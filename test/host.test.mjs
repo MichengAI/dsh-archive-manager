@@ -14,6 +14,7 @@ import { Context, Service } from "@deepseek-ai/cordis";
 import { WorkspaceUnknownSessionError } from "@deepseek-ai/dsh-workspace";
 import { TypertRegistry } from "@deepseek-ai/dsh-typert-registry";
 import { TypertGatewayService } from "@deepseek-ai/dsh-api-gateway";
+import { remoteMethods } from "@deepseek-ai/dsh-typert-protocol";
 import { ArchiveWorkspaceRegistry } from "../lib/workspace.js";
 import { ArchiveProjectionCache } from "../lib/projcache.js";
 
@@ -267,6 +268,7 @@ test("deleteSession reports a retained transcript when physical deletion fails",
 		assert.deepEqual(env.global.archivedSessionIds, []);
 		assert.deepEqual(env.table.get(A).sessionIds, [s1]);
 		assert.equal(existsSync(env.located.get(s2)), true, "physical deletion failure leaves the transcript for recovery");
+		assert.equal(await registry.sessionKnown(s2), true, "failed physical delete must keep the header index for retry");
 	} finally {
 		fsPromises.rm = originalRm;
 		syncBuiltinESMExports();
@@ -311,6 +313,35 @@ test("deleteSession cascades to SUBAGENT children (origin = subagent) but never 
 	assert.deepEqual(env.table.get(A).sessionIds, [s2], "the fork branch survives");
 	assert.equal(existsSync(env.located.get(s5)), false, "cascade child transcript dir removed");
 	assert.equal(existsSync(env.located.get(s2)), true, "fork branch transcript dir kept");
+	assert.equal(await registry.sessionKnown(s4), false);
+	assert.equal(await registry.sessionKnown(s5), false, "cascade child must also leave the header index");
+	assert.equal(await registry.sessionKnown(s2), true);
+});
+
+test("deleteSession forgets the in-memory header index so the id cannot be re-archived", async () => {
+	const env = buildRoot({
+		headers: [header(s1, cwdA), header(s2, cwdA)],
+		workspaces: { [A]: workspace("D:\\proj-a", [s1, s2]) },
+		archived: [s2]
+	});
+	const registry = await mountWorkspaceRegistry(env);
+	await registry.deleteSession(s2);
+	assert.equal(await registry.sessionKnown(s2), false, "deleted session must leave the parent header index");
+	await assert.rejects(() => registry.archiveSession(s2), WorkspaceUnknownSessionError);
+	await assert.rejects(() => registry.deleteSession(s2), WorkspaceUnknownSessionError);
+	// persistence.list() still returns the deleted header; probing another id
+	// re-indexes and must not resurrect the forgotten session.
+	assert.equal(await registry.sessionKnown(sUnknown), false);
+	assert.equal(await registry.sessionKnown(s2), false, "stale persistence.list() must not resurrect a deleted session");
+	assert.equal(await registry.sessionKnown(s1), true);
+});
+
+test("markRemoteMethod registers unarchiveSession and deleteSession on the service prototype", async () => {
+	const env = buildRoot({ headers: [header(s1, cwdA)], workspaces: { [A]: workspace("D:\\proj-a", [s1]) } });
+	const registry = await mountWorkspaceRegistry(env);
+	const methods = remoteMethods(registry).map((item) => item.method);
+	assert.ok(methods.includes("unarchiveSession"), "unarchiveSession must be marked Remote");
+	assert.ok(methods.includes("deleteSession"), "deleteSession must be marked Remote");
 });
 
 test("ArchiveProjectionCache whenIdle waits for disposal write before delete", async () => {

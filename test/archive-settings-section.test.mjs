@@ -38,3 +38,11 @@ test("归档设置页下拉菜单不强制宿主主题", async () => {
 
   assert.doesNotMatch(client, /\.dsham_settingsFilter\{color-scheme:/);
 });
+
+test("归档设置页删除全部会收集父会话和 subagent 子会话", async () => {
+  const client = await readFile(clientPath, "utf8");
+
+  assert.match(client, /collectArchivedDeleteAllIds\(workspaceState\.archivedSessionIds, sessions\.byId\)/);
+  assert.match(client, /deleteTarget\.all \? deleteAllSessionIds : collectSessionAndDescendantIds\(deleteTarget\.id, sessions\.byId\)/);
+  assert.match(client, /collectSessionAndDescendantIds\(rootId, sessionSnapshot\.byId\)/);
+});
