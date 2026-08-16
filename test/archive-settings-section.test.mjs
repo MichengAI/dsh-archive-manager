@@ -29,7 +29,7 @@ test("归档设置页提供参考界面的搜索、筛选和全部删除入口",
 test("归档设置页收紧顶部留白，侧栏入口使用简短归档标签", async () => {
   const client = await readFile(clientPath, "utf8");
 
-  assert.match(client, /margin:24px auto 80px/);
+  assert.match(client, /margin:0 auto/);
   assert.match(client, /label: \(\) => ctx\.locale\.bind\(NS\)\("archived\.badge"\)/);
 });
 
