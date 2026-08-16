@@ -22,6 +22,8 @@ test("归档设置页提供参考界面的搜索、筛选和全部删除入口",
   assert.match(client, /placeholder: t\("archives\.searchPlaceholder"\)/);
   assert.match(client, /className: "dsham_settingsFilter"/);
   assert.match(client, /onClick: \(\) => setDeleteTarget\(\{ all: true \}\)/);
+  assert.doesNotMatch(client, /value: chatType, onChange: \(event\) => setChatType\(event\.target\.value\)/);
+  assert.doesNotMatch(client, /chatType === "all"/);
 });
 
 test("归档设置页收紧顶部留白，侧栏入口使用简短归档标签", async () => {
@@ -31,8 +33,8 @@ test("归档设置页收紧顶部留白，侧栏入口使用简短归档标签",
   assert.match(client, /label: \(\) => ctx\.locale\.bind\(NS\)\("archived\.badge"\)/);
 });
 
-test("归档设置页下拉菜单继承深色系统控件主题", async () => {
+test("归档设置页下拉菜单不强制宿主主题", async () => {
   const client = await readFile(clientPath, "utf8");
 
-  assert.match(client, /\.dsham_settingsFilter\{color-scheme:dark/);
+  assert.doesNotMatch(client, /\.dsham_settingsFilter\{color-scheme:/);
 });

@@ -258,6 +258,7 @@ test("deleteSession reports a retained transcript when physical deletion fails",
 	});
 	const fsPromises = require("node:fs/promises");
 	const originalRm = fsPromises.rm;
+	// 进程级补丁：本文件测试按顺序执行，且 finally 会在退出前恢复内置绑定。
 	fsPromises.rm = async () => { throw new Error("rm failed"); };
 	syncBuiltinESMExports();
 	try {
@@ -312,7 +313,7 @@ test("deleteSession cascades to SUBAGENT children (origin = subagent) but never 
 	assert.equal(existsSync(env.located.get(s2)), true, "fork branch transcript dir kept");
 });
 
-test("ArchiveProjectionCache delete(id) + whenIdle ordering", async () => {
+test("ArchiveProjectionCache whenIdle waits for disposal write before delete", async () => {
 	const ctx = new Context();
 	const table = new FakeTable({});
 	const domain = new FakeDomain({ sessions: table }, null);
@@ -328,14 +329,44 @@ test("ArchiveProjectionCache delete(id) + whenIdle ordering", async () => {
 	const session = { id: s3, header: header(s3, cwdB), events: [] };
 	await cache.put(s3, { createdAt: 1700000000000, cwd: cwdB }, { title: { ver: 1, seq: 9, val: "t" } });
 	assert.ok(table.has(s3));
-	await cache.delete(s3);
-	assert.ok(!table.has(s3));
 	// disposal triggers the write-behind; whenIdle must observe it
 	ctx.emit("session/disposed", session);
 	await cache.whenIdle();
 	assert.ok(table.has(s3), "dispose write-behind must land before whenIdle resolves");
 	await cache.delete(s3);
 	assert.ok(!table.has(s3));
+});
+
+test("ArchiveProjectionCache delete prevents an in-flight write from recreating its row", async () => {
+	const ctx = new Context();
+	const table = new FakeTable({});
+	const domain = new FakeDomain({ sessions: table }, null);
+	ctx.provide("storageDomain", { open: async () => domain });
+	ctx.provide("sessionProjections", {
+		checkpoint: () => ({ title: { ver: 1, seq: 9, val: "t" } }),
+		viewCheckpoint: (rows) => Object.fromEntries(Object.entries(rows).map(([k, v]) => [k, v.val]))
+	});
+	ctx.provide("sessionPersistence", { list: async () => [] });
+	ctx.provide("sessions", { get: () => void 0 });
+	const cache = new ArchiveProjectionCache(ctx, { writeEveryEvents: 200, writeIntervalMs: 5000 });
+	await cache[Service.init]();
+	const session = { id: s3, header: header(s3, cwdB), events: [] };
+	const put = table.put.bind(table);
+	let started;
+	const writing = new Promise((resolve) => { started = resolve; });
+	let release;
+	const released = new Promise((resolve) => { release = resolve; });
+	table.put = async (...args) => {
+		started();
+		await released;
+		return put(...args);
+	};
+	const pendingWrite = cache.write(session);
+	await writing;
+	await cache.delete(s3);
+	release();
+	await pendingWrite;
+	assert.ok(!table.has(s3), "a deleted session must not be recreated by a stale write");
 });
 
 test("typert gateway SRC: claims + dispatch unarchiveSession/deleteSession end to end", async () => {
