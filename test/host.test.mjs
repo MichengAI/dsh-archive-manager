@@ -199,7 +199,7 @@ test("archiveSession + unarchiveSession round trip (idempotent, durable)", async
 test("unarchiveSession rejects unknown sessions", async () => {
 	const env = buildRoot({ headers: [header(s1, cwdA)], workspaces: { [A]: workspace("D:\\proj-a", [s1]) } });
 	const registry = await mountWorkspaceRegistry(env);
-	await assert.rejects(() => registry.unarchiveSession(sUnknown), WorkspaceUnknownSessionError);
+	await assert.rejects(() => registry.unarchiveSession(sUnknown), /UNKNOWN_SESSION/);
 });
 
 test("deleteSession rejects unknown sessions", async () => {
@@ -334,6 +334,24 @@ test("deleteSession forgets the in-memory header index so the id cannot be re-ar
 	assert.equal(await registry.sessionKnown(sUnknown), false);
 	assert.equal(await registry.sessionKnown(s2), false, "stale persistence.list() must not resurrect a deleted session");
 	assert.equal(await registry.sessionKnown(s1), true);
+});
+
+test("live reuse removes the tombstone from both the set and the order queue", async () => {
+	const liveSession = { id: sLive, header: header(sLive, cwdA), events: [] };
+	const env = buildRoot({
+		headers: [header(s1, cwdA), header(sLive, cwdA)],
+		workspaces: { [A]: workspace("D:\\proj-a", [s1, sLive]) },
+		live: [liveSession]
+	});
+	const registry = await mountWorkspaceRegistry(env);
+	registry.forgetIndexedSession(sLive);
+	assert.equal(registry.deletedSessionIds.has(sLive), true);
+	assert.equal(registry.deletedSessionOrder.includes(sLive), true);
+	assert.equal(await registry.sessionKnown(sLive), true);
+	assert.equal(registry.deletedSessionIds.has(sLive), false);
+	assert.equal(registry.deletedSessionOrder.includes(sLive), false);
+	registry.forgetIndexedSession(sLive);
+	assert.equal(registry.deletedSessionOrder.filter((id) => id === sLive).length, 1);
 });
 
 test("deletedSessionIds evicts the oldest tombstone after the cap", async () => {
