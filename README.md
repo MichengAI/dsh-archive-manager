@@ -21,16 +21,19 @@
   <img src="https://img.shields.io/badge/Node.js-22%2B-339933?logo=nodedotjs&logoColor=white" alt="Node.js 22 or later">
 </p>
 
+<p align="center">
+  <img src="assets/screenshots/archived-sessions.png" alt="Archived Sessions settings page" width="1200">
+</p>
+
 > DSH Archive Manager is a community-maintained plugin, not an official DeepSeek AI product.
 
 ## Features
 
+- Archives a session from the sidebar session menu.
 - Lists archived sessions by workspace in **Settings → Archived Sessions**.
 - Safely restores a session to its original workspace position.
 - Permanently deletes a confirmed session, its workspace association, archive marker, and projection cache.
 - Removes unloaded deleted sessions from connected sidebars immediately.
-
-![Archived Sessions settings page](assets/screenshots/archived-sessions.png)
 
 ## Prerequisites
 
@@ -73,10 +76,14 @@ Restart DSH Web and hard-refresh the browser. Local installation applies `cordis
 
 ## Usage
 
-1. Open **Settings → Archived Sessions**.
-2. Expand a workspace group to inspect its archived sessions.
-3. Select **Unarchive** to restore a session, or **Delete** to remove it permanently.
+1. Open the sidebar session menu and choose **Archive session**.
+2. Open **Settings → Archived Sessions** to inspect sessions by workspace.
+3. Select **Unarchive** to restore a session, or use the delete icon to remove it permanently.
 4. Confirm deletion. **It cannot be undone.**
+
+<p align="center">
+  <img src="assets/screenshots/archive-session-menu.png" alt="Archive a session from the session menu" width="1200">
+</p>
 
 If the entry is missing after installation or upgrade, restart DSH Web and hard-refresh the browser. It is located directly after **Connectors** in Settings.
 

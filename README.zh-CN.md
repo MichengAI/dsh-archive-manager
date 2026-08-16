@@ -21,16 +21,19 @@
   <img src="https://img.shields.io/badge/Node.js-22%2B-339933?logo=nodedotjs&logoColor=white" alt="Node.js 22 或更高版本">
 </p>
 
+<p align="center">
+  <img src="assets/screenshots/archived-sessions.png" alt="已归档会话设置页面" width="1200">
+</p>
+
 > DSH Archive Manager 是社区维护的插件，并非 DeepSeek AI 官方产品。
 
 ## 功能概览
 
+- 在侧栏会话菜单中选择「归档会话」。
 - 在「设置 → 已归档」按工作区展示归档会话。
 - 安全取消归档，将会话恢复到原工作区位置。
 - 经确认后永久删除会话、工作区归属、归档标记和投影缓存。
 - 已删除的未加载归档会话会立即从已连接客户端的侧栏移除。
-
-![已归档会话设置页面](assets/screenshots/archived-sessions.png)
 
 ## 前置条件
 
@@ -73,12 +76,16 @@ dsh --profile web --dump-config
 
 ## 使用
 
-1. 打开「设置 → 已归档」。
-2. 展开工作区分组，查看其中的归档会话。
-3. 点击「取消归档」恢复会话；点击「删除」永久移除会话。
+1. 在侧栏右键或打开会话菜单，选择「归档会话」。
+2. 打开「设置 → 已归档」，按工作区查看归档会话。
+3. 点击「取消归档」恢复会话；点击删除图标永久移除会话。
 4. 删除前确认提示。**删除无法撤销。**
 
-安装或升级后找不到入口时，重启 DSH Web 并硬刷新浏览器；入口位于「设置」中，紧随「连接器」之后。
+<p align="center">
+  <img src="assets/screenshots/archive-session-menu.png" alt="从会话菜单归档会话" width="1200">
+</p>
+
+安装或升级后找不到入口时，重启 DSH Web 并硬刷新浏览器；入口位于「设置」中，连接器之后。
 
 ## 数据处理边界
 
