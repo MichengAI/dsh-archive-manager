@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/icon.png" alt="DSH Archive Manager" width="96">
+</p>
+
 <h1 align="center">DSH Archive Manager</h1>
 
 <p align="center">
@@ -17,6 +21,10 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="Apache License 2.0"></a>
   <img src="https://img.shields.io/badge/DSH-Web%20Plugin-10b981" alt="DSH Web Plugin">
   <img src="https://img.shields.io/badge/Node.js-22%2B-339933?logo=nodedotjs&logoColor=white" alt="Node.js 22 or later">
+</p>
+
+<p align="center">
+  <img src="assets/screenshots/archived-sessions.png" alt="Archived Sessions settings page" width="1200">
 </p>
 
 > DSH Archive Manager is a community-maintained plugin. It is not an official DeepSeek AI product.
