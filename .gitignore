@@ -1,0 +1,12 @@
+# 依赖与构建缓存
+node_modules/
+*.tsbuildinfo
+*.tgz
+pnpm-debug.log*
+
+# npm 本地缓存（发布时临时使用）
+.npm-cache*/
+
+# 本地日志与系统文件
+*.log
+.DS_Store
