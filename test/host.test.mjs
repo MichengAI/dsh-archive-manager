@@ -205,7 +205,7 @@ test("unarchiveSession rejects unknown sessions", async () => {
 test("deleteSession rejects unknown sessions", async () => {
 	const env = buildRoot({ headers: [header(s1, cwdA)], workspaces: { [A]: workspace("D:\\proj-a", [s1]) } });
 	const registry = await mountWorkspaceRegistry(env);
-	await assert.rejects(() => registry.deleteSession(sUnknown), WorkspaceUnknownSessionError);
+	await assert.rejects(() => registry.deleteSession(sUnknown), /UNKNOWN_SESSION/);
 });
 
 test("deleteSession removes transcript, archive marker, accounts, and cache row (stray + accounted)", async () => {
@@ -328,12 +328,23 @@ test("deleteSession forgets the in-memory header index so the id cannot be re-ar
 	await registry.deleteSession(s2);
 	assert.equal(await registry.sessionKnown(s2), false, "deleted session must leave the parent header index");
 	await assert.rejects(() => registry.archiveSession(s2), WorkspaceUnknownSessionError);
-	await assert.rejects(() => registry.deleteSession(s2), WorkspaceUnknownSessionError);
+	await assert.rejects(() => registry.deleteSession(s2), /UNKNOWN_SESSION/);
 	// persistence.list() still returns the deleted header; probing another id
 	// re-indexes and must not resurrect the forgotten session.
 	assert.equal(await registry.sessionKnown(sUnknown), false);
 	assert.equal(await registry.sessionKnown(s2), false, "stale persistence.list() must not resurrect a deleted session");
 	assert.equal(await registry.sessionKnown(s1), true);
+});
+
+test("deletedSessionIds evicts the oldest tombstone after the cap", async () => {
+	const env = buildRoot({ headers: [header(s1, cwdA)], workspaces: { [A]: workspace("D:\\proj-a", [s1]) } });
+	const registry = await mountWorkspaceRegistry(env);
+	const limit = registry.deletedSessionTombstoneLimit;
+	assert.ok(limit > 0);
+	for (let i = 0; i < limit + 3; i++) registry.forgetIndexedSession(`gone-${i}`);
+	assert.equal(registry.deletedSessionIds.has("gone-0"), false);
+	assert.equal(registry.deletedSessionIds.has(`gone-${limit + 2}`), true);
+	assert.ok(registry.deletedSessionIds.size <= limit);
 });
 
 test("markRemoteMethod registers unarchiveSession and deleteSession on the service prototype", async () => {
@@ -440,7 +451,7 @@ test("typert gateway SRC: claims + dispatch unarchiveSession/deleteSession end t
 	// dispatch: unknown session surfaces as a failed rpc
 	const unknown = await captured.handler("workspaceRegistry/deleteSession", { args: { sessionId: sUnknown } }, void 0);
 	assert.equal(unknown.ok, false);
-	assert.match(unknown.error.message, /no such session/);
+	assert.match(unknown.error.message, /UNKNOWN_SESSION/);
 	// dispatch: missing args is rejected
 	const bad = await captured.handler("workspaceRegistry/unarchiveSession", { args: {} }, void 0);
 	assert.equal(bad.ok, false);

@@ -104,6 +104,7 @@ test("bundle materializes with apply/inject and the __test surface", () => {
 	assert.equal(typeof t.displayTitle, "function");
 	assert.equal(typeof t.collectArchivedDeleteAllIds, "function");
 	assert.equal(typeof t.collectSessionAndDescendantIds, "function");
+	assert.equal(typeof t.isUnknownSessionError, "function");
 });
 
 test("displayTitle: SessionSummary 使用 displayTitle，包括未命名会话", () => {
@@ -195,4 +196,10 @@ test("collectSessionAndDescendantIds deletes descendants before the session", ()
 	assert.deepEqual(t.collectSessionAndDescendantIds("child", byId), ["grand", "child"]);
 	assert.deepEqual(t.collectSessionAndDescendantIds("fork", byId), ["fork"]);
 	assert.deepEqual(t.collectSessionAndDescendantIds("missing", byId), ["missing"]);
+});
+
+test("isUnknownSessionError recognizes the stable delete token", () => {
+	assert.equal(t.isUnknownSessionError(new Error("UNKNOWN_SESSION:session-1")), true);
+	assert.equal(t.isUnknownSessionError(new Error("cannot archive session 'x': live sessions and session persistence hold no such session")), true);
+	assert.equal(t.isUnknownSessionError(new Error("transcript directory remains")), false);
 });

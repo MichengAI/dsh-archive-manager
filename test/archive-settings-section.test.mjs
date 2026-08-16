@@ -46,3 +46,15 @@ test("归档设置页删除全部会收集父会话和 subagent 子会话", asyn
   assert.match(client, /deleteTarget\.all \? deleteAllSessionIds : collectSessionAndDescendantIds\(deleteTarget\.id, sessions\.byId\)/);
   assert.match(client, /collectSessionAndDescendantIds\(rootId, sessionSnapshot\.byId\)/);
 });
+
+test("删除文案中英键齐全，并统一使用子代理用语", async () => {
+  const client = await readFile(clientPath, "utf8");
+  assert.match(client, /"deleteSession.unknown": "会话已不存在或已被删除。"/);
+  assert.match(client, /"deleteSession.unknown": "This session no longer exists or was already deleted."/);
+  assert.match(client, /"deleteSession.failed": "删除会话失败：{detail}"/);
+  assert.match(client, /"deleteSession.failed": "Could not delete the session: {detail}"/);
+  assert.match(client, /及其子代理和记录/);
+  assert.match(client, /their child agents/);
+  assert.doesNotMatch(client, /及其子会话和记录/);
+  assert.match(client, /isUnknownSessionError\(reason\)/);
+});
