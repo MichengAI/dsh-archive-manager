@@ -56,43 +56,15 @@ dsh plugin --profile web add @michengai/dsh-archive-manager
 3. 点击「取消归档」恢复会话，或点击「删除」永久移除会话。
 4. 确认删除；该操作无法撤销。
 
-## 安全行为
+## 删除前请注意
 
 - 删除操作始终要求确认。
 - 删除会同步移除会话目录、工作区记录、归档集合和投影缓存。
-- 运行中的会话会在清理前完成写入并释放；未加载的归档会话也会向已连接客户端广播移除通知。
+- 运行中的会话会在完成写入后再清理；未加载的归档会话也会从已连接客户端的侧栏移除。
 
-## 开发与验证
+## 找不到「已归档」入口？
 
-```powershell
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$OutputEncoding = [System.Text.Encoding]::UTF8
-pnpm test
-pnpm build
-pnpm run pack:check
-```
-
-## 项目结构
-
-- `lib\client.js`：浏览器设置页、会话卡片与交互。
-- `lib\workspace.js`：归档、取消归档和永久删除服务。
-- `lib\projcache.js`：投影缓存清理扩展。
-- `cordis.patch.yml`：DSH 服务替换配置。
-- `test\`：Node.js 自动化测试。
-
-## 维护者发布
-
-发布前更新版本并检查包内容：
-
-```powershell
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$OutputEncoding = [System.Text.Encoding]::UTF8
-npm version patch
-pnpm run pack:check
-npm publish
-```
-
-发布前会由 `prepublishOnly` 自动运行构建和测试。包发布到官方 npm registry。
+安装或升级插件后，请重启 DSH Web 并在浏览器执行硬刷新。入口位于「设置」中，紧随「连接器」之后。
 
 ## 许可证
 

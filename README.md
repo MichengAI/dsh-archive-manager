@@ -56,43 +56,15 @@ For a local checkout, replace the package name with the absolute repository path
 3. Choose **Unarchive** to restore a session, or **Delete** to permanently remove it.
 4. Confirm deletion. This action cannot be undone.
 
-## Safety behavior
+## Before you delete
 
 - Deletion always requires confirmation.
 - A deleted session is removed from its transcript directory, workspace records, archived-session set, and projection cache.
-- Live sessions flush and dispose before cleanup; unloaded archived sessions still broadcast the removal notification to connected clients.
+- Live sessions finish writing before cleanup; unloaded archived sessions are also removed from connected sidebars.
 
-## Development and verification
+## Can't find Archived Sessions?
 
-```powershell
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$OutputEncoding = [System.Text.Encoding]::UTF8
-pnpm test
-pnpm build
-pnpm run pack:check
-```
-
-## Project layout
-
-- `lib\client.js` — browser settings page, session cards, and interactions.
-- `lib\workspace.js` — archive, unarchive, and permanent deletion service.
-- `lib\projcache.js` — projection-cache cleanup extension.
-- `cordis.patch.yml` — DSH service replacement configuration.
-- `test\` — Node.js automated tests.
-
-## Maintainer release
-
-Before publishing, update the version and inspect the package:
-
-```powershell
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$OutputEncoding = [System.Text.Encoding]::UTF8
-npm version patch
-pnpm run pack:check
-npm publish
-```
-
-`prepublishOnly` runs the build and test suite before publication. The package publishes to the official npm registry.
+Restart DSH Web and hard-refresh the browser after installing or upgrading the plugin. The entry is located in **Settings**, directly after **Connectors**.
 
 ## License
 
