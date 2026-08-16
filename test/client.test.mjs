@@ -173,10 +173,10 @@ test("view store: showArchived default false, persists toggles, same store famil
 test("collectArchivedDeleteAllIds includes archived parents, archived children, and live children of archived parents", () => {
 	const byId = {
 		parent: summary("parent"),
-		child: summary("child", { origin: "subagent", parentSessionId: "parent" }),
-		archivedChild: summary("archivedChild", { origin: "subagent", parentSessionId: "other" }),
-		liveChild: summary("liveChild", { origin: "subagent", parentSessionId: "parent" }),
-		unrelated: summary("unrelated", { origin: "subagent", parentSessionId: "someone-else" })
+		child: summary("child", { origin: "subagent", parentId: "parent" }),
+		archivedChild: summary("archivedChild", { origin: "subagent", parentId: "other" }),
+		liveChild: summary("liveChild", { origin: "subagent", parentId: "parent" }),
+		unrelated: summary("unrelated", { origin: "subagent", parentId: "someone-else" })
 	};
 	assert.deepEqual(t.collectArchivedDeleteAllIds(["parent", "archivedChild"], byId), ["child", "liveChild", "parent", "archivedChild"]);
 	assert.deepEqual(t.collectArchivedDeleteAllIds(["archivedChild"], byId), ["archivedChild"]);
@@ -186,10 +186,10 @@ test("collectArchivedDeleteAllIds includes archived parents, archived children, 
 test("collectSessionAndDescendantIds deletes descendants before the session", () => {
 	const byId = {
 		root: summary("root"),
-		child: summary("child", { origin: "subagent", parentSessionId: "root" }),
-		grand: summary("grand", { origin: "subagent", parentSessionId: "child" }),
-		fork: summary("fork", { parentSessionId: "root" }),
-		other: summary("other", { origin: "subagent", parentSessionId: "someone-else" })
+		child: summary("child", { origin: "subagent", parentId: "root" }),
+		grand: summary("grand", { origin: "subagent", parentId: "child" }),
+		fork: summary("fork", { parentId: "root" }),
+		other: summary("other", { origin: "subagent", parentId: "someone-else" })
 	};
 	assert.deepEqual(t.collectSessionAndDescendantIds("root", byId), ["grand", "child", "root"]);
 	assert.deepEqual(t.collectSessionAndDescendantIds("child", byId), ["grand", "child"]);
