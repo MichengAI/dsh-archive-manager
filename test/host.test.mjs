@@ -388,6 +388,7 @@ test("typert gateway SRC: claims + dispatch unarchiveSession/deleteSession end t
 	new TypertGatewayService(env.ctx);
 	await tick(); // ctx.inject registers the interceptor asynchronously
 	assert.ok(captured, "gateway must register a /api interceptor");
+	assert.ok(env.ctx.get("typert").local.get("workspaceRegistry/deleteSession") !== undefined, "late typert still receives the host contribution");
 	assert.equal(captured.channel, "/api");
 	// SRC claims for the new endpoints
 	assert.equal(captured.matches("workspaceRegistry/unarchiveSession"), true);
@@ -414,6 +415,20 @@ test("typert gateway SRC: claims + dispatch unarchiveSession/deleteSession end t
 	assert.equal(bad.ok, false);
 });
 
+// 生产环境 404：网关优先认 typert.local。Host 必须在 typert 就绪后写入严格描述符。
+test("typert local contribution registers deleteSession before SRC discovery", async () => {
+	const env = buildRoot({
+		headers: [header(s1, cwdA), header(s2, cwdA), header(s3, cwdB)],
+		workspaces: { [A]: workspace("D:\\proj-a", [s1, s2]), [B]: workspace("D:\\proj-b", [s3]) }
+	});
+	new TypertRegistry(env.ctx);
+	await mountWorkspaceRegistry(env);
+	const local = env.ctx.get("typert").local;
+	assert.ok(local.get("workspaceRegistry/deleteSession") !== undefined, "host must register workspaceRegistry/deleteSession on typert.local");
+	assert.ok(local.get("workspaceRegistry/unarchiveSession") !== undefined, "host must register workspaceRegistry/unarchiveSession on typert.local");
+	assert.equal(local.get("workspaceRegistry/deleteSession").service, "workspaceRegistry");
+	assert.equal(local.get("workspaceRegistry/deleteSession").method, "deleteSession");
+});
 test("legacy workspaceRegistry API surface is intact", async () => {
 	const env = buildRoot({
 		headers: [header(s1, cwdA), header(s2, cwdA), header(s3, cwdB)],
