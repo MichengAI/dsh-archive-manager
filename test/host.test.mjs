@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, realpathSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createRequire, syncBuiltinESMExports } from "node:module";
 import { Context, Service } from "@deepseek-ai/cordis";
 import { WorkspaceUnknownSessionError } from "@deepseek-ai/dsh-workspace";
 import { TypertRegistry } from "@deepseek-ai/dsh-typert-registry";
@@ -17,6 +18,7 @@ import { ArchiveWorkspaceRegistry } from "../lib/workspace.js";
 import { ArchiveProjectionCache } from "../lib/projcache.js";
 
 const SID = (n) => `session-${String(n).padStart(5, "0")}-0000-0000-0000-000000000000`;
+const require = createRequire(import.meta.url);
 
 /** Map-backed domain table facade matching the storage-domain table contract. */
 class FakeTable {
@@ -43,12 +45,16 @@ class FakeDomain {
 	constructor(tables, global) {
 		this.tables = tables;
 		this.globalState = global;
+		this.globalSetError = null;
 	}
 	table(name) { return this.tables[name]; }
 	get global() {
 		return {
 			get: () => this.globalState,
-			set: async (next) => { Object.assign(this.globalState, next); }
+			set: async (next) => {
+				if (this.globalSetError !== null) throw this.globalSetError;
+				Object.assign(this.globalState, next);
+			}
 		};
 	}
 	close() {}
@@ -228,6 +234,42 @@ test("deleteSession removes transcript, archive marker, accounts, and cache row 
 	assert.equal(existsSync(env.located.get(s2)), false, "archived session transcript dir removed");
 	assert.deepEqual(env.persistence.prepared, [s4, s2]);
 	assert.deepEqual(env.sessions.detached, [s4, s2]);
+});
+
+test("deleteSession keeps the transcript when archive bookkeeping fails", async () => {
+	const env = buildRoot({
+		headers: [header(s1, cwdA), header(s2, cwdA)],
+		workspaces: { [A]: workspace("D:\\proj-a", [s1, s2]) },
+		archived: [s2]
+	});
+	const registry = await mountWorkspaceRegistry(env);
+	env.domain.globalSetError = new Error("state write failed");
+	await assert.rejects(() => registry.deleteSession(s2), /state write failed/);
+	assert.equal(existsSync(env.located.get(s2)), true, "failed bookkeeping must not orphan the transcript");
+	assert.deepEqual(env.global.archivedSessionIds, [s2]);
+	assert.deepEqual(env.table.get(A).sessionIds, [s1, s2]);
+});
+
+test("deleteSession reports a retained transcript when physical deletion fails", async () => {
+	const env = buildRoot({
+		headers: [header(s1, cwdA), header(s2, cwdA)],
+		workspaces: { [A]: workspace("D:\\proj-a", [s1, s2]) },
+		archived: [s2]
+	});
+	const fsPromises = require("node:fs/promises");
+	const originalRm = fsPromises.rm;
+	fsPromises.rm = async () => { throw new Error("rm failed"); };
+	syncBuiltinESMExports();
+	try {
+		const registry = await mountWorkspaceRegistry(env);
+		await assert.rejects(() => registry.deleteSession(s2), /transcript directory .* remains after bookkeeping cleanup/);
+		assert.deepEqual(env.global.archivedSessionIds, []);
+		assert.deepEqual(env.table.get(A).sessionIds, [s1]);
+		assert.equal(existsSync(env.located.get(s2)), true, "physical deletion failure leaves the transcript for recovery");
+	} finally {
+		fsPromises.rm = originalRm;
+		syncBuiltinESMExports();
+	}
 });
 
 test("deleteSession on a live session flushes, detaches, emits session/disposed, and waits for the cache write-behind before deleting the row", async () => {

@@ -101,6 +101,13 @@ test("bundle materializes with apply/inject and the __test surface", () => {
 	assert.equal(typeof t.deriveGroups, "function");
 	assert.equal(typeof t.deriveFlat, "function");
 	assert.equal(typeof t.deriveSearchResults, "function");
+	assert.equal(typeof t.displayTitle, "function");
+});
+
+test("displayTitle: SessionSummary 使用 displayTitle，包括未命名会话", () => {
+	assert.equal(t.displayTitle(summary("s1"), (key) => key), "Title-s1");
+	assert.equal(t.displayTitle(summary("s2", { displayTitle: "" }), (key) => key), "");
+	assert.equal(t.displayTitle({ id: "s3", blank: false }, (key) => key), "");
 });
 
 test("sessionVisible: archived hidden by default, visible with showArchived", () => {
