@@ -5,70 +5,116 @@
 <h1 align="center">DSH Archive Manager</h1>
 
 <p align="center">
-  <strong>An npm-installable DeepSeek Harness Web plugin for managing archived sessions.</strong>
+  <strong>A DeepSeek Harness Web plugin for safely managing archived sessions.</strong>
 </p>
 
 <p align="center">
   <a href="https://github.com/MichengAI/dsh-archive-manager/issues">Report an issue</a>
   · <a href="https://www.npmjs.com/package/@michengai/dsh-archive-manager">View on npm</a>
+  · <a href="README.zh-CN.md">简体中文</a>
 </p>
 
-<p align="center">
-  <strong>English</strong> · <a href="README.zh-CN.md">简体中文</a>
-</p>
+> DSH Archive Manager is a community-maintained plugin, not an official DeepSeek AI product.
 
-<p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="Apache License 2.0"></a>
-  <a href="https://www.npmjs.com/package/@michengai/dsh-archive-manager"><img src="https://img.shields.io/npm/v/%40michengai/dsh-archive-manager?label=npm" alt="npm package"></a>
-  <img src="https://img.shields.io/badge/DSH-Web%20Plugin-10b981" alt="DSH Web Plugin">
-  <img src="https://img.shields.io/badge/Node.js-22%2B-339933?logo=nodedotjs&logoColor=white" alt="Node.js 22 or later">
-</p>
+## Features
 
-<p align="center">
-  <img src="assets/screenshots/archived-sessions.png" alt="Archived Sessions settings page" width="1200">
-</p>
+- Lists archived sessions by workspace in **Settings → Archived Sessions**.
+- Safely restores a session to its original workspace position.
+- Permanently deletes a confirmed session, its workspace association, archive marker, and projection cache.
+- Removes unloaded deleted sessions from connected sidebars immediately.
 
-> DSH Archive Manager is a community-maintained plugin. It is not an official DeepSeek AI product.
+![Archived Sessions settings page](assets/screenshots/archived-sessions.png)
 
-## What it provides
+## Prerequisites
 
-- **Archived Sessions settings page** — placed directly after Connectors and grouped by workspace.
-- **Dark session cards** — show the session title and update time with explicit restore and delete actions.
-- **Safe unarchive** — restores a session to its original workspace position.
-- **Permanent deletion** — removes the transcript, workspace accounting, archive marker, and projection-cache record after confirmation.
-- **Immediate sidebar cleanup** — deleted cold sessions emit the standard removal event, so they do not reappear under Recent.
+- A working DeepSeek Harness Web installation with `dsh` available in PowerShell.
+- Examples use the `web` profile; replace it with the target profile.
+- Source installation and development require Node.js 22+ and pnpm. npm installation does not require running `npm install` in an arbitrary directory.
 
-## Quick start
+## Installation
 
-You need a working DeepSeek Harness Web installation. Do not run `npm install` in an arbitrary directory: install the published package into the DSH Web profile instead.
+### Install from npm
+
+Run this from any PowerShell directory. Install into the DSH profile through `dsh plugin`, not as a dependency of an unrelated project:
 
 ```powershell
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 dsh plugin --profile web add @michengai/dsh-archive-manager
+dsh --profile web --dump-config
 ```
 
-Restart DSH Web and hard-refresh the browser after installing or upgrading. No source checkout is required.
+Restart DSH Web and hard-refresh the browser after installation or upgrade. If a package mirror is behind, append `--registry=https://registry.npmjs.org/`.
 
-If a package mirror has not synchronized the latest version yet, append `--registry=https://registry.npmjs.org/` to the install command.
+### Install from source
 
-## Use Archived Sessions
+Use this for debugging or unpublished changes. The cloned directory becomes the plugin source path:
+
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+Set-Location D:\Repository\deepseek-harness-plugin
+git clone https://github.com/MichengAI/dsh-archive-manager.git
+Set-Location .\dsh-archive-manager
+pnpm install --frozen-lockfile
+pnpm build
+dsh plugin --profile web add .
+dsh --profile web --dump-config
+```
+
+Restart DSH Web and hard-refresh the browser. Local installation applies `cordis.patch.yml`; do not copy `lib` or client files manually.
+
+## Usage
 
 1. Open **Settings → Archived Sessions**.
-2. Select a workspace group to review its archived sessions.
-3. Choose **Unarchive** to restore a session, or **Delete** to permanently remove it.
-4. Confirm deletion. This action cannot be undone.
+2. Expand a workspace group to inspect its archived sessions.
+3. Select **Unarchive** to restore a session, or **Delete** to remove it permanently.
+4. Confirm deletion. **It cannot be undone.**
 
-## Before you delete
+If the entry is missing after installation or upgrade, restart DSH Web and hard-refresh the browser. It is located directly after **Connectors** in Settings.
+
+## Data handling limits
 
 - Deletion always requires confirmation.
-- A deleted session is removed from its transcript directory, workspace records, archived-session set, and projection cache.
-- Live sessions finish writing before cleanup; unloaded archived sessions are also removed from connected sidebars.
+- It removes the session directory, workspace records, archive set, and projection cache.
+- A live session finishes writing before cleanup to prevent data truncation.
+- The plugin replaces DSH’s default workspace and projection services. Install through the DSH profile instead of manually composing the patch.
 
-## Can't find Archived Sessions?
+## Secondary development
 
-Restart DSH Web and hard-refresh the browser after installing or upgrading the plugin. The entry is located in **Settings**, directly after **Connectors**.
+This repository has no `src` directory. `lib` is directly maintained runtime source, which is its current layout rather than the recommended layout for new plugins. New plugins should prefer `src` built to `lib`.
+
+- [lib\index.js](lib/index.js): host service entry point.
+- [lib\workspace.js](lib/workspace.js): archived-session and workspace service.
+- [lib\projcache.js](lib/projcache.js): session projection cache.
+- [lib\client.js](lib/client.js): Settings page and archive UI.
+- `test\*.test.mjs`: host, client, Remote, and styling coverage.
+
+After changing the runtime source, validate, test, and install from the local directory:
+
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+pnpm build
+pnpm test
+pnpm pack:check
+dsh plugin --profile web add .
+```
+
+`pnpm build` validates package integrity; it does not compile `lib` into another directory.
+
+## Validation
+
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+pnpm build
+pnpm test
+pnpm pack:check
+```
+
+`prepublishOnly` runs the build check and tests before publishing.
 
 ## License
 
-Licensed under the [Apache License 2.0](LICENSE).
+Licensed under [Apache License 2.0](LICENSE).
