@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://github.com/MichengAI/dsh-archive-manager/issues">反馈问题</a>
-  · <a href="https://github.com/MichengAI/dsh-archive-manager">在 GitHub 查看</a>
+  · <a href="https://www.npmjs.com/package/@michengai/dsh-archive-manager">在 npm 查看</a>
 </p>
 
 <p align="center">
@@ -19,6 +19,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="Apache License 2.0"></a>
+  <a href="https://www.npmjs.com/package/@michengai/dsh-archive-manager"><img src="https://img.shields.io/npm/v/%40michengai/dsh-archive-manager?label=npm" alt="npm 包"></a>
   <img src="https://img.shields.io/badge/DSH-Web%20Plugin-10b981" alt="DSH Web Plugin">
   <img src="https://img.shields.io/badge/Node.js-22%2B-339933?logo=nodedotjs&logoColor=white" alt="Node.js 22 或更高版本">
 </p>
@@ -39,7 +40,7 @@
 
 ## 快速开始
 
-环境要求：可正常运行的 DeepSeek Harness Web 环境。将已发布的包安装到 DSH Web profile：
+环境要求：可正常运行的 DeepSeek Harness Web 环境。不要在任意目录执行 `npm install`；应将已发布的包安装到 DSH Web profile。
 
 ```powershell
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -47,7 +48,9 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 dsh plugin --profile web add @michengai/dsh-archive-manager
 ```
 
-本地开发时，可将包名替换为仓库绝对路径。安装或升级后请重启 DSH Web，并在浏览器执行硬刷新。
+安装或升级后请重启 DSH Web，并在浏览器执行硬刷新；无需下载源码。
+
+若软件源镜像尚未同步最新版本，可在安装命令末尾添加 `--registry=https://registry.npmjs.org/`。
 
 ## 使用已归档会话
 

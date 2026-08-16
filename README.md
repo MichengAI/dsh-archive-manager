@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://github.com/MichengAI/dsh-archive-manager/issues">Report an issue</a>
-  · <a href="https://github.com/MichengAI/dsh-archive-manager">View on GitHub</a>
+  · <a href="https://www.npmjs.com/package/@michengai/dsh-archive-manager">View on npm</a>
 </p>
 
 <p align="center">
@@ -19,6 +19,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="Apache License 2.0"></a>
+  <a href="https://www.npmjs.com/package/@michengai/dsh-archive-manager"><img src="https://img.shields.io/npm/v/%40michengai/dsh-archive-manager?label=npm" alt="npm package"></a>
   <img src="https://img.shields.io/badge/DSH-Web%20Plugin-10b981" alt="DSH Web Plugin">
   <img src="https://img.shields.io/badge/Node.js-22%2B-339933?logo=nodedotjs&logoColor=white" alt="Node.js 22 or later">
 </p>
@@ -39,7 +40,7 @@
 
 ## Quick start
 
-You need a working DeepSeek Harness Web installation. Install the published package into the DSH Web profile:
+You need a working DeepSeek Harness Web installation. Do not run `npm install` in an arbitrary directory: install the published package into the DSH Web profile instead.
 
 ```powershell
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -47,7 +48,9 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 dsh plugin --profile web add @michengai/dsh-archive-manager
 ```
 
-For a local checkout, replace the package name with the absolute repository path. Restart DSH Web and hard-refresh the browser after installing or upgrading.
+Restart DSH Web and hard-refresh the browser after installing or upgrading. No source checkout is required.
+
+If a package mirror has not synchronized the latest version yet, append `--registry=https://registry.npmjs.org/` to the install command.
 
 ## Use Archived Sessions
 
