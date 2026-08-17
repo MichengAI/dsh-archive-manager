@@ -73,3 +73,19 @@ test("归档设置页使用自定义项目筛选菜单，而不是原生 select"
   assert.match(client, /dsham_selectOption\[aria-selected='true'\]/);
   assert.doesNotMatch(client, /jsx\)\("select", \{ className: "dsham_settingsFilter"/);
 });
+
+test("删除全部计数只包含列表可见的已归档会话", async () => {
+  const client = await readFile(clientPath, "utf8");
+
+  assert.match(client, /deleteAllSessionIds = \(0, react\.useMemo\)\(\(\) => groups\.flatMap/);
+  assert.match(client, /session\.origin === "subagent"/);
+});
+
+test("确认框按 Escape 只关闭最上层，不关掉设置页", async () => {
+  const client = await readFile(clientPath, "utf8");
+
+  assert.match(client, /window\.addEventListener\("keydown", onKeyDown, true\)/);
+  assert.match(client, /event\.stopImmediatePropagation/);
+  assert.match(client, /if \(event\.key !== "Escape"\) return;/);
+});
+
