@@ -465,6 +465,66 @@ test("ArchiveProjectionCache delete prevents an in-flight write from recreating 
 	assert.ok(!table.has(s3), "a deleted session must not be recreated by a stale write");
 });
 
+// 冷读写回经 putSoft 落盘：墓碑必须同样挡住它，且 whenIdle 必须覆盖它。
+test("ArchiveProjectionCache tombstone guards the cold-read write-back (putSoft) and whenIdle covers it", async () => {
+	const ctx = new Context();
+	const table = new FakeTable({});
+	const domain = new FakeDomain({ sessions: table }, null);
+	ctx.provide("storageDomain", { open: async () => domain });
+	ctx.provide("sessionProjections", {
+		checkpoint: () => ({ title: { ver: 1, seq: 9, val: "t" } }),
+		viewCheckpoint: (rows) => Object.fromEntries(Object.entries(rows).map(([k, v]) => [k, v.val]))
+	});
+	ctx.provide("sessionPersistence", { list: async () => [] });
+	ctx.provide("sessions", { get: () => void 0 });
+	const cache = new ArchiveProjectionCache(ctx, { writeEveryEvents: 200, writeIntervalMs: 5000 });
+	await cache[Service.init]();
+	const identity = { createdAt: 1700000000000, cwd: cwdB };
+	// 已删除：冷读写回直接被墓碑拦截，不落盘。
+	await cache.delete(s3);
+	await cache.putSoft(s3, identity, { title: { ver: 1, seq: 9, val: "t" } }, "cold-read write-back");
+	assert.ok(!table.has(s3), "putSoft after delete must not recreate the row");
+	// 删除落在写回进行中：写回完成后补删自己的残留行。
+	cache.clearTombstone(s3);
+	const put = table.put.bind(table);
+	let started;
+	const writing = new Promise((resolve) => { started = resolve; });
+	let release;
+	const released = new Promise((resolve) => { release = resolve; });
+	table.put = async (...args) => {
+		started();
+		await released;
+		return put(...args);
+	};
+	const pendingWrite = cache.putSoft(s3, identity, { title: { ver: 1, seq: 9, val: "t" } }, "cold-read write-back");
+	await writing;
+	await cache.delete(s3);
+	release();
+	await pendingWrite;
+	assert.ok(!table.has(s3), "an in-flight putSoft must not resurrect the deleted row");
+	await cache.whenIdle();
+	assert.ok(!table.has(s3));
+});
+
+test("cold reuse of a deleted id (new lifecycle) clears the tombstone; a stale same-lifecycle header stays unknown", async () => {
+	const env = buildRoot({
+		headers: [header(s1, cwdA), header(s2, cwdA)],
+		workspaces: { [A]: workspace("D:\\proj-a", [s1, s2]) },
+		archived: [s2]
+	});
+	const registry = await mountWorkspaceRegistry(env);
+	await registry.deleteSession(s2);
+	// stale list()：同一生命周期（同 createdAt）的旧头部仍视为未知。
+	assert.equal(await registry.sessionKnown(s2), false);
+	// 另一进程以同 id 重建并落盘新生命周期（createdAt 不同）：撤墓碑放行。
+	env.persistence.headers = env.persistence.headers.map((item) => item.id === s2 ? { ...item, createdAt: 1800000000000 } : item);
+	assert.equal(await registry.sessionKnown(s2), true);
+	assert.equal(registry.deletedSessionIds.has(s2), false, "cold reuse must clear the tombstone");
+	// 撤墓碑后可重新归档（headers 已重新编入索引）。
+	await registry.archiveSession(s2);
+	assert.deepEqual(env.global.archivedSessionIds, [s2]);
+});
+
 test("typert gateway SRC: claims + dispatch unarchiveSession/deleteSession end to end", async () => {
 	const env = buildRoot({
 		headers: [header(s1, cwdA), header(s2, cwdA), header(s3, cwdB)],

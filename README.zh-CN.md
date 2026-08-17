@@ -36,6 +36,8 @@ Safe archived session control
 
 > DSH Archive Manager 是社区维护的 DeepSeek Harness（DSH）插件，并非 DeepSeek AI 官方产品。
 
+> 交接入口：[docs/00-交接入口](docs/00-交接入口/项目概览.md)
+
 ## 功能概览
 
 - 在侧栏会话菜单中选择「归档会话」。

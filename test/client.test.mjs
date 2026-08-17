@@ -203,3 +203,41 @@ test("isUnknownSessionError recognizes the stable delete token", () => {
 	assert.equal(t.isUnknownSessionError(new Error("cannot archive session 'x': live sessions and session persistence hold no such session")), true);
 	assert.equal(t.isUnknownSessionError(new Error("transcript directory remains")), false);
 });
+
+test("deriveArchivedGroups: 按工作区分组，重名工作区使用不同 key，未归入者进未分组", () => {
+	const byId = {
+		s1: summary("s1"),
+		s2: summary("s2"),
+		s3: summary("s3"),
+		sub: summary("sub", { origin: "subagent", parentId: "s1" })
+	};
+	// 两个工作区同名 proj-a：title 相同但 workspaceId 不同。
+	const items = [
+		{ workspaceId: "w1", title: "proj-a", sessionIds: ["s1"] },
+		{ workspaceId: "w2", title: "proj-a", sessionIds: ["s2"] }
+	];
+	const groups = t.deriveArchivedGroups(byId, items, ["s1", "s2", "s3", "sub"], "未分组");
+	assert.deepEqual(groups.map((g) => g.key), ["w1", "w2", "__ungrouped__"]);
+	assert.deepEqual(groups.map((g) => g.title), ["proj-a", "proj-a", "未分组"]);
+	assert.deepEqual(groups[0].sessions.map((s) => s.id), ["s1"]);
+	assert.deepEqual(groups[2].sessions.map((s) => s.id), ["s3"], "subagent 不进设置页列表");
+	const keys = new Set(groups.map((g) => g.key));
+	assert.equal(keys.size, groups.length, "分组 key 不得重复");
+});
+
+test("deriveArchivedGroups: 无归档会话的工作区不产出空分组", () => {
+	const items = [
+		{ workspaceId: "w1", title: "proj-a", sessionIds: ["s1"] },
+		{ workspaceId: "w2", title: "proj-b", sessionIds: [] }
+	];
+	const groups = t.deriveArchivedGroups({ s1: summary("s1") }, items, ["s1"], "未分组");
+	assert.deepEqual(groups.map((g) => g.key), ["w1"]);
+});
+
+test("deriveArchivedDeleteAllIds: 取归档全集，仅排除已知 subagent，不依赖摘要加载", () => {
+	const byId = { s1: summary("s1"), sub: summary("sub", { origin: "subagent" }) };
+	// s2 故意不在 byId（投影未加载）：仍必须进入删除全集。
+	assert.deepEqual(t.deriveArchivedDeleteAllIds(["s1", "s2", "sub"], byId), ["s1", "s2"]);
+	assert.deepEqual(t.deriveArchivedDeleteAllIds(["s1", "s1"], byId), ["s1"], "归档集合重复 id 去重");
+	assert.deepEqual(t.deriveArchivedDeleteAllIds([], byId), []);
+});

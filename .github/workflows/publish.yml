@@ -7,6 +7,9 @@ on:
 
 permissions:
   contents: read
+  # npm 发布依赖 npmjs.org 的 Trusted Publishers（OIDC）：本仓库需在 npm
+  # 侧配置指向 MichengAI/dsh-archive-manager、此工作流与 tag 触发的
+  # Trusted Publisher 条目；未配置时 npm publish 会因缺少凭证失败。
   id-token: write
 
 jobs:

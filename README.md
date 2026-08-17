@@ -36,6 +36,8 @@ Safe archived session control
 
 > DSH Archive Manager is a community-maintained DeepSeek Harness (DSH) plugin, not an official DeepSeek AI product.
 
+> Handover docs (Chinese): [docs/00-交接入口](docs/00-交接入口/项目概览.md)
+
 ## Features
 
 - Archive a session from the sidebar session menu.

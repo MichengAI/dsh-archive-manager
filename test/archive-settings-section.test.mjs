@@ -74,11 +74,23 @@ test("归档设置页使用自定义项目筛选菜单，而不是原生 select"
   assert.doesNotMatch(client, /jsx\)\("select", \{ className: "dsham_settingsFilter"/);
 });
 
-test("删除全部计数只包含列表可见的已归档会话", async () => {
+test("删除全集直接取归档集合，不依赖摘要是否已加载", async () => {
   const client = await readFile(clientPath, "utf8");
 
-  assert.match(client, /deleteAllSessionIds = \(0, react\.useMemo\)\(\(\) => groups\.flatMap/);
-  assert.match(client, /session\.origin === "subagent"/);
+  assert.match(client, /deriveArchivedDeleteAllIds\(workspaceState\.archivedSessionIds, sessions\.byId\)/);
+  assert.match(client, /if \(byId\?\.\[id\]\?\.origin === "subagent"\) continue;/);
+  assert.doesNotMatch(client, /deleteAllSessionIds = \(0, react\.useMemo\)\(\(\) => groups\.flatMap/);
+});
+
+test("项目筛选与分组使用 workspaceId 作为 key，选中项消失时回退所有项目", async () => {
+  const client = await readFile(clientPath, "utf8");
+
+  assert.match(client, /key: workspace\.workspaceId/);
+  assert.match(client, /value: group\.key, label: group\.title/);
+  assert.match(client, /project === "all" \|\| project === group\.key/);
+  assert.match(client, /setProject\("all"\)/);
+  // 分组渲染 key 与筛选 value 不再使用允许重名的 title。
+  assert.doesNotMatch(client, /\}, group\.title\)\)/);
 });
 
 test("确认框按 Escape 只关闭最上层，不关掉设置页", async () => {
