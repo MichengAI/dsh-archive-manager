@@ -373,6 +373,42 @@ test("markRemoteMethod registers unarchiveSession and deleteSession on the servi
 	assert.ok(methods.includes("deleteSession"), "deleteSession must be marked Remote");
 });
 
+test("deleteSession cascade skips already-deleted subagent children", async () => {
+	const env = buildRoot({
+		headers: [
+			header(s4, cwdA),
+			header(s5, cwdA, { parentSession: s4, origin: "subagent" })
+		],
+		workspaces: { [A]: workspace("D:\\proj-a", [s4, s5]) }
+	});
+	const registry = await mountWorkspaceRegistry(env);
+	await registry.deleteSession(s5);
+	await registry.deleteSession(s4);
+	assert.equal(await registry.sessionKnown(s4), false);
+	assert.equal(await registry.sessionKnown(s5), false);
+});
+
+test("ArchiveProjectionCache deletedSessionIds evicts the oldest tombstone after the cap", async () => {
+	const ctx = new Context();
+	const table = new FakeTable({});
+	const domain = new FakeDomain({ sessions: table }, null);
+	ctx.provide("storageDomain", { open: async () => domain });
+	ctx.provide("sessionProjections", {
+		checkpoint: () => ({ title: { ver: 1, seq: 9, val: "t" } }),
+		viewCheckpoint: (rows) => Object.fromEntries(Object.entries(rows).map(([k, v]) => [k, v.val]))
+	});
+	ctx.provide("sessionPersistence", { list: async () => [] });
+	ctx.provide("sessions", { get: () => void 0 });
+	const cache = new ArchiveProjectionCache(ctx, { writeEveryEvents: 200, writeIntervalMs: 5000 });
+	await cache[Service.init]();
+	const limit = cache.deletedSessionTombstoneLimit;
+	assert.ok(limit > 0);
+	for (let i = 0; i < limit + 3; i++) await cache.delete(`gone-${i}`);
+	assert.equal(cache.deletedSessionIds.has("gone-0"), false);
+	assert.equal(cache.deletedSessionIds.has(`gone-${limit + 2}`), true);
+	assert.ok(cache.deletedSessionIds.size <= limit);
+});
+
 test("ArchiveProjectionCache whenIdle waits for disposal write before delete", async () => {
 	const ctx = new Context();
 	const table = new FakeTable({});

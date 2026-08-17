@@ -39,12 +39,13 @@ test("归档设置页下拉菜单不强制宿主主题", async () => {
   assert.doesNotMatch(client, /\.dsham_settingsFilter\{color-scheme:/);
 });
 
-test("归档设置页删除全部会收集父会话和 subagent 子会话", async () => {
+test("删除只提交根会话或归档集合，子代理交给服务端级联", async () => {
   const client = await readFile(clientPath, "utf8");
 
-  assert.match(client, /collectArchivedDeleteAllIds\(workspaceState\.archivedSessionIds, sessions\.byId\)/);
-  assert.match(client, /deleteTarget\.all \? deleteAllSessionIds : collectSessionAndDescendantIds\(deleteTarget\.id, sessions\.byId\)/);
-  assert.match(client, /collectSessionAndDescendantIds\(rootId, sessionSnapshot\.byId\)/);
+  assert.match(client, /deleteTarget\.all \? deleteAllSessionIds : \[deleteTarget\.id\]/);
+  assert.match(client, /await deleteSession\(rootId\)/);
+  assert.doesNotMatch(client, /collectArchivedDeleteAllIds\(workspaceState\.archivedSessionIds, sessions\.byId\)/);
+  assert.doesNotMatch(client, /collectSessionAndDescendantIds\(rootId, sessionSnapshot\.byId\)/);
 });
 
 test("删除文案中英键齐全，并统一使用子代理用语", async () => {
@@ -53,10 +54,14 @@ test("删除文案中英键齐全，并统一使用子代理用语", async () =>
   assert.match(client, /"deleteSession.unknown": "This session no longer exists or was already deleted."/);
   assert.match(client, /"deleteSession.failed": "删除会话失败：{detail}"/);
   assert.match(client, /"deleteSession.failed": "Could not delete the session: {detail}"/);
-  assert.match(client, /及其子代理和记录/);
-  assert.match(client, /their child agents/);
+  assert.match(client, /及其子代理（含正在运行的）/);
+  assert.match(client, /their child agents \(including any that are still running\)/);
   assert.doesNotMatch(client, /及其子会话和记录/);
   assert.match(client, /isUnknownSessionError\(reason\)/);
+  assert.match(client, /"archives.archiveFailed": "归档失败：{detail}"/);
+  assert.match(client, /"archives.archiveFailed": "Could not archive the session: {detail}"/);
+  assert.match(client, /showArchivedToast\(formatArchiveError/);
+  assert.match(client, /showArchivedToast\(formatUnarchiveError/);
 });
 
 test("归档设置页使用自定义项目筛选菜单，而不是原生 select", async () => {
