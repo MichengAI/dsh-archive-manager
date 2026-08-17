@@ -1,60 +1,117 @@
-<p align="center">
-  <img src="assets/icon.png" alt="DSH Archive Manager" width="96">
-</p>
+<div align="center">
+<table cellpadding="0" cellspacing="0">
+<tr>
+<td valign="middle" align="center">
+  <img src="assets/icon.png" alt="DSH Archive Manager logo" width="168">
+</td>
+<td valign="middle">
+<pre>
+   ____  ____  _   _
+  |  _ \/ ___|| | | |
+  | | | \___ \| |_| |
+  | |_| |___) |  _  |
+  |____/|____/|_| |_|
+    ARCHIVE MANAGER
+Safe archived session control
+ DeepSeek Harness plugin
+</pre>
+</td>
+</tr>
+</table>
+</div>
 
-<h1 align="center">DSH Archive Manager</h1>
+<div align="center">
 
-<p align="center">
-  <strong>A DeepSeek Harness Web plugin for safely managing archived sessions.</strong>
-</p>
+  # DSH Archive Manager
 
-<p align="center">
-  <a href="https://github.com/MichengAI/dsh-archive-manager/issues">Report an issue</a>
-  · <a href="https://www.npmjs.com/package/@michengai/dsh-archive-manager">View on npm</a>
-  · <a href="README.zh-CN.md">简体中文</a>
-</p>
+  **Safely manage archived sessions in DeepSeek Harness**
 
-<p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="Apache License 2.0"></a>
-  <a href="https://www.npmjs.com/package/@michengai/dsh-archive-manager"><img src="https://img.shields.io/npm/v/%40michengai/dsh-archive-manager?label=npm" alt="npm package"></a>
-  <img src="https://img.shields.io/badge/DSH-Web%20Plugin-10b981" alt="DSH Web Plugin">
-  <img src="https://img.shields.io/badge/Node.js-22%2B-339933?logo=nodedotjs&logoColor=white" alt="Node.js 22 or later">
-</p>
+  [简体中文](README.zh-CN.md) · [Apache-2.0](LICENSE)
 
-<p align="center">
-  <img src="assets/screenshots/archived-sessions.png" alt="Archived Sessions settings page" width="1200">
-</p>
+  [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
+  [![npm package](https://img.shields.io/npm/v/%40michengai%2Fdsh-archive-manager.svg?label=npm%20package)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
+  [![DSH Web Plugin](https://img.shields.io/badge/DSH%20Web-Plugin-0f766e.svg)](https://github.com/MichengAI/dsh-archive-manager)
+  [![Node.js 22 or later](https://img.shields.io/badge/Node.js-22%20or%20later-339933.svg?logo=node.js&logoColor=white)](https://nodejs.org/)
+</div>
 
-> DSH Archive Manager is a community-maintained plugin, not an official DeepSeek AI product.
+> DSH Archive Manager is a community-maintained DeepSeek Harness (DSH) plugin, not an official DeepSeek AI product.
 
 ## Features
 
-- Archives a session from the sidebar session menu.
-- Lists archived sessions by workspace in **Settings → Archived Sessions**.
-- Safely restores a session to its original workspace position.
-- Permanently deletes a confirmed session, its workspace association, archive marker, and projection cache.
-- Removes unloaded deleted sessions from connected sidebars immediately.
+- Archive a session from the sidebar session menu.
+- Search archived chats and filter them by workspace in **Settings → Archived**.
+- Restore a session to its original workspace with **Unarchive**.
+- Permanently delete a confirmed session, its workspace association, archive marker, and projection cache.
+- Delete all archived chats after confirmation, including child agents.
+- Remove unloaded deleted sessions from connected sidebars immediately.
+- Paste one sentence into DSH, Codex, or WorkBuddy and let that agent install the plugin locally.
+
+## Screenshots
+
+Open the sidebar session menu and choose **Archive session**:
+
+![Archive a session from the session menu](assets/screenshots/archive-session-menu.png)
+
+Search, filter by project, unarchive, or permanently delete chats in **Settings → Archived**:
+
+![Archived chats settings page](assets/screenshots/archived-sessions.png)
 
 ## Prerequisites
 
 - A working DeepSeek Harness Web installation with `dsh` available in PowerShell.
 - Examples use the `web` profile; replace it with the target profile.
-- Source installation and development require Node.js 22+ and pnpm. npm installation does not require running `npm install` in an arbitrary directory.
+- Source installation and development require Node.js 22+ and pnpm. npm installation does not require running `pnpm install` separately.
 
 ## Installation
 
-### Install from npm
+`dsh plugin add` forwards to `pnpm add` in the profile directory. Without a version and official registry, a local mirror or minimum-release-age policy can leave you on an older build.
 
-Run this from any PowerShell directory. Install into the DSH profile through `dsh plugin`, not as a dependency of an unrelated project:
+### Ask another agent to install it
+
+This plugin runs inside DeepSeek Harness Web. Copy one of the sentences below into DSH, Codex, or WorkBuddy and let that agent install it into your local `web` profile.
+
+From npm:
+
+```text
+Install the latest DSH plugin @michengai/dsh-archive-manager into my local web profile using the official npm registry: dsh plugin --profile web add @michengai/dsh-archive-manager@latest --registry=https://registry.npmjs.org/. Then run dsh --profile web --dump-config, confirm archive-manager is mounted, and remind me to restart DSH Web and hard-refresh the browser.
+```
+
+From source:
+
+```text
+Install the DSH plugin from source at https://github.com/MichengAI/dsh-archive-manager: clone it, run pnpm install --frozen-lockfile and pnpm build, then run dsh plugin --profile web add . from that directory. Do not copy lib by itself. Then run dsh --profile web --dump-config, confirm archive-manager is mounted, and remind me to restart DSH Web and hard-refresh the browser.
+```
+
+| Product | How to use it |
+| --- | --- |
+| DSH | Send one of the sentences above to the current session. |
+| Codex | Send one of the sentences above to Codex and let it install locally. |
+| WorkBuddy | Send one of the sentences above to WorkBuddy; for a source install you can also paste `https://github.com/MichengAI/dsh-archive-manager`. |
+
+Codex and WorkBuddy only install the plugin. After that, open DSH Web and use **Settings → Archived**.
+
+You can also run the same npm command yourself:
+
+```powershell
+dsh plugin --profile web add @michengai/dsh-archive-manager@latest --registry=https://registry.npmjs.org/
+```
+
+If `dsh` is not on PATH, replace the leading `dsh` with `npx --yes @deepseek-ai/dsh`.
+
+### Install the latest package from the official npm registry
+
+Run this from any PowerShell directory:
 
 ```powershell
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
-dsh plugin --profile web add @michengai/dsh-archive-manager
+dsh plugin --profile web add @michengai/dsh-archive-manager@latest --registry=https://registry.npmjs.org/
 dsh --profile web --dump-config
 ```
 
-Restart DSH Web and hard-refresh the browser after installation or upgrade. If a package mirror is behind, append `--registry=https://registry.npmjs.org/`.
+To pin a release, replace `@latest` with a version such as `@0.1.8`.
+
+The configuration output should contain `workspace-archive-manager` and `ui-workspace-archive-manager`. Restart DSH Web and hard-refresh the browser. Do not copy client files manually: the Settings page and archive menu need the mounted plugin.
 
 ### Install from source
 
@@ -72,18 +129,15 @@ dsh plugin --profile web add .
 dsh --profile web --dump-config
 ```
 
-Restart DSH Web and hard-refresh the browser. Local installation applies `cordis.patch.yml`; do not copy `lib` or client files manually.
+Restart DSH Web and hard-refresh the browser. `dsh plugin ... add .` reads the package metadata and `cordis.patch.yml`; do not install by copying `lib` directly.
 
 ## Usage
 
 1. Open the sidebar session menu and choose **Archive session**.
-2. Open **Settings → Archived Sessions** to inspect sessions by workspace.
-3. Select **Unarchive** to restore a session, or use the delete icon to remove it permanently.
-4. Confirm deletion. **It cannot be undone.**
-
-<p align="center">
-  <img src="assets/screenshots/archive-session-menu.png" alt="Archive a session from the session menu" width="1200">
-</p>
+2. Open **Settings → Archived** to inspect sessions by workspace.
+3. Use the search box or project filter to narrow the list.
+4. Select **Unarchive** to restore a session, or use the delete icon to remove it permanently.
+5. Confirm deletion. **It cannot be undone.**
 
 If the entry is missing after installation or upgrade, restart DSH Web and hard-refresh the browser. It is located directly after **Connectors** in Settings.
 

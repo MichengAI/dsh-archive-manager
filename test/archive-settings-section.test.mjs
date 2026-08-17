@@ -58,3 +58,13 @@ test("删除文案中英键齐全，并统一使用子代理用语", async () =>
   assert.doesNotMatch(client, /及其子会话和记录/);
   assert.match(client, /isUnknownSessionError\(reason\)/);
 });
+
+test("归档设置页使用自定义项目筛选菜单，而不是原生 select", async () => {
+  const client = await readFile(clientPath, "utf8");
+
+  assert.match(client, /function ArchiveProjectSelect/);
+  assert.match(client, /className: "dsham_selectMenu"/);
+  assert.match(client, /role: "listbox"/);
+  assert.match(client, /dsham_selectOption\[aria-selected='true'\]/);
+  assert.doesNotMatch(client, /jsx\)\("select", \{ className: "dsham_settingsFilter"/);
+});

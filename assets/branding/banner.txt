@@ -1,0 +1,11 @@
+README 左侧使用仓库已有 assets/icon.png（宽 168，不随表格均分撑开）
+右侧字符：
+
+   ____  ____  _   _
+  |  _ \/ ___|| | | |
+  | | | \___ \| |_| |
+  | |_| |___) |  _  |
+  |____/|____/|_| |_|
+    ARCHIVE MANAGER
+Safe archived session control
+ DeepSeek Harness plugin
