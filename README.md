@@ -1,24 +1,6 @@
-<div align="center">
-<table cellpadding="0" cellspacing="0">
-<tr>
-<td valign="middle" align="center">
-  <img src="assets/icon.png" alt="DSH Archive Manager logo" width="168">
-</td>
-<td valign="middle">
-<pre>
-   ____  ____  _   _
-  |  _ \/ ___|| | | |
-  | | | \___ \| |_| |
-  | |_| |___) |  _  |
-  |____/|____/|_| |_|
-    ARCHIVE MANAGER
-Safe archived session control
- DeepSeek Harness plugin
-</pre>
-</td>
-</tr>
-</table>
-</div>
+<p align="center">
+  <img src="assets/branding/dsh-banner.png" alt="DSH Archive Manager" width="100%">
+</p>
 
 <div align="center">
 

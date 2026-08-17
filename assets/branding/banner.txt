@@ -1,11 +1,2 @@
-README 左侧使用仓库已有 assets/icon.png（宽 168，不随表格均分撑开）
-右侧字符：
-
-   ____  ____  _   _
-  |  _ \/ ___|| | | |
-  | | | \___ \| |_| |
-  | |_| |___) |  _  |
-  |____/|____/|_| |_|
-    ARCHIVE MANAGER
-Safe archived session control
- DeepSeek Harness plugin
+README 顶部使用 assets/branding/dsh-banner.png 全宽展示。
+仓库标识仍保留 assets/icon.png，供插件图标和其它入口复用。
