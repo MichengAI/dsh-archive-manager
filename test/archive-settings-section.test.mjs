@@ -44,8 +44,8 @@ test("删除只提交根会话或归档集合，子代理交给服务端级联",
 
   assert.match(client, /deleteTarget\.all \? deleteAllSessionIds : \[deleteTarget\.id\]/);
   assert.match(client, /await deleteSession\(rootId\)/);
-  assert.doesNotMatch(client, /collectArchivedDeleteAllIds\(workspaceState\.archivedSessionIds, sessions\.byId\)/);
-  assert.doesNotMatch(client, /collectSessionAndDescendantIds\(rootId, sessionSnapshot\.byId\)/);
+  // 客户端级联收集（collect*）已按 clean cutover 移除，不得回归。
+  assert.doesNotMatch(client, /collectSessionAndDescendantIds|collectArchivedDeleteAllIds/);
 });
 
 test("删除文案中英键齐全，并统一使用子代理用语", async () => {

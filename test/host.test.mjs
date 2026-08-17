@@ -525,6 +525,28 @@ test("cold reuse of a deleted id (new lifecycle) clears the tombstone; a stale s
 	assert.deepEqual(env.global.archivedSessionIds, [s2]);
 });
 
+test("cold-reuse probe normalizes a missing cwd on both sides of the identity comparison", async () => {
+	// 删除时身份带 cwd，list 返回同 createdAt 但无 cwd 的头部：形状不同即身份不同，按新生命周期放行。
+	const env = buildRoot({
+		headers: [header(s1, cwdA), header(s2, cwdA)],
+		workspaces: { [A]: workspace("D:\\proj-a", [s1, s2]) },
+		archived: [s2]
+	});
+	const registry = await mountWorkspaceRegistry(env);
+	await registry.deleteSession(s2);
+	env.persistence.headers = env.persistence.headers.map((item) => item.id === s2 ? { id: s2, createdAt: 1700000000000 } : item);
+	assert.equal(await registry.sessionKnown(s2), true, "a header whose cwd shape differs from the deleted identity is a new lifecycle");
+	// 双侧均无 cwd 的同生命周期头部：归一为 null 后相等，仍拦截。
+	const env2 = buildRoot({
+		headers: [{ id: s3, createdAt: 1700000000000 }],
+		workspaces: {},
+		archived: [s3]
+	});
+	const registry2 = await mountWorkspaceRegistry(env2);
+	await registry2.deleteSession(s3);
+	assert.equal(await registry2.sessionKnown(s3), false, "both-missing cwd normalizes to null and keeps the stale header unknown");
+});
+
 test("typert gateway SRC: claims + dispatch unarchiveSession/deleteSession end to end", async () => {
 	const env = buildRoot({
 		headers: [header(s1, cwdA), header(s2, cwdA), header(s3, cwdB)],

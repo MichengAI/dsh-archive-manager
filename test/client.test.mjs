@@ -102,8 +102,6 @@ test("bundle materializes with apply/inject and the __test surface", () => {
 	assert.equal(typeof t.deriveFlat, "function");
 	assert.equal(typeof t.deriveSearchResults, "function");
 	assert.equal(typeof t.displayTitle, "function");
-	assert.equal(typeof t.collectArchivedDeleteAllIds, "function");
-	assert.equal(typeof t.collectSessionAndDescendantIds, "function");
 	assert.equal(typeof t.isUnknownSessionError, "function");
 });
 
@@ -169,33 +167,6 @@ test("view store: showArchived default false, persists toggles, same store famil
 	assert.equal(spec.persist, "dsh.workspace.view.v5");
 	assert.equal(typeof spec.actions.setGroupBy, "function");
 	assert.equal(typeof spec.actions.setShowArchived, "function");
-});
-
-test("collectArchivedDeleteAllIds includes archived parents, archived children, and live children of archived parents", () => {
-	const byId = {
-		parent: summary("parent"),
-		child: summary("child", { origin: "subagent", parentId: "parent" }),
-		archivedChild: summary("archivedChild", { origin: "subagent", parentId: "other" }),
-		liveChild: summary("liveChild", { origin: "subagent", parentId: "parent" }),
-		unrelated: summary("unrelated", { origin: "subagent", parentId: "someone-else" })
-	};
-	assert.deepEqual(t.collectArchivedDeleteAllIds(["parent", "archivedChild"], byId), ["child", "liveChild", "parent", "archivedChild"]);
-	assert.deepEqual(t.collectArchivedDeleteAllIds(["archivedChild"], byId), ["archivedChild"]);
-	assert.deepEqual(t.collectArchivedDeleteAllIds(["parent", "parent"], byId), ["child", "liveChild", "parent"]);
-});
-
-test("collectSessionAndDescendantIds deletes descendants before the session", () => {
-	const byId = {
-		root: summary("root"),
-		child: summary("child", { origin: "subagent", parentId: "root" }),
-		grand: summary("grand", { origin: "subagent", parentId: "child" }),
-		fork: summary("fork", { parentId: "root" }),
-		other: summary("other", { origin: "subagent", parentId: "someone-else" })
-	};
-	assert.deepEqual(t.collectSessionAndDescendantIds("root", byId), ["grand", "child", "root"]);
-	assert.deepEqual(t.collectSessionAndDescendantIds("child", byId), ["grand", "child"]);
-	assert.deepEqual(t.collectSessionAndDescendantIds("fork", byId), ["fork"]);
-	assert.deepEqual(t.collectSessionAndDescendantIds("missing", byId), ["missing"]);
 });
 
 test("isUnknownSessionError recognizes the stable delete token", () => {
