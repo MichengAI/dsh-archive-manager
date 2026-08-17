@@ -10,3 +10,6 @@ pnpm-debug.log*
 # 本地日志与系统文件
 *.log
 .DS_Store
+
+# 本地交接文档（不入库，仅本机维护）
+docs/
