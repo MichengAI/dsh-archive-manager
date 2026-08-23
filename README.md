@@ -180,3 +180,7 @@ pnpm pack:check
 ## License
 
 Licensed under [Apache License 2.0](LICENSE).
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the five most recent releases.

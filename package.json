@@ -1,6 +1,6 @@
 {
   "name": "@michengai/dsh-archive-manager",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "NPM-installable DSH Web plugin for managing archived sessions.",
   "type": "module",
   "packageManager": "pnpm@11.21.0",
@@ -21,7 +21,9 @@
     "cordis.patch.yml",
     "README.md",
     "README.zh-CN.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md",
+    "CHANGELOG.zh-CN.md"
   ],
   "scripts": {
     "build": "node scripts/check-package.mjs",
