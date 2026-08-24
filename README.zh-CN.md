@@ -8,7 +8,7 @@
 
   **在 DeepSeek Harness 中安全管理已归档会话**
 
-  [English](README.md) · [Apache-2.0](LICENSE)
+  [English](README.md) · [更新日志](CHANGELOG.zh-CN.md) · [Apache-2.0](LICENSE)
 
   [![许可证：Apache-2.0](https://img.shields.io/badge/许可证-Apache--2.0-blue.svg)](LICENSE)
   [![npm package](https://img.shields.io/npm/v/%40michengai%2Fdsh-archive-manager.svg?label=npm%20package)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
@@ -186,4 +186,4 @@ pnpm pack:check
 
 ## 更新日志
 
-最近五个发布版本见 [CHANGELOG.zh-CN.md](CHANGELOG.zh-CN.md)。
+完整保留的发布说明见 [CHANGELOG.zh-CN.md](CHANGELOG.zh-CN.md)。

@@ -2,7 +2,7 @@
 
 [English](CHANGELOG.md)
 
-以下记录最近发布的五个版本。
+以下发布说明会持续保留；新增版本时不再删除较早记录。
 
 ## 0.1.14 — 2026-08-24
 
@@ -40,3 +40,10 @@
 - 归档计数仅统计当前可见会话。
 
 发布标签：[`v0.1.10`](https://github.com/MichengAI/dsh-archive-manager/tree/v0.1.10)。
+
+## 0.1.9 — 2026-08-17
+
+- 移除客户端级联删除，并显示侧栏操作错误。
+- 重做项目筛选样式并刷新插件文档。
+
+发布标签：[`v0.1.9`](https://github.com/MichengAI/dsh-archive-manager/tree/v0.1.9)。

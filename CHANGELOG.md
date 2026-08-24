@@ -2,7 +2,7 @@
 
 [简体中文](CHANGELOG.zh-CN.md)
 
-The five most recent published versions are listed below.
+Published release notes are retained below; new versions are added without removing earlier entries.
 
 ## 0.1.14 — 2026-08-24
 
@@ -40,3 +40,10 @@ Release tag: [`v0.1.11`](https://github.com/MichengAI/dsh-archive-manager/tree/v
 - Counted only visible conversations in archive totals.
 
 Release tag: [`v0.1.10`](https://github.com/MichengAI/dsh-archive-manager/tree/v0.1.10).
+
+## 0.1.9 — 2026-08-17
+
+- Removed client-side cascade deletes and surfaced sidebar operation errors.
+- Restyled the project filter and refreshed plugin documentation.
+
+Release tag: [`v0.1.9`](https://github.com/MichengAI/dsh-archive-manager/tree/v0.1.9).
