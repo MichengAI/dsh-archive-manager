@@ -4,6 +4,14 @@
 
 The five most recent published versions are listed below.
 
+## 0.1.14 — 2026-08-24
+
+- Added project-scoped batch restore and permanent deletion, plus a page-level **Restore all** action.
+- Added archived-chat sorting by last update, creation time, or title, backed by authoritative host creation metadata.
+- Added confirmation, success, and partial-failure feedback for batch archive operations.
+
+Published package: [`@michengai/dsh-archive-manager@0.1.14`](https://www.npmjs.com/package/@michengai/dsh-archive-manager/v/0.1.14).
+
 ## 0.1.13 — 2026-08-23
 
 - Added bilingual changelogs covering the five most recent releases.
@@ -32,10 +40,3 @@ Release tag: [`v0.1.11`](https://github.com/MichengAI/dsh-archive-manager/tree/v
 - Counted only visible conversations in archive totals.
 
 Release tag: [`v0.1.10`](https://github.com/MichengAI/dsh-archive-manager/tree/v0.1.10).
-
-## 0.1.9 — 2026-08-17
-
-- Removed client-side cascade deletes and surfaced sidebar operation errors.
-- Restyled the project filter and refreshed plugin documentation.
-
-Release tag: [`v0.1.9`](https://github.com/MichengAI/dsh-archive-manager/tree/v0.1.9).

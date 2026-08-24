@@ -205,10 +205,35 @@ test("deriveArchivedGroups: 无归档会话的工作区不产出空分组", () =
 	assert.deepEqual(groups.map((g) => g.key), ["w1"]);
 });
 
-test("deriveArchivedDeleteAllIds: 取归档全集，仅排除已知 subagent，不依赖摘要加载", () => {
-	const byId = { s1: summary("s1"), sub: summary("sub", { origin: "subagent" }) };
-	// s2 故意不在 byId（投影未加载）：仍必须进入删除全集。
-	assert.deepEqual(t.deriveArchivedDeleteAllIds(["s1", "s2", "sub"], byId), ["s1", "s2"]);
-	assert.deepEqual(t.deriveArchivedDeleteAllIds(["s1", "s1"], byId), ["s1"], "归档集合重复 id 去重");
-	assert.deepEqual(t.deriveArchivedDeleteAllIds([], byId), []);
+test("sortArchivedGroups: 按更新、创建或字母顺序排列项目与组内会话且不改写输入", () => {
+	const groups = [
+		{ key: "w1", title: "zeta", sessions: [summary("a", { displayTitle: "Alpha", updatedAt: 10 }), summary("b", { displayTitle: "Beta", updatedAt: 30 })] },
+		{ key: "w2", title: "alpha", sessions: [summary("c", { displayTitle: "Charlie", updatedAt: 20 })] }
+	];
+	const createdAtById = { a: 40, b: 10, c: 50 };
+	const translate = (key) => key;
+
+	const updated = t.sortArchivedGroups(groups, "updated", createdAtById, translate);
+	assert.deepEqual(updated.map((group) => group.key), ["w1", "w2"]);
+	assert.deepEqual(updated[0].sessions.map((session) => session.id), ["b", "a"]);
+
+	const created = t.sortArchivedGroups(groups, "created", createdAtById, translate);
+	assert.deepEqual(created.map((group) => group.key), ["w2", "w1"]);
+	assert.deepEqual(created[1].sessions.map((session) => session.id), ["a", "b"]);
+
+	const alphabetical = t.sortArchivedGroups(groups, "alphabetical", createdAtById, translate);
+	assert.deepEqual(alphabetical.map((group) => group.key), ["w2", "w1"]);
+	assert.deepEqual(alphabetical[1].sessions.map((session) => session.id), ["a", "b"]);
+	assert.deepEqual(groups[0].sessions.map((session) => session.id), ["a", "b"], "原分组顺序保持不变");
+});
+
+test("deriveArchivedBatchIds: 按完整归档集合派生全部、项目和未分组批次", () => {
+	const items = [
+		{ workspaceId: "w1", title: "proj-a", sessionIds: ["s1", "s-missing"] },
+		{ workspaceId: "w2", title: "proj-b", sessionIds: ["s2"] }
+	];
+	const archived = ["s1", "s-missing", "s2", "s3", "s1"];
+	assert.deepEqual(t.deriveArchivedBatchIds(archived, items, { scope: "all" }), ["s1", "s-missing", "s2", "s3"]);
+	assert.deepEqual(t.deriveArchivedBatchIds(archived, items, { scope: "workspace", workspaceId: "w1" }), ["s1", "s-missing"], "摘要未加载的项目会话仍计入批次");
+	assert.deepEqual(t.deriveArchivedBatchIds(archived, items, { scope: "ungrouped" }), ["s3"]);
 });

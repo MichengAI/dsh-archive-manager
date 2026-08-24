@@ -4,6 +4,14 @@
 
 以下记录最近发布的五个版本。
 
+## 0.1.14 — 2026-08-24
+
+- 新增项目级批量恢复和永久删除，并在页面顶部增加「全部恢复」。
+- 新增按更新时间、创建时间或标题排序归档聊天；创建时间来自宿主权威元数据。
+- 为批量归档操作新增确认、成功和部分失败反馈。
+
+发布包：[`@michengai/dsh-archive-manager@0.1.14`](https://www.npmjs.com/package/@michengai/dsh-archive-manager/v/0.1.14)。
+
 ## 0.1.13 — 2026-08-23
 
 - 新增中英文更新日志，展示最近五个发布版本。
@@ -32,10 +40,3 @@
 - 归档计数仅统计当前可见会话。
 
 发布标签：[`v0.1.10`](https://github.com/MichengAI/dsh-archive-manager/tree/v0.1.10)。
-
-## 0.1.9 — 2026-08-17
-
-- 移除客户端级联删除，并显示侧栏操作错误。
-- 重做项目筛选样式并刷新插件文档。
-
-发布标签：[`v0.1.9`](https://github.com/MichengAI/dsh-archive-manager/tree/v0.1.9)。

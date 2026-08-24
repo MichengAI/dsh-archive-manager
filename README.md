@@ -22,8 +22,10 @@
 ## Features
 
 - Archive a session from the sidebar session menu.
-- Search archived chats and filter them by workspace in **Settings → Archived**.
+- Search archived chats, sort them by update time, creation time, or title, and filter them by workspace in **Settings → Archived**.
 - Restore a session to its original workspace with **Unarchive**.
+- Restore or permanently delete every archived chat in a project group.
+- Restore all archived chats from the page header.
 - Permanently delete a confirmed session, its workspace association, archive marker, and projection cache.
 - Delete all archived chats after confirmation, including child agents.
 - Remove unloaded deleted sessions from connected sidebars immediately.
@@ -35,7 +37,7 @@ Open the sidebar session menu and choose **Archive session**:
 
 ![Archive a session from the session menu](assets/screenshots/archive-session-menu.png)
 
-Search, filter by project, unarchive, or permanently delete chats in **Settings → Archived**:
+Search, sort, filter by project, unarchive, or permanently delete chats in **Settings → Archived**:
 
 ![Archived chats settings page](assets/screenshots/archived-sessions.png)
 
@@ -129,9 +131,10 @@ Restart DSH Web and hard-refresh the browser. `dsh plugin ... add .` reads the p
 
 1. Open the sidebar session menu and choose **Archive session**.
 2. Open **Settings → Archived** to inspect sessions by workspace.
-3. Use the search box or project filter to narrow the list.
-4. Select **Unarchive** to restore a session, or use the delete icon to remove it permanently.
-5. Confirm deletion. **It cannot be undone.**
+3. Search by title, sort by update time, creation time, or title, or filter the list by project.
+4. Select **Unarchive** to restore one session, or select **Restore all** in the page header.
+5. Open a project heading's action menu to restore or delete all of that project's archived chats.
+6. Use the delete icon to remove one session permanently, then confirm the deletion. **It cannot be undone.**
 
 If the entry is missing after installation or upgrade, restart DSH Web and hard-refresh the browser. It is located directly after **Connectors** in Settings.
 

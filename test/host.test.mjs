@@ -202,6 +202,39 @@ test("unarchiveSession rejects unknown sessions", async () => {
 	await assert.rejects(() => registry.unarchiveSession(sUnknown), /UNKNOWN_SESSION/);
 });
 
+test("archivedSessionMetadata returns host header creation times and skips stale archive markers", async () => {
+	const env = buildRoot({
+		headers: [header(s1, cwdA, { createdAt: 100 }), header(s2, cwdA, { createdAt: 200 })],
+		workspaces: { [A]: workspace("D:\\proj-a", [s1, s2]) },
+		archived: [s2, sUnknown, s1, s2]
+	});
+	const registry = await mountWorkspaceRegistry(env);
+	assert.deepEqual(await registry.archivedSessionMetadata(), {
+		items: [{ sessionId: s2, createdAt: 200 }, { sessionId: s1, createdAt: 100 }]
+	});
+});
+
+test("unarchiveSessions restores an authoritative workspace or ungrouped scope in one state update", async () => {
+	const env = buildRoot({
+		headers: [header(s1, cwdA), header(s2, cwdA), header(s3, cwdB), header(s4, cwdA)],
+		workspaces: { [A]: workspace("D:\\proj-a", [s1, s2]), [B]: workspace("D:\\proj-b", [s3]) },
+		archived: [s1, s2, s3, s4, sUnknown]
+	});
+	const registry = await mountWorkspaceRegistry(env);
+	const workspaceResult = await registry.unarchiveSessions({ scope: "workspace", workspaceId: A });
+	assert.deepEqual(workspaceResult.unarchivedSessionIds, [s1, s2]);
+	assert.deepEqual(workspaceResult.archivedSessionIds, [s3, s4, sUnknown]);
+	assert.deepEqual(env.global.archivedSessionIds, [s3, s4, sUnknown]);
+	const ungroupedResult = await registry.unarchiveSessions({ scope: "ungrouped" });
+	assert.deepEqual(ungroupedResult.unarchivedSessionIds, [s4, sUnknown], "stale ungrouped markers are cleared without requiring a summary or transcript");
+	assert.deepEqual(env.global.archivedSessionIds, [s3]);
+	const allResult = await registry.unarchiveSessions({ scope: "all" });
+	assert.deepEqual(allResult.unarchivedSessionIds, [s3]);
+	assert.deepEqual(env.global.archivedSessionIds, []);
+	await assert.rejects(() => registry.unarchiveSessions({ scope: "workspace", workspaceId: "missing" }), /unknown workspace/);
+	await assert.rejects(() => registry.unarchiveSessions({ scope: "invalid" }), /target\.scope must be/);
+});
+
 test("deleteSession rejects unknown sessions", async () => {
 	const env = buildRoot({ headers: [header(s1, cwdA)], workspaces: { [A]: workspace("D:\\proj-a", [s1]) } });
 	const registry = await mountWorkspaceRegistry(env);
@@ -235,6 +268,30 @@ test("deleteSession removes transcript, archive marker, accounts, and cache row 
 	assert.equal(existsSync(env.located.get(s2)), false, "archived session transcript dir removed");
 	assert.deepEqual(env.persistence.prepared, [s4, s2]);
 	assert.deepEqual(env.sessions.detached, [s4, s2]);
+});
+
+test("deleteArchivedSessions snapshots a workspace scope, continues after failures, and reports partial success", async () => {
+	const env = buildRoot({
+		headers: [header(s1, cwdA), header(s2, cwdA), header(s3, cwdB)],
+		workspaces: { [A]: workspace("D:\\proj-a", [s1, s2]), [B]: workspace("D:\\proj-b", [s3]) },
+		archived: [s1, s2, s3]
+	});
+	const registry = await mountWorkspaceRegistry(env);
+	const originalDelete = env.projCache.delete;
+	env.projCache.delete = async (id) => {
+		if (id === s1) throw new Error("cache write failed");
+		return originalDelete.call(env.projCache, id);
+	};
+	const result = await registry.deleteArchivedSessions({ scope: "workspace", workspaceId: A });
+	assert.deepEqual(result.requestedSessionIds, [s1, s2]);
+	assert.deepEqual(result.deletedSessionIds, [s2]);
+	assert.deepEqual(result.skippedSessionIds, []);
+	assert.equal(result.failures.length, 1);
+	assert.equal(result.failures[0].sessionId, s1);
+	assert.match(result.failures[0].message, /cache write failed/);
+	assert.deepEqual(env.global.archivedSessionIds, [s3], "both attempted workspace markers are removed while the other workspace remains archived");
+	assert.equal(existsSync(env.located.get(s1)), true, "failed target keeps its transcript for diagnosis");
+	assert.equal(existsSync(env.located.get(s2)), false, "later targets still complete");
 });
 
 test("deleteSession keeps the transcript when archive bookkeeping fails", async () => {
@@ -365,12 +422,15 @@ test("deletedSessionIds evicts the oldest tombstone after the cap", async () => 
 	assert.ok(registry.deletedSessionIds.size <= limit);
 });
 
-test("markRemoteMethod registers unarchiveSession and deleteSession on the service prototype", async () => {
+test("markRemoteMethod registers single and batch archive methods on the service prototype", async () => {
 	const env = buildRoot({ headers: [header(s1, cwdA)], workspaces: { [A]: workspace("D:\\proj-a", [s1]) } });
 	const registry = await mountWorkspaceRegistry(env);
 	const methods = remoteMethods(registry).map((item) => item.method);
 	assert.ok(methods.includes("unarchiveSession"), "unarchiveSession must be marked Remote");
 	assert.ok(methods.includes("deleteSession"), "deleteSession must be marked Remote");
+	assert.ok(methods.includes("unarchiveSessions"), "unarchiveSessions must be marked Remote");
+	assert.ok(methods.includes("deleteArchivedSessions"), "deleteArchivedSessions must be marked Remote");
+	assert.ok(methods.includes("archivedSessionMetadata"), "archivedSessionMetadata must be marked Remote");
 });
 
 test("deleteSession cascade skips already-deleted subagent children", async () => {
@@ -547,7 +607,7 @@ test("cold-reuse probe normalizes a missing cwd on both sides of the identity co
 	assert.equal(await registry2.sessionKnown(s3), false, "both-missing cwd normalizes to null and keeps the stale header unknown");
 });
 
-test("typert gateway SRC: claims + dispatch unarchiveSession/deleteSession end to end", async () => {
+test("typert gateway SRC: claims + dispatch single and batch archive methods end to end", async () => {
 	const env = buildRoot({
 		headers: [header(s1, cwdA), header(s2, cwdA), header(s3, cwdB)],
 		workspaces: { [A]: workspace("D:\\proj-a", [s1, s2]), [B]: workspace("D:\\proj-b", [s3]) }
@@ -571,6 +631,9 @@ test("typert gateway SRC: claims + dispatch unarchiveSession/deleteSession end t
 	// SRC claims for the new endpoints
 	assert.equal(captured.matches("workspaceRegistry/unarchiveSession"), true);
 	assert.equal(captured.matches("workspaceRegistry/deleteSession"), true);
+	assert.equal(captured.matches("workspaceRegistry/unarchiveSessions"), true);
+	assert.equal(captured.matches("workspaceRegistry/deleteArchivedSessions"), true);
+	assert.equal(captured.matches("workspaceRegistry/archivedSessionMetadata"), true);
 	// legacy endpoints stay with the apiproxy (not claimed)
 	assert.equal(captured.matches("workspace.archiveSession"), false);
 	assert.equal(captured.matches("workspace.list"), false);
@@ -578,6 +641,19 @@ test("typert gateway SRC: claims + dispatch unarchiveSession/deleteSession end t
 	const unarchive = await captured.handler("workspaceRegistry/unarchiveSession", { args: { sessionId: s1 } }, void 0);
 	assert.equal(unarchive.ok, true);
 	assert.deepEqual(unarchive.value, { archivedSessionIds: [] });
+	await registry.archiveSession(s1);
+	const metadata = await captured.handler("workspaceRegistry/archivedSessionMetadata", { args: {} }, void 0);
+	assert.equal(metadata.ok, true);
+	assert.deepEqual(metadata.value, { items: [{ sessionId: s1, createdAt: 1700000000000 }] });
+	const unarchiveBatch = await captured.handler("workspaceRegistry/unarchiveSessions", { args: { target: { scope: "workspace", workspaceId: A } } }, void 0);
+	assert.equal(unarchiveBatch.ok, true);
+	assert.deepEqual(unarchiveBatch.value, { archivedSessionIds: [], unarchivedSessionIds: [s1] });
+	await registry.archiveSession(s2);
+	const deleteBatch = await captured.handler("workspaceRegistry/deleteArchivedSessions", { args: { target: { scope: "workspace", workspaceId: A } } }, void 0);
+	assert.equal(deleteBatch.ok, true);
+	assert.deepEqual(deleteBatch.value.requestedSessionIds, [s2]);
+	assert.deepEqual(deleteBatch.value.deletedSessionIds, [s2]);
+	assert.deepEqual(deleteBatch.value.failures, []);
 	// dispatch: deleteSession
 	const del = await captured.handler("workspaceRegistry/deleteSession", { args: { sessionId: s3 } }, void 0);
 	assert.equal(del.ok, true);
@@ -604,6 +680,9 @@ test("typert local contribution registers deleteSession before SRC discovery", a
 	const local = env.ctx.get("typert").local;
 	assert.ok(local.get("workspaceRegistry/deleteSession") !== undefined, "host must register workspaceRegistry/deleteSession on typert.local");
 	assert.ok(local.get("workspaceRegistry/unarchiveSession") !== undefined, "host must register workspaceRegistry/unarchiveSession on typert.local");
+	assert.ok(local.get("workspaceRegistry/unarchiveSessions") !== undefined, "host must register workspaceRegistry/unarchiveSessions on typert.local");
+	assert.ok(local.get("workspaceRegistry/deleteArchivedSessions") !== undefined, "host must register workspaceRegistry/deleteArchivedSessions on typert.local");
+	assert.ok(local.get("workspaceRegistry/archivedSessionMetadata") !== undefined, "host must register workspaceRegistry/archivedSessionMetadata on typert.local");
 	assert.equal(local.get("workspaceRegistry/deleteSession").service, "workspaceRegistry");
 	assert.equal(local.get("workspaceRegistry/deleteSession").method, "deleteSession");
 });

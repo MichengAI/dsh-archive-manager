@@ -15,15 +15,30 @@ test("归档入口注册在设置的连接器之后，并移除旧的视图选�
   assert.doesNotMatch(client, /viewOptions\.showArchived/);
 });
 
-test("归档设置页提供参考界面的搜索、筛选和全部删除入口", async () => {
+test("归档设置页提供搜索、排序、筛选、全部恢复和全部删除入口", async () => {
   const client = await readFile(clientPath, "utf8");
 
   assert.match(client, /dsham_settingsToolbar/);
   assert.match(client, /placeholder: t\("archives\.searchPlaceholder"\)/);
   assert.match(client, /className: "dsham_settingsFilter"/);
-  assert.match(client, /onClick: \(\) => setDeleteTarget\(\{ all: true \}\)/);
+  assert.match(client, /id: "dsham-sort-filter"/);
+  assert.match(client, /value: "updated", label: t\("archives\.sortUpdated"\)/);
+  assert.match(client, /value: "created", label: t\("archives\.sortCreated"\)/);
+  assert.match(client, /value: "alphabetical", label: t\("archives\.sortAlphabetical"\)/);
+  assert.match(client, /className: "dsham_settingsRestoreAll"/);
+  assert.match(client, /onClick: \(\) => onBatchUnarchive\(allBatchTarget\)/);
+  assert.match(client, /target: allBatchTarget/);
   assert.doesNotMatch(client, /value: chatType, onChange: \(event\) => setChatType\(event\.target\.value\)/);
   assert.doesNotMatch(client, /chatType === "all"/);
+});
+
+test("创建时间排序从宿主归档头部读取元数据，更新时间继续使用客户端摘要", async () => {
+  const client = await readFile(clientPath, "utf8");
+
+  assert.match(client, /registry\.archivedSessionMetadata\(\)/);
+  assert.match(client, /Object\.fromEntries\(result\.items\.map/);
+  assert.match(client, /sortBy === "created" \? createdAtById\[session\.id\] : session\.updatedAt/);
+  assert.match(client, /sortArchivedGroups\(groups, sortBy, createdAtById, t\)/);
 });
 
 test("归档设置页收紧顶部留白，侧栏入口使用简短归档标签", async () => {
@@ -39,11 +54,11 @@ test("归档设置页下拉菜单不强制宿主主题", async () => {
   assert.doesNotMatch(client, /\.dsham_settingsFilter\{color-scheme:/);
 });
 
-test("删除只提交根会话或归档集合，子代理交给服务端级联", async () => {
+test("单条删除与批量删除分别调用宿主单会话和作用域接口", async () => {
   const client = await readFile(clientPath, "utf8");
 
-  assert.match(client, /deleteTarget\.all \? deleteAllSessionIds : \[deleteTarget\.id\]/);
-  assert.match(client, /await deleteSession\(rootId\)/);
+  assert.match(client, /await deleteSession\(deleteTarget\.session\.id\)/);
+  assert.match(client, /await deleteArchivedSessions\(deleteTarget\.target\)/);
   // 客户端级联收集（collect*）已按 clean cutover 移除，不得回归。
   assert.doesNotMatch(client, /collectSessionAndDescendantIds|collectArchivedDeleteAllIds/);
 });
@@ -74,12 +89,24 @@ test("归档设置页使用自定义项目筛选菜单，而不是原生 select"
   assert.doesNotMatch(client, /jsx\)\("select", \{ className: "dsham_settingsFilter"/);
 });
 
-test("删除全集直接取归档集合，不依赖摘要是否已加载", async () => {
+test("批量计数直接取归档集合与 workspace 记账，不依赖摘要是否已加载", async () => {
   const client = await readFile(clientPath, "utf8");
 
-  assert.match(client, /deriveArchivedDeleteAllIds\(workspaceState\.archivedSessionIds, sessions\.byId\)/);
-  assert.match(client, /if \(byId\?\.\[id\]\?\.origin === "subagent"\) continue;/);
-  assert.doesNotMatch(client, /deleteAllSessionIds = \(0, react\.useMemo\)\(\(\) => groups\.flatMap/);
+  assert.match(client, /deriveArchivedBatchIds\(workspaceState\.archivedSessionIds, workspaceState\.items, allBatchTarget\)/);
+  assert.match(client, /const accounted = new Set\(items\.find/);
+  assert.match(client, /const accounted = new Set\(items\.flatMap/);
+  assert.doesNotMatch(client, /allBatchSessionIds = \(0, react\.useMemo\)\(\(\) => groups\.flatMap/);
+});
+
+test("每个项目分组提供恢复全部与删除全部菜单", async () => {
+  const client = await readFile(clientPath, "utf8");
+
+  assert.match(client, /function ArchivedGroupActions/);
+  assert.match(client, /archives\.restoreProject/);
+  assert.match(client, /archives\.deleteProject/);
+  assert.match(client, /IconEllipsisOutline16/);
+  assert.match(client, /archivedBatchTargetForGroup\(group\.key\)/);
+  assert.match(client, /archives\.deleteProjectDesc/);
 });
 
 test("项目筛选与分组使用 workspaceId 作为 key，选中项消失时回退所有项目", async () => {
@@ -100,4 +127,3 @@ test("确认框按 Escape 只关闭最上层，不关掉设置页", async () => 
   assert.match(client, /event\.stopImmediatePropagation/);
   assert.match(client, /if \(event\.key !== "Escape"\) return;/);
 });
-
