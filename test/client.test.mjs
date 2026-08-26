@@ -232,10 +232,10 @@ test("deriveArchivedBatchIds: 按完整归档集合派生全部、项目和未�
 		{ workspaceId: "w1", title: "proj-a", sessionIds: ["s1", "s-missing"] },
 		{ workspaceId: "w2", title: "proj-b", sessionIds: ["s2"] }
 	];
-	const archived = ["s1", "s-missing", "s2", "s3", "s1"];
-	assert.deepEqual(t.deriveArchivedBatchIds(archived, items, { scope: "all" }), ["s1", "s-missing", "s2", "s3"]);
+	const archived = ["s1", "s-missing", "s2", "s3", "s1", ""];
+	assert.deepEqual(t.deriveArchivedBatchIds(archived, items, { scope: "all" }), ["s1", "s-missing", "s2", "s3", ""], "客户端计数与宿主权威归档集合保持一致");
 	assert.deepEqual(t.deriveArchivedBatchIds(archived, items, { scope: "workspace", workspaceId: "w1" }), ["s1", "s-missing"], "摘要未加载的项目会话仍计入批次");
-	assert.deepEqual(t.deriveArchivedBatchIds(archived, items, { scope: "ungrouped" }), ["s3"]);
+	assert.deepEqual(t.deriveArchivedBatchIds(archived, items, { scope: "ungrouped" }), ["s3", ""], "异常空 ID 也由宿主批量清理路径处理");
 });
 
 test("archivedDeleteFeedback: skipped 会话不会计入删除成功数", () => {
