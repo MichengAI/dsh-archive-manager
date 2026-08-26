@@ -105,7 +105,7 @@ dsh plugin --profile web add @michengai/dsh-archive-manager@latest --registry=ht
 dsh --profile web --dump-config
 ```
 
-需要钉死某一版时，把 `@latest` 换成具体版本，例如 `@0.1.8`。
+需要钉死某一版时，把 `@latest` 换成具体版本，例如 `@x.y.z`。
 
 配置输出中应包含 `workspace-archive-manager` 与 `ui-workspace-archive-manager`。安装后重启 DSH Web 并在浏览器硬刷新；请勿手工复制客户端文件，否则设置页和归档菜单不会被挂载。
 

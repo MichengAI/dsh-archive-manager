@@ -14,7 +14,10 @@ const required = [
   "lib/projcache.js",
   "lib/client.js",
   "LICENSE",
-  "README.md"
+  "README.md",
+  "README.zh-CN.md",
+  "CHANGELOG.md",
+  "CHANGELOG.zh-CN.md"
 ];
 
 let failed = false;

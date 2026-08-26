@@ -237,3 +237,28 @@ test("deriveArchivedBatchIds: 按完整归档集合派生全部、项目和未�
 	assert.deepEqual(t.deriveArchivedBatchIds(archived, items, { scope: "workspace", workspaceId: "w1" }), ["s1", "s-missing"], "摘要未加载的项目会话仍计入批次");
 	assert.deepEqual(t.deriveArchivedBatchIds(archived, items, { scope: "ungrouped" }), ["s3"]);
 });
+
+test("archivedDeleteFeedback: skipped 会话不会计入删除成功数", () => {
+	const translate = (key, params) => ({ key, params });
+	const skippedOnly = t.archivedDeleteFeedback({
+		deletedSessionIds: [],
+		skippedSessionIds: ["stale"],
+		failures: []
+	}, translate);
+	assert.deepEqual(skippedOnly, {
+		kind: "notice",
+		message: { key: "archives.deleteSkipped", params: { n: 1 } }
+	});
+	const mixed = t.archivedDeleteFeedback({
+		deletedSessionIds: ["deleted"],
+		skippedSessionIds: ["stale"],
+		failures: [{ sessionId: "failed", message: "boom" }]
+	}, translate);
+	assert.deepEqual(mixed, {
+		kind: "error",
+		message: {
+			key: "archives.deletePartial",
+			params: { deleted: 1, skipped: 1, failed: 1, detail: "boom" }
+		}
+	});
+});

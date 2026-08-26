@@ -105,7 +105,7 @@ dsh plugin --profile web add @michengai/dsh-archive-manager@latest --registry=ht
 dsh --profile web --dump-config
 ```
 
-To pin a release, replace `@latest` with a version such as `@0.1.8`.
+To pin a release, replace `@latest` with a specific version such as `@x.y.z`.
 
 The configuration output should contain `workspace-archive-manager` and `ui-workspace-archive-manager`. Restart DSH Web and hard-refresh the browser. Do not copy client files manually: the Settings page and archive menu need the mounted plugin.
 

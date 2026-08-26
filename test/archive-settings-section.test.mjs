@@ -63,6 +63,23 @@ test("单条删除与批量删除分别调用宿主单会话和作用域接口",
   assert.doesNotMatch(client, /collectSessionAndDescendantIds|collectArchivedDeleteAllIds/);
 });
 
+test("批量删除反馈区分真正删除与陈旧归档记录清理", async () => {
+  const client = await readFile(clientPath, "utf8");
+
+  assert.match(client, /archivedDeleteFeedback\(result, t\)/);
+  assert.match(client, /"archives\.deleteSkipped"/);
+  assert.doesNotMatch(client, /deletedSessionIds\.length \+ result\.skippedSessionIds\.length/);
+});
+
+test("单条恢复按会话阻止重复提交，并在请求结束后释放", async () => {
+  const client = await readFile(clientPath, "utf8");
+
+  assert.match(client, /unarchivingSessionIdsRef\.current\.has\(sessionId\)/);
+  assert.match(client, /unarchivingSessionIdsRef\.current\.add\(sessionId\)/);
+  assert.match(client, /unarchivingSessionIdsRef\.current\.delete\(sessionId\)/);
+  assert.match(client, /disabled: busy \|\| unarchivingSessionIds\.has\(session\.id\)/);
+});
+
 test("删除文案中英键齐全，并统一使用子代理用语", async () => {
   const client = await readFile(clientPath, "utf8");
   assert.match(client, /"deleteSession.unknown": "会话已不存在或已被删除。"/);

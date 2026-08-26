@@ -15,6 +15,7 @@ import { WorkspaceUnknownSessionError } from "@deepseek-ai/dsh-workspace";
 import { TypertRegistry } from "@deepseek-ai/dsh-typert-registry";
 import { TypertGatewayService } from "@deepseek-ai/dsh-api-gateway";
 import { remoteMethods } from "@deepseek-ai/dsh-typert-protocol";
+import { sessionDir } from "@deepseek-ai/dsh-spill-local";
 import { ArchiveWorkspaceRegistry } from "../lib/workspace.js";
 import { ArchiveProjectionCache } from "../lib/projcache.js";
 
@@ -117,10 +118,11 @@ function buildRoot({ headers = [], workspaces = {}, archived = [], live = [] } =
 			return { kind: "jsonl", path };
 		}
 	};
-	const cacheCalls = { deleted: [], idleAwaited: 0 };
+	const cacheCalls = { deleted: [], cleared: [], idleAwaited: 0 };
 	const projCache = {
 		async whenIdle() { cacheCalls.idleAwaited += 1; },
-		async delete(id) { cacheCalls.deleted.push(id); }
+		async delete(id) { cacheCalls.deleted.push(id); },
+		clearTombstone(id) { cacheCalls.cleared.push(id); }
 	};
 	const sessions = {
 		live,
@@ -294,6 +296,42 @@ test("deleteArchivedSessions snapshots a workspace scope, continues after failur
 	assert.equal(existsSync(env.located.get(s2)), false, "later targets still complete");
 });
 
+test("deleteArchivedSessions clears every remaining trace for unknown sessions", async () => {
+	const env = buildRoot({
+		workspaces: { [A]: workspace("D:\\proj-a", [sUnknown]) },
+		archived: [sUnknown, sUnknown]
+	});
+	const spillPath = sessionDir(join(env.root, "spill"), sUnknown);
+	mkdirSync(spillPath, { recursive: true });
+	writeFileSync(join(spillPath, "stale.txt"), "stale");
+	const registry = await mountWorkspaceRegistry(env);
+	const result = await registry.deleteArchivedSessions({ scope: "all" });
+	assert.deepEqual(result.requestedSessionIds, [sUnknown]);
+	assert.deepEqual(result.deletedSessionIds, []);
+	assert.deepEqual(result.skippedSessionIds, [sUnknown]);
+	assert.deepEqual(result.failures, []);
+	assert.deepEqual(env.global.archivedSessionIds, [], "unknown targets must not leave permanent archive markers");
+	assert.deepEqual(env.table.get(A).sessionIds, [], "unknown targets must be removed from workspace accounting");
+	assert.deepEqual(env.cacheCalls.deleted, [sUnknown], "unknown targets must purge stale projection rows");
+	assert.deepEqual(env.cacheCalls.cleared, [sUnknown], "a transient cache tombstone must be released after the purge");
+	assert.equal(existsSync(spillPath), false, "unknown targets must remove stale spill data");
+});
+
+test("deleteArchivedSessions keeps the marker retryable when unknown-session cleanup fails", async () => {
+	const env = buildRoot({
+		workspaces: { [A]: workspace("D:\\proj-a", [sUnknown]) },
+		archived: [sUnknown]
+	});
+	env.projCache.delete = async () => { throw new Error("cache cleanup failed"); };
+	const registry = await mountWorkspaceRegistry(env);
+	const result = await registry.deleteArchivedSessions({ scope: "all" });
+	assert.deepEqual(result.skippedSessionIds, []);
+	assert.equal(result.failures.length, 1);
+	assert.match(result.failures[0].message, /cache cleanup failed/);
+	assert.deepEqual(env.global.archivedSessionIds, [sUnknown], "failed cleanup must preserve the archive marker for retry");
+	assert.deepEqual(env.table.get(A).sessionIds, [sUnknown], "cache cleanup runs before workspace bookkeeping changes");
+});
+
 test("deleteSession keeps the transcript when archive bookkeeping fails", async () => {
 	const env = buildRoot({
 		headers: [header(s1, cwdA), header(s2, cwdA)],
@@ -308,7 +346,7 @@ test("deleteSession keeps the transcript when archive bookkeeping fails", async 
 	assert.deepEqual(env.table.get(A).sessionIds, [s1, s2]);
 });
 
-test("deleteSession reports a retained transcript when physical deletion fails", async () => {
+test("deleteSession retains the transcript after a physical failure and succeeds on retry", async () => {
 	const env = buildRoot({
 		headers: [header(s1, cwdA), header(s2, cwdA)],
 		workspaces: { [A]: workspace("D:\\proj-a", [s1, s2]) },
@@ -316,11 +354,11 @@ test("deleteSession reports a retained transcript when physical deletion fails",
 	});
 	const fsPromises = require("node:fs/promises");
 	const originalRm = fsPromises.rm;
+	const registry = await mountWorkspaceRegistry(env);
 	// 进程级补丁：本文件测试按顺序执行，且 finally 会在退出前恢复内置绑定。
 	fsPromises.rm = async () => { throw new Error("rm failed"); };
 	syncBuiltinESMExports();
 	try {
-		const registry = await mountWorkspaceRegistry(env);
 		await assert.rejects(() => registry.deleteSession(s2), /transcript directory .* remains after bookkeeping cleanup/);
 		assert.deepEqual(env.global.archivedSessionIds, []);
 		assert.deepEqual(env.table.get(A).sessionIds, [s1]);
@@ -330,6 +368,9 @@ test("deleteSession reports a retained transcript when physical deletion fails",
 		fsPromises.rm = originalRm;
 		syncBuiltinESMExports();
 	}
+	await registry.deleteSession(s2);
+	assert.equal(existsSync(env.located.get(s2)), false, "retry removes the retained transcript");
+	assert.equal(await registry.sessionKnown(s2), false, "successful retry forgets the header and records the tombstone");
 });
 
 test("deleteSession on a live session flushes, detaches, emits session/disposed, and waits for the cache write-behind before deleting the row", async () => {
@@ -407,6 +448,7 @@ test("live reuse removes the tombstone from both the set and the order queue", a
 	assert.equal(await registry.sessionKnown(sLive), true);
 	assert.equal(registry.deletedSessionIds.has(sLive), false);
 	assert.equal(registry.deletedSessionOrder.includes(sLive), false);
+	assert.deepEqual(env.cacheCalls.cleared, [sLive], "live reuse must also clear the projection-cache tombstone");
 	registry.forgetIndexedSession(sLive);
 	assert.equal(registry.deletedSessionOrder.filter((id) => id === sLive).length, 1);
 });
@@ -580,6 +622,7 @@ test("cold reuse of a deleted id (new lifecycle) clears the tombstone; a stale s
 	env.persistence.headers = env.persistence.headers.map((item) => item.id === s2 ? { ...item, createdAt: 1800000000000 } : item);
 	assert.equal(await registry.sessionKnown(s2), true);
 	assert.equal(registry.deletedSessionIds.has(s2), false, "cold reuse must clear the tombstone");
+	assert.deepEqual(env.cacheCalls.cleared, [s2], "cold reuse must also clear the projection-cache tombstone");
 	// 撤墓碑后可重新归档（headers 已重新编入索引）。
 	await registry.archiveSession(s2);
 	assert.deepEqual(env.global.archivedSessionIds, [s2]);
