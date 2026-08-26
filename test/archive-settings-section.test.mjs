@@ -121,9 +121,19 @@ test("每个项目分组提供恢复全部与删除全部菜单", async () => {
   assert.match(client, /function ArchivedGroupActions/);
   assert.match(client, /archives\.restoreProject/);
   assert.match(client, /archives\.deleteProject/);
+  assert.match(client, /id: "restore",[\s\S]*IconRefreshOutline16/);
   assert.match(client, /IconEllipsisOutline16/);
   assert.match(client, /archivedBatchTargetForGroup\(group\.key\)/);
   assert.match(client, /archives\.deleteProjectDesc/);
+});
+
+test("未分组批量菜单使用简短文案", async () => {
+  const client = await readFile(clientPath, "utf8");
+
+  assert.match(client, /"archives\.restoreUngrouped": "全部恢复"/);
+  assert.match(client, /"archives\.deleteUngrouped": "全部删除"/);
+  assert.match(client, /"archives\.restoreUngrouped": "Restore all"/);
+  assert.match(client, /"archives\.deleteUngrouped": "Delete all"/);
 });
 
 test("项目筛选与分组使用 workspaceId 作为 key，选中项消失时回退所有项目", async () => {

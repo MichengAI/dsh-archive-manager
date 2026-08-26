@@ -4,6 +4,13 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 0.1.16 — 2026-08-27
+
+- Added a restore icon to archived-group bulk action menus for consistent action affordances.
+- Shortened the ungrouped bulk action labels to **Restore all** and **Delete all**, avoiding repeated context and reducing menu width.
+
+Published package: [`@michengai/dsh-archive-manager@0.1.16`](https://www.npmjs.com/package/@michengai/dsh-archive-manager/v/0.1.16).
+
 ## 0.1.15 — 2026-08-26
 
 - Hardened permanent deletion so missing transcripts clear stale archive, workspace, spill, and projection-cache data while failed physical deletion remains retryable.
