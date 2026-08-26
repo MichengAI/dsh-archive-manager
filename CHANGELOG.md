@@ -4,6 +4,14 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 0.1.15 — 2026-08-26
+
+- Hardened permanent deletion so missing transcripts clear stale archive, workspace, spill, and projection-cache data while failed physical deletion remains retryable.
+- Cleared workspace and projection-cache tombstones when a session ID is reused, preventing valid replacement sessions from being blocked.
+- Corrected batch deletion feedback and duplicate restore submission handling, and aligned client batch counts with the host's authoritative archive set.
+
+Published package: [`@michengai/dsh-archive-manager@0.1.15`](https://www.npmjs.com/package/@michengai/dsh-archive-manager/v/0.1.15).
+
 ## 0.1.14 — 2026-08-24
 
 - Added project-scoped batch restore and permanent deletion, plus a page-level **Restore all** action.
