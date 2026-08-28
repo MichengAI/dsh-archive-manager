@@ -4,6 +4,14 @@
 
 以下发布说明会持续保留；新增版本时不再删除较早记录。
 
+## 0.1.18 — 2026-08-28
+
+- 兼容 DSH `v0.1.2-alpha.1` 拆分后的客户端 Store 布局，同时保留 `v0.1.1-rc.2` 使用的旧版 Runtime 回退路径。
+- 在归档管理器替换官方工作区 UI 后补齐 alpha 版侧栏、会话视图和目录选择器依赖的工作区导航服务。
+- 在设置页注入边界绑定可观察 Store，并将子代理谱系索引保留在插件内部，避免 alpha 版启动和归档页渲染失败。
+
+发布包：[`@michengai/dsh-archive-manager@0.1.18`](https://www.npmjs.com/package/@michengai/dsh-archive-manager/v/0.1.18)。
+
 ## 0.1.17 — 2026-08-28
 
 - 启用仓库 GitHub Actions 发布工作流的 npm Trusted Publishing。

@@ -1,12 +1,14 @@
 // dsh-archive-manager client bundle self-tests (node:test).
 //
-// 使用真实 client-runtime 模块实例化已归档会话管理客户端 bundle。
-// bundle and the REAL static module table (react, cordis, ui-slots,
+// 使用真实 legacy client-runtime，并模拟 0.1.2 拆分后的静态 client-store，
+// 分别实例化已归档会话管理客户端 bundle。其余 static module table
+// (react, cordis, ui-slots,
 // ui-primitives, ...) resolved from the dsh flat module fallback through the
 // test 目录的 `node_modules` junction。覆盖客户端自身的派生
 // functions and store through its `__test` export.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -55,14 +57,17 @@ async function loadBundle(absolutePath) {
 	await import(pathToFileURL(absolutePath).href);
 }
 
-function materialize(id) {
+function materialize(id, options = {}) {
+	const staticModules = options.staticModules ?? statics;
+	const requests = options.requests;
 	const factory = factories.get(id);
 	if (factory === void 0) throw new Error(`no factory registered for ${id}`);
 	const module = { exports: {} };
 	const require = (spec) => {
-		if (Object.hasOwn(statics, spec)) return statics[spec];
+		requests?.push(spec);
+		if (Object.hasOwn(staticModules, spec)) return staticModules[spec];
 		const stripped = spec.endsWith("/client") ? spec.slice(0, -7) : spec;
-		if (stripped !== id && factories.has(stripped)) return materialize(stripped);
+		if (stripped !== id && factories.has(stripped)) return materialize(stripped, options);
 		throw new Error(`smoke require miss: ${spec}`);
 	};
 	// The factory owns its own `module`/`exports` closure; its return value is
@@ -72,11 +77,21 @@ function materialize(id) {
 
 const RUNTIME_BUNDLE = fileURLToPath(new URL("../node_modules/@deepseek-ai/dsh-client-runtime/lib/client.js", import.meta.url));
 const CLIENT_BUNDLE = fileURLToPath(new URL("../lib/client.js", import.meta.url));
+const PACKAGE_MANIFEST = JSON.parse(await readFile(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8"));
 
 await loadBundle(RUNTIME_BUNDLE);
 const runtime = materialize("@deepseek-ai/dsh-client-runtime");
 await loadBundle(CLIENT_BUNDLE);
-const bundle = materialize("@michengai/dsh-archive-manager");
+const legacyRequests = [];
+const legacyBundle = materialize("@michengai/dsh-archive-manager", { requests: legacyRequests });
+const alphaRequests = [];
+const bundle = materialize("@michengai/dsh-archive-manager", {
+	requests: alphaRequests,
+	staticModules: {
+		...statics,
+		"@deepseek-ai/dsh-client-store": { defineStore: runtime.defineStore }
+	}
+});
 
 const t = bundle.__test;
 
@@ -103,6 +118,137 @@ test("bundle materializes with apply/inject and the __test surface", () => {
 	assert.equal(typeof t.deriveSearchResults, "function");
 	assert.equal(typeof t.displayTitle, "function");
 	assert.equal(typeof t.isUnknownSessionError, "function");
+});
+
+test("bundle resolves the split alpha store first and falls back to the legacy runtime", () => {
+	assert.equal(alphaRequests[0], "@deepseek-ai/dsh-client-store");
+	assert.equal(alphaRequests.includes("@deepseek-ai/dsh-client-runtime/client"), false);
+	assert.deepEqual(legacyRequests.slice(0, 2), [
+		"@deepseek-ai/dsh-client-store",
+		"@deepseek-ai/dsh-client-runtime/client"
+	]);
+	assert.equal(typeof legacyBundle.__test.createWorkspaceViewStore().create, "function");
+	assert.equal(typeof bundle.__test.createWorkspaceViewStore().create, "function");
+	assert.equal(legacyBundle.__test.hasSplitClientStore, false);
+	assert.equal(bundle.__test.hasSplitClientStore, true);
+});
+
+test("manifest treats the removed legacy runtime as an optional fallback", () => {
+	assert.equal(PACKAGE_MANIFEST.peerDependenciesMeta?.["@deepseek-ai/dsh-client-runtime"]?.optional, true);
+	assert.equal(PACKAGE_MANIFEST.dsh.client.inject.includes("@deepseek-ai/dsh-client-runtime"), false);
+});
+
+test("bindObservable preserves receiver-sensitive alpha store methods", () => {
+	const source = {
+		value: 42,
+		getSnapshot() {
+			return this.value;
+		},
+		subscribe(listener) {
+			assert.equal(this, source);
+			listener(this.value);
+			return () => {};
+		}
+	};
+	const bound = t.bindObservable(source);
+	assert.equal(bound.getSnapshot(), 42);
+	let observed;
+	bound.subscribe((value) => { observed = value; });
+	assert.equal(observed, 42);
+});
+
+test("provideUiWorkspace restores alpha navigation, archive, and directory capabilities", async () => {
+	function observable(state) {
+		const listeners = new Set();
+		return {
+			state,
+			getSnapshot() { return this.state; },
+			subscribe(listener) {
+				listeners.add(listener);
+				return () => listeners.delete(listener);
+			},
+			set(next) {
+				this.state = next;
+				for (const listener of listeners) listener();
+			}
+		};
+	}
+
+	const workspaceList = observable({
+		phase: "ready",
+		items: [{ workspaceId: "w1", path: "D:\\proj-a", title: "proj-a", createdAt: "2026-01-01T00:00:00.000Z", sessionIds: [] }],
+		archivedSessionIds: []
+	});
+	const sessionList = observable({ phase: "ready", current: "existing-session", ids: ["existing-session"], byId: { "existing-session": summary("existing-session") } });
+	const opened = [];
+	const archived = [];
+	let cleared = 0;
+	let created = 0;
+	const roots = [];
+	const effectDisposers = [];
+	const services = new Map([
+		["remote.directoryPicker", {
+			pick: async () => ({ ok: true, value: "D:\\picked" }),
+			list: async (path) => ({ ok: true, value: [{ path }] }),
+			createDirectory: async (path, name) => ({ ok: true, value: `${path}\\${name}` })
+		}]
+	]);
+	const ctx = {
+		get: (name) => services.get(name),
+		provide(name, value) {
+			services.set(name, value);
+			return () => services.delete(name);
+		},
+		sessions: {
+			list: sessionList,
+			async create({ workspaceId }) {
+				created += 1;
+				assert.equal(workspaceId, "w1");
+				return "new-session";
+			},
+			open: (sessionId) => opened.push(sessionId),
+			clear: () => { cleared += 1; }
+		},
+		workspaces: {
+			list: workspaceList,
+			archiveSession: async (sessionId) => {
+				archived.push(sessionId);
+				return sessionId;
+			}
+		},
+		slots: { provideRoot: (root) => { roots.push(root); } },
+		effect(factory) { effectDisposers.push(factory()); }
+	};
+
+	const dispose = t.provideUiWorkspace(ctx);
+	const service = services.get("uiWorkspace");
+	assert.ok(service);
+	assert.equal(roots[0].hooks.workspaces, workspaceList);
+	assert.deepEqual(await Promise.all([service.connectWorkspace("w1"), service.connectWorkspace("w1")]), ["new-session", "new-session"]);
+	assert.equal(created, 1, "concurrent workspace connections share one session creation");
+	service.startSession("w1");
+	await new Promise((resolve) => setImmediate(resolve));
+	assert.deepEqual(opened, ["new-session"]);
+	assert.equal(await service.archiveSession("new-session"), "new-session");
+	assert.deepEqual(archived, ["new-session"]);
+	assert.equal(await service.pickDirectory(), "D:\\picked");
+	assert.deepEqual(await service.listDirectory("D:\\proj-a"), [{ path: "D:\\proj-a" }]);
+	assert.equal(await service.createDirectory("D:\\proj-a", "child"), "D:\\proj-a\\child");
+
+	sessionList.set({ phase: "ready", current: "new-session", ids: ["new-session"], byId: { "new-session": summary("new-session") } });
+	workspaceList.set({ ...workspaceList.getSnapshot(), archivedSessionIds: ["new-session"] });
+	assert.equal(cleared, 1, "archiving the current session clears alpha navigation state");
+	for (const stop of effectDisposers) stop();
+	dispose();
+	assert.equal(services.has("uiWorkspace"), false);
+});
+
+test("provideUiWorkspace leaves an existing host service untouched", () => {
+	const existing = {};
+	const ctx = { get: (name) => name === "uiWorkspace" ? existing : void 0 };
+	const dispose = t.provideUiWorkspace(ctx);
+	assert.equal(ctx.get("uiWorkspace"), existing);
+	dispose();
 });
 
 test("displayTitle: SessionSummary 使用 displayTitle，包括未命名会话", () => {
@@ -203,6 +349,18 @@ test("deriveArchivedGroups: 无归档会话的工作区不产出空分组", () =
 	];
 	const groups = t.deriveArchivedGroups({ s1: summary("s1") }, items, ["s1"], "未分组");
 	assert.deepEqual(groups.map((g) => g.key), ["w1"]);
+});
+
+test("indexSubagentDescendants stays local and counts uninterrupted lineage", () => {
+	const descendants = t.indexSubagentDescendants({
+		root: summary("root"),
+		child: summary("child", { origin: "subagent", parentId: "root" }),
+		grandchild: summary("grandchild", { origin: "subagent", parentId: "child", running: true }),
+		fork: summary("fork", { origin: "fork", parentId: "root", running: true })
+	});
+	assert.deepEqual(descendants.get("root"), { count: 2, runningCount: 1 });
+	assert.deepEqual(descendants.get("child"), { count: 1, runningCount: 1 });
+	assert.equal(descendants.has("fork"), false);
 });
 
 test("sortArchivedGroups: 按更新、创建或字母顺序排列项目与组内会话且不改写输入", () => {
