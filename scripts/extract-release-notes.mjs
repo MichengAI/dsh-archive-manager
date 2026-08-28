@@ -1,10 +1,21 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { relative, resolve } from 'node:path'
 
 const tag = process.argv[2] || process.env.GITHUB_REF_NAME
 const outputPath = process.argv[3] || 'release-notes.md'
 
 if (!tag) {
   throw new Error('Usage: node scripts/extract-release-notes.mjs <tag> [output]')
+}
+
+if (!/^v?[\w.-]+$/.test(tag)) {
+  throw new Error(`Invalid tag: ${tag}`)
+}
+
+const resolvedOutputPath = resolve(outputPath)
+const relativeOutputPath = relative(process.cwd(), resolvedOutputPath)
+if (relativeOutputPath.startsWith('..') || resolve(process.cwd(), relativeOutputPath) !== resolvedOutputPath) {
+  throw new Error(`Invalid output path: ${outputPath}`)
 }
 
 const version = tag.replace(/^v/, '')
