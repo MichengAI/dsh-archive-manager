@@ -4,6 +4,12 @@
 
 以下发布说明会持续保留；新增版本时不再删除较早记录。
 
+## 0.1.17 — 2026-08-28
+
+- 启用仓库 GitHub Actions 发布工作流的 npm Trusted Publishing。
+
+发布包：[`@michengai/dsh-archive-manager@0.1.17`](https://www.npmjs.com/package/@michengai/dsh-archive-manager/v/0.1.17)。
+
 ## 0.1.16 — 2026-08-27
 
 - 为归档分组的批量操作菜单补充恢复图标，使操作入口的视觉提示保持一致。

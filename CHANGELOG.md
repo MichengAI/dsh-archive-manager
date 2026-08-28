@@ -4,6 +4,12 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 0.1.17 — 2026-08-28
+
+- Enabled npm Trusted Publishing through the repository's GitHub Actions release workflow.
+
+Published package: [`@michengai/dsh-archive-manager@0.1.17`](https://www.npmjs.com/package/@michengai/dsh-archive-manager/v/0.1.17).
+
 ## 0.1.16 — 2026-08-27
 
 - Added a restore icon to archived-group bulk action menus for consistent action affordances.
