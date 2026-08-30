@@ -4,6 +4,12 @@
 
 以下发布说明会持续保留；新增版本时不再删除较早记录。
 
+## 0.1.19 — 2026-08-30
+
+- 修复 DSH `v0.1.2-alpha.1` 中工作区行 **+** 操作：在操作执行时再获取 `uiWorkspace` 服务，避免受插件加载顺序影响，也不再落入已移除的旧版 `startSession` API。
+
+发布包：[`@michengai/dsh-archive-manager@0.1.19`](https://www.npmjs.com/package/@michengai/dsh-archive-manager/v/0.1.19)。
+
 ## 0.1.18 — 2026-08-28
 
 - 兼容 DSH `v0.1.2-alpha.1` 拆分后的客户端 Store 布局，同时保留 `v0.1.1-rc.2` 使用的旧版 Runtime 回退路径。

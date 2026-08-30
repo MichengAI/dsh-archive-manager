@@ -4,6 +4,12 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 0.1.19 — 2026-08-30
+
+- Fixed the workspace-row **+** action on DSH `v0.1.2-alpha.1` by resolving the `uiWorkspace` service when the action runs, removing its dependency on plugin load order and avoiding the removed legacy `startSession` API.
+
+Published package: [`@michengai/dsh-archive-manager@0.1.19`](https://www.npmjs.com/package/@michengai/dsh-archive-manager/v/0.1.19).
+
 ## 0.1.18 — 2026-08-28
 
 - Added client compatibility for the split store layout in DSH `v0.1.2-alpha.1` while preserving the legacy runtime fallback used by `v0.1.1-rc.2`.
