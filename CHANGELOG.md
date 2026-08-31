@@ -4,6 +4,14 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 0.1.20 — 2026-08-31
+
+- Kept IM and other non-filesystem-safe Session ids unchanged while persisting projection checkpoints under fixed-length safe keys, preventing DSH `v0.1.2-alpha.2` from using colons as Windows filenames.
+- Added resumable, add-only cache import from the DSH `v0.1.1-rc.2` whole-file format and from clean alpha per-record profiles, so existing users retain cached projections across either upgrade path.
+- Rebuild missing archived-session projections from the retained transcript on demand and refresh the client list, so legacy archive markers remain fully visible whether their old cache row exists or not.
+
+Published package: [`@michengai/dsh-archive-manager@0.1.20`](https://www.npmjs.com/package/@michengai/dsh-archive-manager/v/0.1.20).
+
 ## 0.1.19 — 2026-08-30
 
 - Fixed the workspace-row **+** action on DSH `v0.1.2-alpha.1` by resolving the `uiWorkspace` service when the action runs, removing its dependency on plugin load order and avoiding the removed legacy `startSession` API.

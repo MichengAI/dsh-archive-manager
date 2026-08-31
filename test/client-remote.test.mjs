@@ -65,7 +65,7 @@ root.provide("connection", {
 			const value = endpoint === "workspaceRegistry/deleteSession" ? { deleted: true }
 				: endpoint === "workspaceRegistry/unarchiveSessions" ? { archivedSessionIds: ["s2"], unarchivedSessionIds: ["s1"] }
 				: endpoint === "workspaceRegistry/deleteArchivedSessions" ? { requestedSessionIds: ["s1"], deletedSessionIds: ["s1"], skippedSessionIds: [], failures: [] }
-				: endpoint === "workspaceRegistry/archivedSessionMetadata" ? { items: [{ sessionId: "s1", createdAt: 1700000000000 }] }
+				: endpoint === "workspaceRegistry/archivedSessionMetadata" ? { items: [{ sessionId: "s1", createdAt: 1700000000000 }], repairedSessionIds: ["s1"] }
 				: { archivedSessionIds: ["s2"] };
 			return { ok: true, value };
 		}
@@ -105,7 +105,7 @@ test("$mount registers the namespace; ctx.get resolves it and dispatches through
 		assert.equal(calls[3].endpoint, "workspaceRegistry/deleteArchivedSessions");
 		assert.deepEqual(JSON.parse(JSON.stringify(calls[3].payload)), { args: { target: { scope: "all" } } });
 		const result5 = await registry.archivedSessionMetadata();
-		assert.deepEqual(result5, { ok: true, value: { items: [{ sessionId: "s1", createdAt: 1700000000000 }] } });
+		assert.deepEqual(result5, { ok: true, value: { items: [{ sessionId: "s1", createdAt: 1700000000000 }], repairedSessionIds: ["s1"] } });
 		assert.equal(calls[4].endpoint, "workspaceRegistry/archivedSessionMetadata");
 		assert.deepEqual(JSON.parse(JSON.stringify(calls[4].payload)), { args: {} });
 	} finally {

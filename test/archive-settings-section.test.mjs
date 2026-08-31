@@ -41,6 +41,15 @@ test("创建时间排序从宿主归档头部读取元数据，更新时间继�
   assert.match(client, /sortArchivedGroups\(groups, sortBy, createdAtById, t\)/);
 });
 
+test("老归档缺少投影时由宿主重建，并在新老客户端会话服务上刷新列表", async () => {
+  const client = await readFile(clientPath, "utf8");
+
+  assert.match(client, /result\.value\.repairedSessionIds\?\.length > 0/);
+  assert.match(client, /typeof ctx\.sessions\.refresh === "function"/);
+  assert.match(client, /await ctx\.sessions\.refresh\(\)/);
+  assert.match(client, /repaired archived projections but session list refresh failed/);
+});
+
 test("归档设置页收紧顶部留白，侧栏入口使用简短归档标签", async () => {
   const client = await readFile(clientPath, "utf8");
 
