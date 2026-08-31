@@ -4,6 +4,13 @@
 
 以下发布说明会持续保留；新增版本时不再删除较早记录。
 
+## 0.1.21 — 2026-08-31
+
+- 墓碑拦截已删除会话的投影缓存写入时仍保持 `put()` 的 Promise 契约，使 DSH `v0.1.2-alpha.2` 冷读写回继续按 fail-soft 方式处理，而不会同步抛出 `TypeError`。
+- 补充 alpha.2 直接调用 `put(...).catch(...)` 的回归测试，同时保留 DSH `v0.1.1-rc.2` 使用的 `putSoft` 路径覆盖，并澄清独立安全缓存域与迁移行为。
+
+已发布包：[`@michengai/dsh-archive-manager@0.1.21`](https://www.npmjs.com/package/@michengai/dsh-archive-manager/v/0.1.21)。
+
 ## 0.1.20 — 2026-08-31
 
 - 保持 IM 等不适合作文件名的会话 ID 不变，将投影检查点改用固定长度安全键落盘，避免 DSH `v0.1.2-alpha.2` 在 Windows 上把冒号直接用作文件名。

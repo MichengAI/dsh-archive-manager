@@ -4,6 +4,13 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 0.1.21 — 2026-08-31
+
+- Preserved the projection-cache `put()` Promise contract when a tombstone suppresses a deleted Session write, so DSH `v0.1.2-alpha.2` cold-read write-back remains fail-soft instead of throwing a synchronous `TypeError`.
+- Added direct `put(...).catch(...)` regression coverage for alpha.2 while retaining the `putSoft` path used by DSH `v0.1.1-rc.2`, and clarified the separate safe cache domain and migration behavior.
+
+Published package: [`@michengai/dsh-archive-manager@0.1.21`](https://www.npmjs.com/package/@michengai/dsh-archive-manager/v/0.1.21).
+
 ## 0.1.20 — 2026-08-31
 
 - Kept IM and other non-filesystem-safe Session ids unchanged while persisting projection checkpoints under fixed-length safe keys, preventing DSH `v0.1.2-alpha.2` from using colons as Windows filenames.

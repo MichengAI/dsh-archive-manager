@@ -692,8 +692,8 @@ test("ArchiveProjectionCache delete prevents an in-flight write from recreating 
 	assert.ok(!table.has(projectionCacheStorageKey(s3)), "a deleted session must not be recreated by a stale write");
 });
 
-// 冷读写回经 putSoft 落盘：墓碑必须同样挡住它，且 whenIdle 必须覆盖它。
-test("ArchiveProjectionCache tombstone guards the cold-read write-back (putSoft) and whenIdle covers it", async () => {
+// rc.2 冷读经 putSoft -> put，alpha.2 直接调用 put(...).catch(...)。
+test("ArchiveProjectionCache tombstone guards both cold-read write-back paths and whenIdle covers them", async () => {
 	const ctx = new Context();
 	const table = new FakeTable({});
 	const domain = new FakeDomain({ sessions: table }, null);
@@ -709,8 +709,11 @@ test("ArchiveProjectionCache tombstone guards the cold-read write-back (putSoft)
 	const identity = { createdAt: 1700000000000, cwd: cwdB };
 	// 已删除：冷读写回直接被墓碑拦截，不落盘。
 	await cache.delete(s3);
+	const blockedPut = cache.put(s3, identity, { title: { ver: 1, seq: 9, val: "t" } });
+	assert.equal(typeof blockedPut?.catch, "function", "alpha.2 coldSnapshot must be able to chain .catch() onto put()");
+	await blockedPut;
 	await cache.putSoft(s3, identity, { title: { ver: 1, seq: 9, val: "t" } }, "cold-read write-back");
-	assert.ok(!table.has(projectionCacheStorageKey(s3)), "putSoft after delete must not recreate the row");
+	assert.ok(!table.has(projectionCacheStorageKey(s3)), "put/putSoft after delete must not recreate the row");
 	// 删除落在写回进行中：写回完成后补删自己的残留行。
 	cache.clearTombstone(s3);
 	const put = table.put.bind(table);

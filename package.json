@@ -1,6 +1,6 @@
 {
   "name": "@michengai/dsh-archive-manager",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "description": "NPM-installable DSH Web plugin for managing archived sessions.",
   "type": "module",
   "packageManager": "pnpm@11.21.0",
