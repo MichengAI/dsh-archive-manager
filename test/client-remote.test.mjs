@@ -59,6 +59,12 @@ const contribution = archiveManager.__test.ARCHIVE_MANAGER_REMOTE;
 const calls = [];
 const root = new Context();
 root.provide("connection", {
+	registerGenerationSource() {
+		return () => {};
+	},
+	start() {
+		return { stop() {} };
+	},
 	rpc: {
 		async call(channel, endpoint, payload, signal) {
 			calls.push({ channel, endpoint, payload, signal });

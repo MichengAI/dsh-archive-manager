@@ -4,6 +4,14 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 0.1.23 — 2026-09-01
+
+- Fixed missing sidebar pending-state indicators on DSH `v0.1.2-alpha.2`: workspace rows now read pending UI interactions from the `ui-session` `pendingInteractions` Map.
+- Whitelisted the official visible pending states (`question`, `approval`, and `plan-review`) before passing them to row rendering, so unknown future states are ignored safely.
+- Kept the legacy `SessionSummary.pendingInteraction` fallback and added regression coverage for grouped, flat, and search result rows.
+
+Published package: [`@michengai/dsh-archive-manager@0.1.23`](https://www.npmjs.com/package/@michengai/dsh-archive-manager/v/0.1.23).
+
 ## 0.1.22 — 2026-09-01
 
 - Added arbitrary archived-chat selection in **Settings → Archived**, including per-row checkboxes, select-all for the current filtered results, cross-project selection, batch restore, and confirmed batch permanent deletion.

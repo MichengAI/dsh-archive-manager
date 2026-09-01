@@ -4,6 +4,14 @@
 
 以下发布说明会持续保留；新增版本时不再删除较早记录。
 
+## 0.1.23 — 2026-09-01
+
+- 修复 DSH `v0.1.2-alpha.2` 后会话侧栏“等待回答 / 等待审批”状态点不显示的问题：侧栏行现在从 `ui-session` 的 `pendingInteractions` Map 读取待处理交互状态。
+- 对 `question`、`approval`、`plan-review` 三种官方可见状态做白名单透传，未知状态会被忽略，避免触发行渲染断言。
+- 保留旧版 `SessionSummary.pendingInteraction` 兜底，并补充分组、扁平列表和搜索结果三条路径的回归测试。
+
+已发布包：[`@michengai/dsh-archive-manager@0.1.23`](https://www.npmjs.com/package/@michengai/dsh-archive-manager/v/0.1.23)。
+
 ## 0.1.22 — 2026-09-01
 
 - 在「设置 → 已归档」新增任意多选：每行复选框、全选当前筛选结果、跨项目保留选择、批量恢复和确认后的批量永久删除。

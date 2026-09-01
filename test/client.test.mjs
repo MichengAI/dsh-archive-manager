@@ -108,6 +108,7 @@ const workspaces = [
 	{ workspaceId: "w1", path: "D:\\proj-a", title: "proj-a", createdAt: "2026-01-01T00:00:00.000Z", sessionIds: ["s1", "s2"] },
 	{ workspaceId: "w2", path: "D:\\proj-b", title: "proj-b", createdAt: "2026-01-01T00:00:00.000Z", sessionIds: ["s3"] }
 ];
+const noPendingInteractions = new Map();
 
 test("bundle materializes with apply/inject and the __test surface", () => {
 	assert.equal(typeof bundle.apply, "function");
@@ -269,10 +270,10 @@ test("sessionVisible: archived hidden by default, visible with showArchived", ()
 test("deriveGroups: archived rows appear in their workspace group with the archived flag when shown", () => {
 	const archived = ["s2"];
 	const view = { expandedGroups: ["w1", "w2"], showArchived: false };
-	const hidden = t.deriveGroups(list, workspaces, archived, view);
+	const hidden = t.deriveGroups(list, workspaces, archived, noPendingInteractions, view);
 	const w1 = hidden.find((g) => g.workspaceId === "w1");
 	assert.deepEqual(w1.sessions.map((s) => s.id), ["s1"]);
-	const shown = t.deriveGroups(list, workspaces, archived, { ...view, showArchived: true });
+	const shown = t.deriveGroups(list, workspaces, archived, noPendingInteractions, { ...view, showArchived: true });
 	const w1b = shown.find((g) => g.workspaceId === "w1");
 	assert.deepEqual(w1b.sessions.map((s) => s.id), ["s1", "s2"]);
 	assert.equal(w1b.sessions.find((s) => s.id === "s2").archived, true);
@@ -281,19 +282,39 @@ test("deriveGroups: archived rows appear in their workspace group with the archi
 
 test("deriveFlat: showArchived toggles archived rows with the flag", () => {
 	const archived = ["s2"];
-	assert.deepEqual(t.deriveFlat(list, archived, false).map((r) => r.id).sort(), ["s1", "s3"]);
-	const rows = t.deriveFlat(list, archived, true);
+	assert.deepEqual(t.deriveFlat(list, archived, noPendingInteractions, false).map((r) => r.id).sort(), ["s1", "s3"]);
+	const rows = t.deriveFlat(list, archived, noPendingInteractions, true);
 	assert.deepEqual(rows.map((r) => r.id).sort(), ["s1", "s2", "s3"]);
 	assert.equal(rows.find((r) => r.id === "s2").archived, true);
+});
+
+test("derive* 从 ui-session 的 pendingInteractions Map 读取待处理交互", () => {
+	const pending = new Map([
+		["s1", { kind: "question" }],
+		["s2", { kind: "approval" }],
+		["s3", { kind: "unknown-kind" }]
+	]);
+	const view = { expandedGroups: ["w1", "w2"], showArchived: true };
+
+	const groups = t.deriveGroups(list, workspaces, [], pending, view);
+	assert.equal(groups.find((g) => g.workspaceId === "w1").sessions.find((s) => s.id === "s1").pendingInteraction, "question");
+
+	const flat = t.deriveFlat(list, [], pending, true);
+	assert.equal(flat.find((s) => s.id === "s2").pendingInteraction, "approval");
+	assert.equal(flat.find((s) => s.id === "s3").pendingInteraction, void 0);
+
+	const search = t.deriveSearchResults(list, workspaces, "Title", [], pending, { items: [], hasMore: false }, 50, true);
+	assert.equal(search.items.find((s) => s.id === "s1").pendingInteraction, "question");
+	assert.equal(search.items.find((s) => s.id === "s3").pendingInteraction, void 0);
 });
 
 test("deriveSearchResults: showArchived toggles archived matches with the flag", () => {
 	const archived = ["s2"];
 	const content = { items: [], hasMore: false };
 	const base = { list, workspaces, query: "Title", archivedSessionIds: archived, content, limit: 50 };
-	const hidden = t.deriveSearchResults(base.list, base.workspaces, base.query, base.archivedSessionIds, base.content, base.limit, false);
+	const hidden = t.deriveSearchResults(base.list, base.workspaces, base.query, base.archivedSessionIds, noPendingInteractions, base.content, base.limit, false);
 	assert.deepEqual(hidden.items.map((r) => r.id).sort(), ["s1", "s3"]);
-	const shown = t.deriveSearchResults(base.list, base.workspaces, base.query, base.archivedSessionIds, base.content, base.limit, true);
+	const shown = t.deriveSearchResults(base.list, base.workspaces, base.query, base.archivedSessionIds, noPendingInteractions, base.content, base.limit, true);
 	assert.deepEqual(shown.items.map((r) => r.id).sort(), ["s1", "s2", "s3"]);
 	assert.equal(shown.items.find((r) => r.id === "s2").archived, true);
 });
