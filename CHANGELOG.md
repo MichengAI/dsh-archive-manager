@@ -4,6 +4,14 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 0.1.22 — 2026-09-01
+
+- Added arbitrary archived-chat selection in **Settings → Archived**, including per-row checkboxes, select-all for the current filtered results, cross-project selection, batch restore, and confirmed batch permanent deletion.
+- Kept selected operations on the existing authoritative host batch path, so stale records, partial deletion failures, and retry behavior match existing project-wide and all-chat actions.
+- Refreshed the client session projection after restoring chats so restored sessions immediately reappear in their original workspace.
+
+Published package: [`@michengai/dsh-archive-manager@0.1.22`](https://www.npmjs.com/package/@michengai/dsh-archive-manager/v/0.1.22).
+
 ## 0.1.21 — 2026-08-31
 
 - Preserved the projection-cache `put()` Promise contract when a tombstone suppresses a deleted Session write, so DSH `v0.1.2-alpha.2` cold-read write-back remains fail-soft instead of throwing a synchronous `TypeError`.

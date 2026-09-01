@@ -285,6 +285,25 @@ test("unarchiveSessions restores an authoritative workspace or ungrouped scope i
 	await assert.rejects(() => registry.unarchiveSessions({ scope: "invalid" }), /target\.scope must be/);
 });
 
+test("explicit archived-session batches span projects, deduplicate input, and preserve archive order", async () => {
+	const env = buildRoot({
+		headers: [header(s1, cwdA), header(s2, cwdA), header(s3, cwdB)],
+		workspaces: { [A]: workspace("D:\\proj-a", [s1, s2]), [B]: workspace("D:\\proj-b", [s3]) },
+		archived: [s2, sUnknown, s1, s3]
+	});
+	const registry = await mountWorkspaceRegistry(env);
+	const restored = await registry.unarchiveSessions({ scope: "sessions", sessionIds: [s3, s1, s3, SID(98)] });
+	assert.deepEqual(restored.unarchivedSessionIds, [s1, s3], "host order, not client selection order, is authoritative");
+	assert.deepEqual(env.global.archivedSessionIds, [s2, sUnknown]);
+
+	const deleted = await registry.deleteArchivedSessions({ scope: "sessions", sessionIds: [sUnknown, s2, s2] });
+	assert.deepEqual(deleted.requestedSessionIds, [s2, sUnknown]);
+	assert.deepEqual(deleted.deletedSessionIds, [s2]);
+	assert.deepEqual(deleted.skippedSessionIds, [sUnknown], "stale selected markers still use batch cleanup");
+	assert.deepEqual(env.global.archivedSessionIds, []);
+	await assert.rejects(() => registry.unarchiveSessions({ scope: "sessions", sessionIds: [] }), /sessions with non-empty sessionIds/);
+});
+
 test("deleteSession rejects unknown sessions", async () => {
 	const env = buildRoot({ headers: [header(s1, cwdA)], workspaces: { [A]: workspace("D:\\proj-a", [s1]) } });
 	const registry = await mountWorkspaceRegistry(env);

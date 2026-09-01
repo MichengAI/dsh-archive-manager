@@ -394,6 +394,18 @@ test("deriveArchivedBatchIds: 按完整归档集合派生全部、项目和未�
 	assert.deepEqual(t.deriveArchivedBatchIds(archived, items, { scope: "all" }), ["s1", "s-missing", "s2", "s3", ""], "客户端计数与宿主权威归档集合保持一致");
 	assert.deepEqual(t.deriveArchivedBatchIds(archived, items, { scope: "workspace", workspaceId: "w1" }), ["s1", "s-missing"], "摘要未加载的项目会话仍计入批次");
 	assert.deepEqual(t.deriveArchivedBatchIds(archived, items, { scope: "ungrouped" }), ["s3", ""], "异常空 ID 也由宿主批量清理路径处理");
+	assert.deepEqual(t.deriveArchivedBatchIds(archived, items, { scope: "sessions", sessionIds: ["s3", "s1", "s1", "missing"] }), ["s1", "s3"], "显式多选仍按权威归档顺序派生");
+});
+
+test("archived selection helpers preserve cross-filter choices and prune stale sessions", () => {
+	const groups = [
+		{ sessions: [{ id: "s1" }, { id: "s2" }] },
+		{ sessions: [{ id: "s2" }, { id: "s3" }] }
+	];
+	assert.deepEqual(t.archivedSessionIdsInGroups(groups), ["s1", "s2", "s3"]);
+	assert.deepEqual(t.toggleArchivedSelection(["s1"], ["s2", "s3"], true), ["s1", "s2", "s3"]);
+	assert.deepEqual(t.toggleArchivedSelection(["s1", "s2", "s3"], ["s2"], false), ["s1", "s3"]);
+	assert.deepEqual(t.pruneArchivedSelection(["s3", "s1", "stale", "s1"], ["s1", "s2", "s3"]), ["s3", "s1"]);
 });
 
 test("archivedDeleteFeedback: skipped 会话不会计入删除成功数", () => {

@@ -32,6 +32,30 @@ test("归档设置页提供搜索、排序、筛选、全部恢复和全部删�
   assert.doesNotMatch(client, /chatType === "all"/);
 });
 
+test("归档设置页原型支持筛选内全选、跨项目选择与确认批量操作", async () => {
+	const client = await readFile(clientPath, "utf8");
+
+	assert.match(client, /ArchivedSessionsSectionPrototype/);
+	assert.match(client, /className: "dsham_settingsSelection"/);
+	assert.match(client, /archives\.selectAllFiltered/);
+	assert.match(client, /toggleVisibleSelection\(event\.target\.checked\)/);
+	assert.match(client, /scope: "sessions", sessionIds: selectedSessionIds/);
+	assert.match(client, /archives\.restoreSelected/);
+	assert.match(client, /archives\.deleteSelectedTitle/);
+	assert.match(client, /function pruneArchivedSelection/);
+	assert.match(client, /function toggleArchivedSelection/);
+	assert.match(client, /}, ArchivedSessionsSectionPrototype\)\);/);
+});
+
+test("恢复后刷新会话投影，使会话重新出现在侧栏", async () => {
+	const client = await readFile(clientPath, "utf8");
+
+	assert.match(client, /const refreshSessionList = async \(\) =>/);
+	assert.match(client, /restored archived sessions but session list refresh failed/);
+	assert.match(client, /await registry\.unarchiveSession\(sessionId\);[\s\S]*await refreshSessionList\(\);/);
+	assert.match(client, /await registry\.unarchiveSessions\(target\);[\s\S]*await refreshSessionList\(\);/);
+});
+
 test("创建时间排序从宿主归档头部读取元数据，更新时间继续使用客户端摘要", async () => {
   const client = await readFile(clientPath, "utf8");
 
