@@ -16,6 +16,7 @@ import { TypertRegistry } from "@deepseek-ai/dsh-typert-registry";
 import { TypertGatewayService } from "@deepseek-ai/dsh-api-gateway";
 import { remoteMethods } from "@deepseek-ai/dsh-typert-protocol";
 import { sessionDir } from "@deepseek-ai/dsh-spill-local";
+import { projectionCacheDomainSpec } from "@deepseek-ai/dsh-session-projection-cache";
 import { ArchiveWorkspaceRegistry } from "../lib/workspace.js";
 import {
 	ArchiveProjectionCache,
@@ -163,7 +164,7 @@ async function mountWorkspaceRegistry(env) {
 }
 
 function header(id, cwd, extra = {}) {
-	return { id, cwd, createdAt: 1700000000000, ...extra };
+	return { id, cwd, createdAt: 1700000000000, isSeeded: false, ...extra };
 }
 
 function workspace(path, sessionIds) {
@@ -220,30 +221,51 @@ test("archivedSessionMetadata returns host header creation times and skips stale
 	});
 });
 
-test("archivedSessionMetadata rebuilds a missing legacy projection once and keeps cached archives zero-I/O", async () => {
+test("archivedSessionMetadata rebuilds a seeded legacy projection and keeps non-seeded cached archives zero-I/O", async () => {
 	const env = buildRoot({
-		headers: [header(s1, cwdA, { createdAt: 100 }), header(s2, cwdA, { createdAt: 200 })],
+		headers: [header(s1, cwdA, { createdAt: 100 }), header(s2, cwdA, { createdAt: 200, isSeeded: true })],
 		workspaces: { [A]: workspace("D:\\proj-a", [s1, s2]) },
 		archived: [s1, s2]
 	});
-	const records = new Map([[s1, { asOfSeq: 8, values: { title: "already cached" } }]]);
+	const identityOf = (meta, inheritedEventCount) => ({
+		createdAt: meta.createdAt,
+		...(meta.cwd === void 0 ? {} : { cwd: meta.cwd }),
+		isSeeded: meta.isSeeded,
+		inheritedEventCount
+	});
+	const records = new Map([[s1, {
+		identity: identityOf(env.persistence.headers.find((item) => item.id === s1), 0),
+		snapshot: { asOfSeq: 8, values: { title: "already cached" } }
+	}]]);
+	const cacheReads = [];
 	const reads = [];
 	const puts = [];
-	env.projCache.cachedSnapshot = (meta) => records.get(meta.id);
+	env.projCache.cachedSnapshot = (meta, inheritedEventCount) => {
+		cacheReads.push({ id: meta.id, inheritedEventCount });
+		const record = records.get(meta.id);
+		return record !== void 0 && JSON.stringify(record.identity) === JSON.stringify(identityOf(meta, inheritedEventCount))
+			? record.snapshot
+			: void 0;
+	};
 	env.projCache.put = async (id, identity, rows) => {
 		puts.push({ id, identity, rows });
-		records.set(id, { asOfSeq: 9, values: { title: rows.title.val } });
+		records.set(id, { identity, snapshot: { asOfSeq: 9, values: { title: rows.title.val } } });
 	};
 	env.persistence.readFrom = async (id, fromSeq) => {
 		reads.push({ id, fromSeq });
-		return { meta: env.persistence.headers.find((item) => item.id === id), events: [{ seq: 0, type: "session/start", data: {} }] };
+		return {
+			meta: env.persistence.headers.find((item) => item.id === id),
+			inheritedEventCount: 3,
+			events: [{ seq: 0, type: "session/start", data: {} }]
+		};
 	};
 	env.ctx.provide("sessionProjections", {
-		restore: (cached, events, floor, meta) => {
+		restore: (cached, events, floor, meta, inheritedEventCount) => {
 			assert.deepEqual(cached, {});
 			assert.equal(events.length, 1);
 			assert.equal(floor, 0);
 			assert.equal(meta.id, s2);
+			assert.equal(inheritedEventCount, 3);
 			return { checkpoint: { title: { ver: 1, seq: 9, val: "rebuilt" } }, snapshot: { asOfSeq: 9, values: { title: "rebuilt" } } };
 		}
 	});
@@ -253,15 +275,63 @@ test("archivedSessionMetadata rebuilds a missing legacy projection once and keep
 		repairedSessionIds: [s2]
 	});
 	assert.deepEqual(reads, [{ id: s2, fromSeq: 0 }], "only the missing archive reads its transcript");
+	assert.deepEqual(cacheReads, [
+		{ id: s1, inheritedEventCount: 0 },
+		{ id: s2, inheritedEventCount: 3 }
+	]);
 	assert.deepEqual(puts, [{
 		id: s2,
-		identity: { createdAt: 200, cwd: env.persistence.headers.find((item) => item.id === s2).cwd },
+		identity: {
+			createdAt: 200,
+			cwd: env.persistence.headers.find((item) => item.id === s2).cwd,
+			isSeeded: true,
+			inheritedEventCount: 3
+		},
 		rows: { title: { ver: 1, seq: 9, val: "rebuilt" } }
 	}]);
 	assert.deepEqual(await registry.archivedSessionMetadata(), {
 		items: [{ sessionId: s1, createdAt: 100 }, { sessionId: s2, createdAt: 200 }]
-	}, "the repaired cache makes later archive reads zero-I/O");
-	assert.equal(reads.length, 1);
+	}, "缓存命中后普通会话无需读取原文；播种会话仍需读取继承事件数");
+	assert.deepEqual(reads, [
+		{ id: s2, fromSeq: 0 },
+		{ id: s2, fromSeq: 0 }
+	], "播种会话必须读取继承事件数，普通已缓存会话无需读取原文");
+	assert.deepEqual(cacheReads, [
+		{ id: s1, inheritedEventCount: 0 },
+		{ id: s2, inheritedEventCount: 3 },
+		{ id: s1, inheritedEventCount: 0 },
+		{ id: s2, inheritedEventCount: 3 }
+	]);
+});
+
+test("archivedSessionMetadata skips seeded projection repair when the inherited count is missing", async () => {
+	const env = buildRoot({
+		headers: [header(s1, cwdA, { createdAt: 100, isSeeded: true })],
+		workspaces: { [A]: workspace("D:\\proj-a", [s1]) },
+		archived: [s1]
+	});
+	const reads = [];
+	let restored = false;
+	let put = false;
+	env.persistence.readFrom = async (id, fromSeq) => {
+		reads.push({ id, fromSeq });
+		return { meta: env.persistence.headers[0], events: [] };
+	};
+	env.projCache.cachedSnapshot = () => void 0;
+	env.projCache.put = async () => { put = true; };
+	env.ctx.provide("sessionProjections", {
+		restore: () => {
+			restored = true;
+			return { checkpoint: {} };
+		}
+	});
+	const registry = await mountWorkspaceRegistry(env);
+	assert.deepEqual(await registry.archivedSessionMetadata(), {
+		items: [{ sessionId: s1, createdAt: 100 }]
+	});
+	assert.deepEqual(reads, [{ id: s1, fromSeq: 0 }]);
+	assert.equal(restored, false);
+	assert.equal(put, false);
 });
 
 test("unarchiveSessions restores an authoritative workspace or ungrouped scope in one state update", async () => {
@@ -592,7 +662,7 @@ test("ArchiveProjectionCache maps IM ids to fixed-length path-safe storage keys"
 	);
 });
 
-test("ArchiveProjectionCache imports legacy IM rows without opening alpha.2's unsafe source", async () => {
+test("ArchiveProjectionCache imports legacy IM rows while also reading the current cache domain", async () => {
 	const imId = "im:qq:dm:1786974024109:AAFEA88ABD266D02959130D923C09741";
 	const record = {
 		identity: { createdAt: 1700000000000, cwd: cwdB },
@@ -600,14 +670,20 @@ test("ArchiveProjectionCache imports legacy IM rows without opening alpha.2's un
 	};
 	const safe = new FakeTable({});
 	const legacy = new FakeTable({ [imId]: record });
+	const current = new FakeTable({});
 	const opened = [];
+	let legacySpec;
 	const ctx = new Context();
 	ctx.provide("storageDomain", {
 		open: async (spec) => {
 			opened.push([spec.name, spec.version, spec.layout]);
 			if (spec.name === safeProjectionCacheDomainSpec.name) return new FakeDomain({ sessions: safe }, null);
-			if (spec.name === "session_projcache" && spec.version === 3) return new FakeDomain({ sessions: legacy }, null);
-			throw new Error("the unsafe alpha.2 source must not open while legacy rows exist");
+			if (spec.name === "session_projcache" && spec.version === 3) {
+				legacySpec = spec;
+				return new FakeDomain({ sessions: legacy }, null);
+			}
+			if (spec.name === projectionCacheDomainSpec.name && spec.version === projectionCacheDomainSpec.version) return new FakeDomain({ sessions: current }, null);
+			throw new Error("unexpected projection-cache source");
 		}
 	});
 	ctx.provide("sessionProjections", {
@@ -619,21 +695,88 @@ test("ArchiveProjectionCache imports legacy IM rows without opening alpha.2's un
 	await cache[Service.init]();
 	const physicalKey = projectionCacheStorageKey(imId);
 	assert.deepEqual(opened, [
-		[safeProjectionCacheDomainSpec.name, 1, safeProjectionCacheDomainSpec.layout],
-		["session_projcache", 3, void 0]
+		[safeProjectionCacheDomainSpec.name, 2, safeProjectionCacheDomainSpec.layout],
+		["session_projcache", 3, void 0],
+		[projectionCacheDomainSpec.name, projectionCacheDomainSpec.version, projectionCacheDomainSpec.layout]
 	]);
-	assert.deepEqual(safe.get(physicalKey), { sessionId: imId, ...record });
-	assert.deepEqual(cache.recordFor(imId, record.identity), record);
+	assert.equal(legacySpec.tables.sessions.valueSchema.safeParse(record).success, true, "旧域读取 schema 必须接受缺少新增身份字段的历史行");
+	const normalized = {
+		identity: { createdAt: 1700000000000, cwd: cwdB, isSeeded: false, inheritedEventCount: 0 },
+		rows: record.rows
+	};
+	assert.deepEqual(safe.get(physicalKey), { sessionId: imId, ...normalized });
+	assert.deepEqual(cache.recordFor(imId, normalized.identity), normalized);
 	await cache.delete(imId);
 	assert.equal(safe.has(physicalKey), false, "logical deletion must remove the encoded row");
+});
+
+test("ArchiveProjectionCache merges current records before legacy records", async () => {
+	const shared = SID(701);
+	const currentOnly = SID(702);
+	const legacyOnly = SID(703);
+	const identity = (createdAt) => ({ createdAt, isSeeded: false, inheritedEventCount: 0 });
+	const row = (title) => ({ title: { ver: 1, seq: 9, val: title } });
+	const currentShared = { identity: identity(701), rows: row("current title") };
+	const legacyShared = { identity: identity(701), rows: row("legacy title") };
+	const currentRecord = { identity: identity(702), rows: row("current only") };
+	const legacyRecord = { identity: identity(703), rows: row("legacy only") };
+	const safe = new FakeTable({});
+	const legacy = new FakeTable({ [shared]: legacyShared, [legacyOnly]: legacyRecord });
+	const current = new FakeTable({ [shared]: currentShared, [currentOnly]: currentRecord });
+	const ctx = new Context();
+	ctx.provide("storageDomain", {
+		open: async (spec) => {
+			if (spec.name === safeProjectionCacheDomainSpec.name) return new FakeDomain({ sessions: safe }, null);
+			if (spec.name === "session_projcache" && spec.version === 3) return new FakeDomain({ sessions: legacy }, null);
+			if (spec.name === projectionCacheDomainSpec.name && spec.version === projectionCacheDomainSpec.version) return new FakeDomain({ sessions: current }, null);
+			throw new Error("unexpected projection-cache source");
+		}
+	});
+	ctx.provide("sessionProjections", {
+		checkpoint: () => ({}),
+		viewCheckpoint: (rows) => Object.fromEntries(Object.entries(rows).map(([key, value]) => [key, value.val]))
+	});
+	ctx.provide("sessions", { get: () => void 0 });
+	const cache = new ArchiveProjectionCache(ctx, { writeEveryEvents: 200, writeIntervalMs: 5000 });
+	await cache[Service.init]();
+	assert.deepEqual(cache.recordFor(shared, currentShared.identity), currentShared, "新版逐会话记录优先");
+	assert.deepEqual(cache.recordFor(currentOnly, currentRecord.identity), currentRecord, "仅存在于新版缓存的记录必须迁入");
+	assert.deepEqual(cache.recordFor(legacyOnly, legacyRecord.identity), legacyRecord, "旧缓存只补新版缺失记录");
+});
+
+test("ArchiveProjectionCache skips a seeded legacy row without an inherited count", async () => {
+	const imId = "im:weixin:dm:1787047812741:o9cq809LPcI9ZPFNlpik3oDWfGI@im.wechat";
+	const safe = new FakeTable({});
+	const legacy = new FakeTable({
+		[imId]: {
+			identity: { createdAt: 1700000000000, cwd: cwdB, isSeeded: true },
+			rows: { title: { ver: 1, seq: 9, val: "unsafe legacy seed" } }
+		}
+	});
+	const ctx = new Context();
+	ctx.provide("storageDomain", {
+		open: async (spec) => spec.name === safeProjectionCacheDomainSpec.name
+			? new FakeDomain({ sessions: safe }, null)
+			: new FakeDomain({ sessions: legacy }, null)
+	});
+	ctx.provide("sessionProjections", {
+		checkpoint: () => ({}),
+		viewCheckpoint: (rows) => Object.fromEntries(Object.entries(rows).map(([key, value]) => [key, value.val]))
+	});
+	ctx.provide("sessions", { get: () => void 0 });
+	const cache = new ArchiveProjectionCache(ctx, { writeEveryEvents: 200, writeIntervalMs: 5000 });
+	await cache[Service.init]();
+	assert.equal(safe.has(imId), false);
+	assert.equal(safe.has(projectionCacheStorageKey(imId)), false);
 });
 
 test("ArchiveProjectionCache resumes a partial import without overwriting newer safe rows", async () => {
 	const first = "im:qq:dm:1:user";
 	const second = "im:weixin:dm:2:user@im.wechat";
 	const oldFirst = { identity: { createdAt: 1 }, rows: { title: { ver: 1, seq: 1, val: "old" } } };
-	const newFirst = { identity: { createdAt: 1 }, rows: { title: { ver: 1, seq: 8, val: "new" } } };
+	const newFirst = { identity: { createdAt: 1, isSeeded: false, inheritedEventCount: 0 }, rows: { title: { ver: 1, seq: 8, val: "new" } } };
 	const secondRecord = { identity: { createdAt: 2 }, rows: { title: { ver: 1, seq: 2, val: "second" } } };
+	const normalizedSecond = { identity: { createdAt: 2, isSeeded: false, inheritedEventCount: 0 }, rows: secondRecord.rows };
 	const safe = new FakeTable({
 		[projectionCacheStorageKey(first)]: { sessionId: first, ...newFirst }
 	});
@@ -652,7 +795,7 @@ test("ArchiveProjectionCache resumes a partial import without overwriting newer 
 	const cache = new ArchiveProjectionCache(ctx, { writeEveryEvents: 200, writeIntervalMs: 5000 });
 	await cache[Service.init]();
 	assert.deepEqual(cache.recordFor(first, newFirst.identity), newFirst, "newer compatibility-domain data wins");
-	assert.deepEqual(cache.recordFor(second, secondRecord.identity), secondRecord, "missing rows resume importing");
+	assert.deepEqual(cache.recordFor(second, normalizedSecond.identity), normalizedSecond, "missing rows resume importing with a complete unseeded identity");
 });
 
 test("ArchiveProjectionCache whenIdle waits for disposal write before delete", async () => {
@@ -668,7 +811,7 @@ test("ArchiveProjectionCache whenIdle waits for disposal write before delete", a
 	ctx.provide("sessions", { get: () => void 0 });
 	const cache = new ArchiveProjectionCache(ctx, { writeEveryEvents: 200, writeIntervalMs: 5000 });
 	await cache[Service.init]();
-	const session = { id: s3, header: header(s3, cwdB), events: [] };
+	const session = { id: s3, header: header(s3, cwdB, { isSeeded: false }), inheritedEventCount: 0, events: [] };
 	await cache.put(s3, { createdAt: 1700000000000, cwd: cwdB }, { title: { ver: 1, seq: 9, val: "t" } });
 	assert.ok(table.has(projectionCacheStorageKey(s3)));
 	// disposal triggers the write-behind; whenIdle must observe it
@@ -692,7 +835,7 @@ test("ArchiveProjectionCache delete prevents an in-flight write from recreating 
 	ctx.provide("sessions", { get: () => void 0 });
 	const cache = new ArchiveProjectionCache(ctx, { writeEveryEvents: 200, writeIntervalMs: 5000 });
 	await cache[Service.init]();
-	const session = { id: s3, header: header(s3, cwdB), events: [] };
+	const session = { id: s3, header: header(s3, cwdB, { isSeeded: false }), inheritedEventCount: 0, events: [] };
 	const put = table.put.bind(table);
 	let started;
 	const writing = new Promise((resolve) => { started = resolve; });
