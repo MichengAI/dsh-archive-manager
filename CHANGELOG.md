@@ -4,9 +4,9 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
-## Unreleased
+## 0.1.24 — 2026-09-02
 
-- Upgraded the development test stack to DSH `0.1.2-alpha.5` and `@deepseek-ai/cordis` `4.0.2`, while retaining the existing DSH `0.1.0-rc.5` through `0.1.x` peer range.
+- Upgraded the development test stack to DSH `0.1.2-alpha.5` and `@deepseek-ai/cordis` `4.0.2`, while supporting DSH `0.1.1-rc.2` through `0.1.x` at runtime.
 - Switched primary client integration tests to the current `dsh-client-store` contract and retained a tested optional `dsh-client-runtime` fallback for older hosts.
 - Added a reproducible pnpm alpha-resolution policy that disables automatic peer installation and records the approved newly published packages.
 

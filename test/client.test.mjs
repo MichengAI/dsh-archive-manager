@@ -139,7 +139,7 @@ test("bundle resolves the current client-store and keeps the legacy fallback", (
 test("manifest keeps the latest and legacy client contracts optional", () => {
 	assert.equal(PACKAGE_MANIFEST.peerDependencies?.["@deepseek-ai/dsh-client-store"], ">=0.1.2-alpha.5 <0.2.0");
 	assert.equal(PACKAGE_MANIFEST.peerDependenciesMeta?.["@deepseek-ai/dsh-client-store"]?.optional, true);
-	assert.equal(PACKAGE_MANIFEST.peerDependencies?.["@deepseek-ai/dsh-client-runtime"], ">=0.1.0-rc.5 <0.2.0");
+	assert.equal(PACKAGE_MANIFEST.peerDependencies?.["@deepseek-ai/dsh-client-runtime"], ">=0.1.1-rc.2 <0.2.0");
 	assert.equal(PACKAGE_MANIFEST.peerDependenciesMeta?.["@deepseek-ai/dsh-client-runtime"]?.optional, true);
 	assert.equal(PACKAGE_MANIFEST.dsh.client.inject.includes("@deepseek-ai/dsh-client-runtime"), false);
 });
