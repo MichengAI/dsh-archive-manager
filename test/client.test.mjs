@@ -136,10 +136,18 @@ test("bundle resolves the current client-store and keeps the legacy fallback", (
 	assert.equal(legacyBundle.__test.hasSplitClientStore, false);
 });
 
-test("manifest keeps the latest and legacy client contracts optional", () => {
-	assert.equal(PACKAGE_MANIFEST.peerDependencies?.["@deepseek-ai/dsh-client-store"], ">=0.1.2-alpha.5 <0.2.0");
+test("manifest keeps one DSH peer range and both client contracts optional", () => {
+	const dshPeerRanges = Object.entries(PACKAGE_MANIFEST.peerDependencies ?? {})
+		.filter(([name]) => name.startsWith("@deepseek-ai/dsh-"))
+		.map(([, range]) => range);
+	const dshDevelopmentVersions = Object.entries(PACKAGE_MANIFEST.devDependencies ?? {})
+		.filter(([name]) => name.startsWith("@deepseek-ai/dsh-"))
+		.map(([, version]) => version);
+	assert.ok(dshPeerRanges.length > 0);
+	assert.deepEqual([...new Set(dshPeerRanges)], [">=0.1.0-rc.5 <0.2.0"]);
+	assert.ok(dshDevelopmentVersions.length > 0);
+	assert.deepEqual([...new Set(dshDevelopmentVersions)], ["0.1.2-alpha.5"]);
 	assert.equal(PACKAGE_MANIFEST.peerDependenciesMeta?.["@deepseek-ai/dsh-client-store"]?.optional, true);
-	assert.equal(PACKAGE_MANIFEST.peerDependencies?.["@deepseek-ai/dsh-client-runtime"], ">=0.1.1-rc.2 <0.2.0");
 	assert.equal(PACKAGE_MANIFEST.peerDependenciesMeta?.["@deepseek-ai/dsh-client-runtime"]?.optional, true);
 	assert.equal(PACKAGE_MANIFEST.dsh.client.inject.includes("@deepseek-ai/dsh-client-runtime"), false);
 });
