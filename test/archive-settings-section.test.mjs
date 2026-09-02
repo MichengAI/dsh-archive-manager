@@ -40,9 +40,14 @@ test("归档设置页在标题区提供项目与反馈入口，不混入批量�
   assert.match(client, /function GithubMark16\(\)/);
   assert.match(client, /GithubMark16, \{\}/);
   assert.match(client, /href: "https:\/\/github\.com\/MichengAI\/dsh-archive-manager\/issues"/);
+  assert.match(client, /IconListPenOutline16/);
+  assert.doesNotMatch(client, /IconDislikeOutline16/);
   assert.match(client, /target: "_blank", rel: "noreferrer"/);
-  assert.match(client, /"archives\.viewProject": "查看项目"/);
+  assert.match(client, /"archives\.viewProject": "Star 项目"/);
+  assert.match(client, /"archives\.viewProject": "Star project"/);
   assert.match(client, /"archives\.feedback": "意见反馈"/);
+  assert.equal((client.match(/className: "dsham_settingsTitleRow"/g) ?? []).length, 2);
+  assert.equal((client.match(/href: "https:\/\/github\.com\/MichengAI\/dsh-archive-manager\/issues"/g) ?? []).length, 2);
   assert.doesNotMatch(client, /dsham_settingsHeaderActions[\s\S]{0,700}archives\.viewProject/);
 });
 

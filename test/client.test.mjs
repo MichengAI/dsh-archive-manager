@@ -319,6 +319,29 @@ test("deriveSearchResults: showArchived toggles archived matches with the flag",
 	assert.equal(shown.items.find((r) => r.id === "s2").archived, true);
 });
 
+test("deriveSearchResults: 未分组会话按当前语言展示并可检索", () => {
+	const ungrouped = summary("ungrouped", { title: "独立会话", cwd: void 0 });
+	const listWithUngrouped = {
+		current: void 0,
+		ids: [ungrouped.id],
+		byId: { [ungrouped.id]: ungrouped }
+	};
+	const result = t.deriveSearchResults(
+		listWithUngrouped,
+		[],
+		"未分组",
+		[],
+		noPendingInteractions,
+		{ items: [], hasMore: false },
+		50,
+		false,
+		"未分组"
+	);
+
+	assert.deepEqual(result.items.map((item) => item.id), ["ungrouped"]);
+	assert.equal(result.items[0].workspace, "未分组");
+});
+
 test("view store: showArchived default false, persists toggles, same store family as groupBy/orderBy", () => {
 	const handle = t.createWorkspaceViewStore();
 	const store = handle.create(void 0);
