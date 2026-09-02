@@ -32,6 +32,20 @@ test("归档设置页提供搜索、排序、筛选、全部恢复和全部删�
   assert.doesNotMatch(client, /chatType === "all"/);
 });
 
+test("归档设置页在标题区提供项目与反馈入口，不混入批量操作", async () => {
+  const client = await readFile(clientPath, "utf8");
+
+  assert.match(client, /className: "dsham_settingsTitleRow"/);
+  assert.match(client, /href: "https:\/\/github\.com\/MichengAI\/dsh-archive-manager"/);
+  assert.match(client, /function GithubMark16\(\)/);
+  assert.match(client, /GithubMark16, \{\}/);
+  assert.match(client, /href: "https:\/\/github\.com\/MichengAI\/dsh-archive-manager\/issues"/);
+  assert.match(client, /target: "_blank", rel: "noreferrer"/);
+  assert.match(client, /"archives\.viewProject": "查看项目"/);
+  assert.match(client, /"archives\.feedback": "意见反馈"/);
+  assert.doesNotMatch(client, /dsham_settingsHeaderActions[\s\S]{0,700}archives\.viewProject/);
+});
+
 test("归档设置页原型支持筛选内全选、跨项目选择与确认批量操作", async () => {
 	const client = await readFile(clientPath, "utf8");
 
