@@ -1,7 +1,6 @@
 // dsh-archive-manager client bundle self-tests (node:test).
 //
-// 使用真实 legacy client-runtime，并模拟 0.1.2 拆分后的静态 client-store，
-// 分别实例化已归档会话管理客户端 bundle。其余 static module table
+// 使用当前 DSH 的 client-store 实例化已归档会话管理客户端 bundle。其余 static module table
 // (react, cordis, ui-slots,
 // ui-primitives, ...) resolved from the dsh flat module fallback through the
 // test 目录的 `node_modules` junction。覆盖客户端自身的派生
@@ -25,11 +24,11 @@ for (const spec of [
 	"react-dom",
 	"react-dom/client",
 	"@deepseek-ai/cordis",
-	"@deepseek-ai/dsh-client-ui-slots",
-	"@deepseek-ai/dsh-client-web-react"
+	"@deepseek-ai/dsh-client-ui-slots"
 ]) {
 	statics[spec] = await import(pathToFileURL(requireFallback.resolve(spec)).href);
 }
+const { defineStore } = await import("@deepseek-ai/dsh-client-store");
 // The primitives package imports CSS through its bundler pipeline, which
 // 纯 Node ESM 无法加载；客户端仅在组件
 // bodies, so a no-op facade suffices for materialization + derivation tests.
@@ -75,21 +74,24 @@ function materialize(id, options = {}) {
 	return factory(require, module, module.exports) ?? module.exports;
 }
 
-const RUNTIME_BUNDLE = fileURLToPath(new URL("../node_modules/@deepseek-ai/dsh-client-runtime/lib/client.js", import.meta.url));
 const CLIENT_BUNDLE = fileURLToPath(new URL("../lib/client.js", import.meta.url));
 const PACKAGE_MANIFEST = JSON.parse(await readFile(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8"));
 
-await loadBundle(RUNTIME_BUNDLE);
-const runtime = materialize("@deepseek-ai/dsh-client-runtime");
 await loadBundle(CLIENT_BUNDLE);
-const legacyRequests = [];
-const legacyBundle = materialize("@michengai/dsh-archive-manager", { requests: legacyRequests });
 const alphaRequests = [];
 const bundle = materialize("@michengai/dsh-archive-manager", {
 	requests: alphaRequests,
 	staticModules: {
 		...statics,
-		"@deepseek-ai/dsh-client-store": { defineStore: runtime.defineStore }
+		"@deepseek-ai/dsh-client-store": { defineStore }
+	}
+});
+const legacyRequests = [];
+const legacyBundle = materialize("@michengai/dsh-archive-manager", {
+	requests: legacyRequests,
+	staticModules: {
+		...statics,
+		"@deepseek-ai/dsh-client-runtime/client": { defineStore }
 	}
 });
 
@@ -121,20 +123,23 @@ test("bundle materializes with apply/inject and the __test surface", () => {
 	assert.equal(typeof t.isUnknownSessionError, "function");
 });
 
-test("bundle resolves the split alpha store first and falls back to the legacy runtime", () => {
+test("bundle resolves the current client-store and keeps the legacy fallback", () => {
 	assert.equal(alphaRequests[0], "@deepseek-ai/dsh-client-store");
 	assert.equal(alphaRequests.includes("@deepseek-ai/dsh-client-runtime/client"), false);
 	assert.deepEqual(legacyRequests.slice(0, 2), [
 		"@deepseek-ai/dsh-client-store",
 		"@deepseek-ai/dsh-client-runtime/client"
 	]);
-	assert.equal(typeof legacyBundle.__test.createWorkspaceViewStore().create, "function");
 	assert.equal(typeof bundle.__test.createWorkspaceViewStore().create, "function");
-	assert.equal(legacyBundle.__test.hasSplitClientStore, false);
+	assert.equal(typeof legacyBundle.__test.createWorkspaceViewStore().create, "function");
 	assert.equal(bundle.__test.hasSplitClientStore, true);
+	assert.equal(legacyBundle.__test.hasSplitClientStore, false);
 });
 
-test("manifest treats the removed legacy runtime as an optional fallback", () => {
+test("manifest keeps the latest and legacy client contracts optional", () => {
+	assert.equal(PACKAGE_MANIFEST.peerDependencies?.["@deepseek-ai/dsh-client-store"], ">=0.1.2-alpha.5 <0.2.0");
+	assert.equal(PACKAGE_MANIFEST.peerDependenciesMeta?.["@deepseek-ai/dsh-client-store"]?.optional, true);
+	assert.equal(PACKAGE_MANIFEST.peerDependencies?.["@deepseek-ai/dsh-client-runtime"], ">=0.1.0-rc.5 <0.2.0");
 	assert.equal(PACKAGE_MANIFEST.peerDependenciesMeta?.["@deepseek-ai/dsh-client-runtime"]?.optional, true);
 	assert.equal(PACKAGE_MANIFEST.dsh.client.inject.includes("@deepseek-ai/dsh-client-runtime"), false);
 });

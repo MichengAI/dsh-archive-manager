@@ -4,6 +4,12 @@
 
 以下发布说明会持续保留；新增版本时不再删除较早记录。
 
+## 未发布
+
+- 将开发测试依赖升级至 DSH `0.1.2-alpha.5` 与 `@deepseek-ai/cordis` `4.0.2`，同时保留原有 DSH `0.1.0-rc.5` 至 `0.1.x` 的 peer 支持范围。
+- 客户端集成测试以当前 `dsh-client-store` 为主路径，并保留经过测试的可选 `dsh-client-runtime` 回退，兼容旧版宿主。
+- 新增可复现的 pnpm alpha 解析策略：关闭自动安装 peer，并记录已批准的刚发布依赖。
+
 ## 0.1.23 — 2026-09-01
 
 - 修复 DSH `v0.1.2-alpha.2` 后会话侧栏“等待回答 / 等待审批”状态点不显示的问题：侧栏行现在从 `ui-session` 的 `pendingInteractions` Map 读取待处理交互状态。

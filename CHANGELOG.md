@@ -4,6 +4,12 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## Unreleased
+
+- Upgraded the development test stack to DSH `0.1.2-alpha.5` and `@deepseek-ai/cordis` `4.0.2`, while retaining the existing DSH `0.1.0-rc.5` through `0.1.x` peer range.
+- Switched primary client integration tests to the current `dsh-client-store` contract and retained a tested optional `dsh-client-runtime` fallback for older hosts.
+- Added a reproducible pnpm alpha-resolution policy that disables automatic peer installation and records the approved newly published packages.
+
 ## 0.1.23 — 2026-09-01
 
 - Fixed missing sidebar pending-state indicators on DSH `v0.1.2-alpha.2`: workspace rows now read pending UI interactions from the `ui-session` `pendingInteractions` Map.

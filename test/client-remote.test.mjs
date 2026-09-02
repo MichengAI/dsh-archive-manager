@@ -17,7 +17,7 @@ import { Context } from "@deepseek-ai/cordis";
 
 const requireFallback = createRequire(import.meta.url);
 const statics = {};
-for (const spec of ["react", "react/jsx-runtime", "react-dom", "react-dom/client", "@deepseek-ai/cordis", "@deepseek-ai/dsh-client-ui-slots", "@deepseek-ai/dsh-client-web-react"]) {
+for (const spec of ["react", "react/jsx-runtime", "react-dom", "react-dom/client", "@deepseek-ai/cordis", "@deepseek-ai/dsh-client-store", "@deepseek-ai/dsh-client-ui-slots"]) {
 	statics[spec] = await import(pathToFileURL(requireFallback.resolve(spec)).href);
 }
 statics["@deepseek-ai/dsh-client-ui-primitives"] = new Proxy({}, { get: (t, p) => (typeof p === "string" ? (t[p] ??= () => null) : t[p]) });
@@ -46,10 +46,8 @@ function materialize(id) {
 	return factory(require, module, module.exports) ?? module.exports;
 }
 
-await loadBundle("@deepseek-ai/dsh-client-runtime");
 await loadBundle("@deepseek-ai/dsh-typert-registry");
 await loadBundle("@deepseek-ai/dsh-api-gateway");
-materialize("@deepseek-ai/dsh-client-runtime");
 const typertClient = materialize("@deepseek-ai/dsh-typert-registry");
 const gatewayClient = materialize("@deepseek-ai/dsh-api-gateway");
 await import(pathToFileURL(fileURLToPath(new URL("../lib/client.js", import.meta.url))).href);
