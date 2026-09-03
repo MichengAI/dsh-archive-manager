@@ -1,6 +1,6 @@
 {
   "name": "@michengai/dsh-archive-manager",
-  "version": "0.1.24",
+  "version": "0.1.25",
   "description": "NPM-installable DSH Web plugin for managing archived sessions.",
   "type": "module",
   "packageManager": "pnpm@11.21.0",
@@ -30,7 +30,7 @@
     "test": "node --test test/*.test.mjs",
     "test:compat": "node scripts/test-legacy-compatibility.mjs",
     "pack:check": "pnpm pack --dry-run",
-    "prepublishOnly": "pnpm build && pnpm test"
+    "prepublishOnly": "pnpm build && pnpm test && pnpm test:compat"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",

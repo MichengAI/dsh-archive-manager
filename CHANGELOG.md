@@ -4,6 +4,12 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 0.1.25 — 2026-09-03
+
+- Added **Archive all chats** to each workspace action menu. The entry is hidden when no active chats remain, and the client refreshes its session list after a successful batch archive.
+- Kept the path-safe `session_projcache_archive_manager_v2` domain as the only write target. Startup now imports missing entries from the short-lived old-name v2 domain, old-name v1 domain, and supported DSH cache formats without overwriting newer records.
+- Added RC2-to-current isolated compatibility coverage and made it a release gate: CI and `prepublishOnly` now run `test:compat`; CI no longer assumes pnpm exists before Corepack enables it.
+
 ## 0.1.24 — 2026-09-02
 
 - Upgraded the development test stack to DSH `0.1.2-alpha.5` and `@deepseek-ai/cordis` `4.0.2`, while retaining the existing `>=0.1.0-rc.5 <0.2.0` DSH runtime peer declarations.

@@ -38,6 +38,9 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Test legacy compatibility
+        run: pnpm test:compat
+
       - name: Check if version is already published
         id: check
         run: |

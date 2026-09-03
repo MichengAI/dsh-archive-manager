@@ -21,6 +21,7 @@ import { ArchiveWorkspaceRegistry } from "../lib/workspace.js";
 import {
 	ArchiveProjectionCache,
 	legacySafeProjectionCacheDomainSpec,
+	legacySafeV2ProjectionCacheDomainSpec,
 	projectionCacheStorageKey,
 	safeProjectionCacheDomainSpec
 } from "../lib/projcache.js";
@@ -739,8 +740,9 @@ test("ArchiveProjectionCache migrates the v1 compatibility domain without reopen
 	const cache = new ArchiveProjectionCache(ctx, { writeEveryEvents: 200, writeIntervalMs: 5000 });
 	await cache[Service.init]();
 
-	assert.deepEqual(opened.slice(0, 2), [
+	assert.deepEqual(opened.slice(0, 3), [
 		[safeProjectionCacheDomainSpec.name, 2, safeProjectionCacheDomainSpec.layout],
+		[legacySafeV2ProjectionCacheDomainSpec.name, 2, legacySafeV2ProjectionCacheDomainSpec.layout],
 		["session_projcache_archive_manager", 1, legacySafeProjectionCacheDomainSpec.layout]
 	]);
 	assert.deepEqual(target.get(projectionCacheStorageKey(sessionId)), {
@@ -748,6 +750,48 @@ test("ArchiveProjectionCache migrates the v1 compatibility domain without reopen
 		identity: { ...legacyRecord.identity, isSeeded: false, inheritedEventCount: 0 },
 		rows: legacyRecord.rows
 	});
+});
+
+test("ArchiveProjectionCache migrates the old-name v2 compatibility domain", async () => {
+	const sessionId = "im:weixin:dm:1787047812741:o9cq809LPcI9ZPFNlpik3oDWfGI@im.wechat";
+	const legacyRecord = {
+		identity: { createdAt: 1700000000001, cwd: cwdA, isSeeded: false, inheritedEventCount: 0 },
+		rows: { title: { ver: 1, seq: 10, val: "v2 compatibility cache" } }
+	};
+	const target = new FakeTable({});
+	const legacySafeV2 = new FakeTable({
+		[projectionCacheStorageKey(sessionId)]: { sessionId, ...legacyRecord }
+	});
+	const legacySafeV1 = new FakeTable({});
+	const legacy = new FakeTable({});
+	const current = new FakeTable({});
+	const opened = [];
+	const ctx = new Context();
+	ctx.provide("storageDomain", {
+		open: async (spec) => {
+			opened.push([spec.name, spec.version, spec.layout]);
+			if (spec.name === safeProjectionCacheDomainSpec.name) return new FakeDomain({ sessions: target }, null);
+			if (spec.name === legacySafeV2ProjectionCacheDomainSpec.name && spec.version === 2) return new FakeDomain({ sessions: legacySafeV2 }, null);
+			if (spec.name === legacySafeProjectionCacheDomainSpec.name && spec.version === 1) return new FakeDomain({ sessions: legacySafeV1 }, null);
+			if (spec.name === "session_projcache" && spec.version === 3) return new FakeDomain({ sessions: legacy }, null);
+			if (spec.name === projectionCacheDomainSpec.name && spec.version === projectionCacheDomainSpec.version) return new FakeDomain({ sessions: current }, null);
+			throw new Error(`unexpected cache domain ${spec.name} v${spec.version}`);
+		}
+	});
+	ctx.provide("sessionProjections", {
+		checkpoint: () => ({}),
+		viewCheckpoint: (rows) => Object.fromEntries(Object.entries(rows).map(([key, value]) => [key, value.val]))
+	});
+	ctx.provide("sessions", { get: () => void 0 });
+	const cache = new ArchiveProjectionCache(ctx, { writeEveryEvents: 200, writeIntervalMs: 5000 });
+	await cache[Service.init]();
+
+	assert.deepEqual(opened.slice(0, 3), [
+		[safeProjectionCacheDomainSpec.name, 2, safeProjectionCacheDomainSpec.layout],
+		["session_projcache_archive_manager", 2, legacySafeV2ProjectionCacheDomainSpec.layout],
+		["session_projcache_archive_manager", 1, legacySafeProjectionCacheDomainSpec.layout]
+	]);
+	assert.deepEqual(target.get(projectionCacheStorageKey(sessionId)), { sessionId, ...legacyRecord });
 });
 
 test("ArchiveProjectionCache imports legacy IM rows while also reading the current cache domain", async () => {
@@ -784,6 +828,7 @@ test("ArchiveProjectionCache imports legacy IM rows while also reading the curre
 	const physicalKey = projectionCacheStorageKey(imId);
 	assert.deepEqual(opened, [
 		[safeProjectionCacheDomainSpec.name, 2, safeProjectionCacheDomainSpec.layout],
+		[legacySafeV2ProjectionCacheDomainSpec.name, 2, legacySafeV2ProjectionCacheDomainSpec.layout],
 		[legacySafeProjectionCacheDomainSpec.name, 1, legacySafeProjectionCacheDomainSpec.layout],
 		["session_projcache", 3, void 0],
 		[projectionCacheDomainSpec.name, projectionCacheDomainSpec.version, projectionCacheDomainSpec.layout]

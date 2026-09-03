@@ -18,7 +18,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: pnpm
+          package-manager-cache: false
 
       - name: 安装依赖
         shell: pwsh

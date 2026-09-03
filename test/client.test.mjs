@@ -121,6 +121,51 @@ test("bundle materializes with apply/inject and the __test surface", () => {
 	assert.equal(typeof t.deriveSearchResults, "function");
 	assert.equal(typeof t.displayTitle, "function");
 	assert.equal(typeof t.isUnknownSessionError, "function");
+	assert.equal(typeof t.archiveWorkspaceSessionsAndRefresh, "function");
+	assert.equal(typeof t.archiveableWorkspaceSessionCount, "function");
+	assert.equal(typeof t.archiveWorkspaceDialogTarget, "function");
+	assert.equal(typeof t.archiveWorkspaceDialogFailureState, "function");
+});
+
+test("批量归档成功后刷新会话列表，失败时不刷新", async () => {
+	const calls = [];
+	const registry = {
+		async archiveWorkspaceSessions(workspaceId) {
+			calls.push(workspaceId);
+			return { ok: true, value: { archivedSessionIds: ["s1"], archivedSessionIdsAdded: ["s1"] } };
+		}
+	};
+	let refreshes = 0;
+	const result = await t.archiveWorkspaceSessionsAndRefresh(registry, "w1", async () => { refreshes += 1; });
+	assert.deepEqual(result, { archivedSessionIds: ["s1"], archivedSessionIdsAdded: ["s1"] });
+	assert.deepEqual(calls, ["w1"]);
+	assert.equal(refreshes, 1);
+
+	await assert.rejects(() => t.archiveWorkspaceSessionsAndRefresh({
+		archiveWorkspaceSessions: async () => ({ ok: false, error: { message: "host rejected" } })
+	}, "w1", async () => { refreshes += 1; }), /host rejected/);
+	assert.equal(refreshes, 1);
+});
+
+test("工作区没有可归档会话时不提供批量归档入口或确认框", () => {
+	const workspace = { workspaceId: "w1", sessionIds: ["s1", "s1", "s2"] };
+	assert.equal(t.archiveableWorkspaceSessionCount(workspace, []), 2);
+	assert.equal(t.archiveableWorkspaceSessionCount(workspace, ["s1"]), 1);
+	assert.equal(t.archiveableWorkspaceSessionCount(workspace, ["s1", "s2"]), 0);
+	assert.equal(t.archiveWorkspaceDialogTarget([workspace], "w1", "项目", ["s1", "s2"]), null);
+	assert.deepEqual(t.archiveWorkspaceDialogTarget([workspace], "w1", "项目", ["s1"]), {
+		workspaceId: "w1",
+		title: "项目",
+		count: 1
+	});
+});
+
+test("批量归档失败时保持确认框打开并显示错误", () => {
+	const target = { workspaceId: "w1", title: "项目", count: 2 };
+	const state = t.archiveWorkspaceDialogFailureState(target, new Error("host rejected"), (key, values) => `${key}: ${values.detail}`);
+	assert.equal(state.target, target);
+	assert.equal(state.archiving, false);
+	assert.equal(state.error, "archives.archiveFailed: host rejected");
 });
 
 test("bundle resolves the current client-store and keeps the legacy fallback", () => {

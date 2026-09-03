@@ -22,6 +22,7 @@
 ## Features
 
 - Archive a session from the sidebar session menu.
+- Archive every active chat in a workspace from its sidebar action menu.
 - Search archived chats, sort them by update time, creation time, or title, and filter them by workspace in **Settings → Archived**.
 - Restore a session to its original workspace with **Unarchive**.
 - Restore or permanently delete every archived chat in a project group.
