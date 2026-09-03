@@ -26,11 +26,12 @@
     "CHANGELOG.zh-CN.md"
   ],
   "scripts": {
-    "build": "node scripts/check-package.mjs",
-    "test": "node --test test/*.test.mjs",
+    "build": "node scripts/build.mjs && node scripts/check-package.mjs",
+    "test": "pnpm build && node --test test/*.test.mjs",
     "test:compat": "node scripts/test-legacy-compatibility.mjs",
     "pack:check": "pnpm pack --dry-run",
-    "prepublishOnly": "pnpm build && pnpm test && pnpm test:compat"
+    "verify": "pnpm test && pnpm test:compat && pnpm pack:check && node scripts/check-generated.mjs",
+    "prepublishOnly": "pnpm verify"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
@@ -83,7 +84,8 @@
     "@deepseek-ai/dsh-typert-registry": "0.1.2-alpha.5",
     "@deepseek-ai/dsh-workspace": "0.1.2-alpha.5",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react-dom": "18.3.1",
+    "esbuild": "0.25.0"
   },
   "license": "Apache-2.0",
   "dsh": {

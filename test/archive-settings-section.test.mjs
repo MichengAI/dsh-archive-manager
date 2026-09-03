@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-const clientPath = fileURLToPath(new URL("../lib/client.js", import.meta.url));
+const clientPath = fileURLToPath(new URL("../src/client.js", import.meta.url));
 
 test("归档入口注册在设置的连接器之后，并移除旧的视图选项入口", async () => {
   const client = await readFile(clientPath, "utf8");

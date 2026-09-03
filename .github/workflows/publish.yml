@@ -32,14 +32,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build
-        run: pnpm build
-
-      - name: Test
-        run: pnpm test
-
-      - name: Test legacy compatibility
-        run: pnpm test:compat
+      - name: 完整发布验证
+        run: pnpm verify
 
       - name: Check if version is already published
         id: check

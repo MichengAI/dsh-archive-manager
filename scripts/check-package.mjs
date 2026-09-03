@@ -1,5 +1,5 @@
 // 轻量发布预检：校验 DSH 加载器与 npm 包依赖的单包结构。
-// 该纯 ESM 插件无需额外构建，此脚本同时作为 `pnpm build` 的校验入口。
+// `pnpm build` 已从 src 生成 lib；此脚本只验证生成后的发布包完整性。
 import { access } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";

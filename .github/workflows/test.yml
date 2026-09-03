@@ -28,17 +28,9 @@ jobs:
           corepack enable
           pnpm install --frozen-lockfile
 
-      - name: 验证当前 DSH 功能
+      - name: 执行完整验证
         shell: pwsh
         run: |
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           $OutputEncoding = [System.Text.Encoding]::UTF8
-          pnpm build
-          pnpm test
-
-      - name: 验证 DSH 0.1.1-rc.2 升级兼容性
-        shell: pwsh
-        run: |
-          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-          $OutputEncoding = [System.Text.Encoding]::UTF8
-          pnpm test:compat
+          pnpm verify

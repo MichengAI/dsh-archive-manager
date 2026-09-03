@@ -148,12 +148,12 @@ dsh --profile web --dump-config
 
 ## 二次开发
 
-当前仓库未提供 `src` 源目录，`lib` 是直接维护的运行源码；这是当前仓库的实现方式，不是新插件的推荐布局。新插件建议使用 `src` 开发并构建到 `lib`：
+`src` 是唯一可维护源码目录，`pnpm build` 使用 esbuild 将其编译为可发布的 `lib`。请勿直接修改 `lib`，否则下次构建会覆盖改动：
 
-- [lib\index.js](lib/index.js)：客户端插件 Host 服务入口。
-- [lib\workspace.js](lib/workspace.js)：归档会话和工作区服务实现。
-- [lib\projcache.js](lib/projcache.js)：会话投影缓存实现。
-- [lib\client.js](lib/client.js)：设置页和归档会话界面。
+- [src\index.js](src/index.js)：客户端插件 Host 服务入口。
+- [src\workspace.js](src/workspace.js)：归档会话和工作区服务实现。
+- [src\projcache.js](src/projcache.js)：会话投影缓存实现。
+- [src\client.js](src/client.js)：设置页和归档会话界面。
 - `test\*.test.mjs`：Host、客户端、Remote 和样式边界测试。
 
 修改后运行检查、测试并用本地目录重新安装：
@@ -167,7 +167,7 @@ pnpm pack:check
 dsh plugin --profile web add .
 ```
 
-`pnpm build` 负责发布包完整性检查，不会将 `lib` 重新编译为其他目录。
+`pnpm build` 会在临时目录中从 `src` 生成全部 `lib` 产物；仅在生成成功后才原子替换旧产物，构建失败时会保留旧的 `lib`。
 
 ## 验证
 
@@ -179,7 +179,7 @@ pnpm test
 pnpm pack:check
 ```
 
-`prepublishOnly` 会在发布前执行构建检查与测试。
+`prepublishOnly` 会在发布前执行完整验证，并确认提交的 `lib` 与当前 `src` 构建结果一致。
 
 ## 许可证
 

@@ -148,12 +148,12 @@ If the entry is missing after installation or upgrade, restart DSH Web and hard-
 
 ## Secondary development
 
-This repository has no `src` directory. `lib` is directly maintained runtime source, which is its current layout rather than the recommended layout for new plugins. New plugins should prefer `src` built to `lib`.
+`src` is the sole maintained source directory. `pnpm build` uses esbuild to compile it into publishable `lib` output. Do not edit `lib` directly because the next build overwrites it.
 
-- [lib\index.js](lib/index.js): host service entry point.
-- [lib\workspace.js](lib/workspace.js): archived-session and workspace service.
-- [lib\projcache.js](lib/projcache.js): session projection cache.
-- [lib\client.js](lib/client.js): Settings page and archive UI.
+- [src\index.js](src/index.js): host service entry point.
+- [src\workspace.js](src/workspace.js): archived-session and workspace service.
+- [src\projcache.js](src/projcache.js): session projection cache.
+- [src\client.js](src/client.js): Settings page and archive UI.
 - `test\*.test.mjs`: host, client, Remote, and styling coverage.
 
 After changing the runtime source, validate, test, and install from the local directory:
@@ -167,7 +167,7 @@ pnpm pack:check
 dsh plugin --profile web add .
 ```
 
-`pnpm build` validates package integrity; it does not compile `lib` into another directory.
+`pnpm build` generates all `lib` output from `src` in a temporary directory, then atomically replaces the previous output only after a successful build. A failed build preserves the existing `lib`.
 
 ## Validation
 
@@ -179,7 +179,7 @@ pnpm test
 pnpm pack:check
 ```
 
-`prepublishOnly` runs the build check and tests before publishing.
+`prepublishOnly` runs the full verification suite before publishing and verifies that committed `lib` output matches the current `src` build.
 
 ## License
 
