@@ -24,3 +24,13 @@ test("两个删除确认入口都使用红色危险样式", async () => {
   assert.match(client, /\.dsham_settingsDeleteConfirm\{color:var\(--dsw-alias-state-error-primary\)!important;background:transparent!important;border-color:var\(--dsw-alias-state-error-primary\)!important/);
   assert.match(client, /\.dsham_settingsDeleteConfirm:focus-visible\{outline:2px solid var\(--dsw-alias-state-error-secondary\);outline-offset:2px\}/);
 });
+
+test("项目归档菜单将确认回调透传到会话树", async () => {
+  const client = await readFile(clientPath, "utf8");
+
+  assert.match(client, /function SessionTree\(\{[\s\S]*onArchiveRequest/);
+  assert.match(client, /onArchiveRequest\(group\.workspaceId, group\.label\)/);
+  assert.match(client, /onArchiveRequest: onArchiveWorkspaceRequest/);
+  assert.match(client, /archiveWorkspaceTarget !== null/);
+  assert.match(client, /archiveWorkspaceSessions\(archiveWorkspaceTarget\.workspaceId\)/);
+});
