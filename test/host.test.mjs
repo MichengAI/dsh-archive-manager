@@ -86,7 +86,9 @@ function buildRoot({ headers = [], workspaces = {}, archived = [], live = [] } =
 		if (header.cwd === void 0 || canonicalOf.has(header.cwd)) continue;
 		const dir = join(root, `proj-${canonicalOf.size}`);
 		mkdirSync(dir, { recursive: true });
-		canonicalOf.set(header.cwd, realpathSync(dir));
+		// 宿主以 fs.promises.realpath 建立会话路径索引；Windows 上普通同步
+		// realpath 的字符串表示可能不同，需用 native 实现保持同一规范形式。
+		canonicalOf.set(header.cwd, realpathSync.native(dir));
 	}
 	const canonicalHeaders = headers.map((h) => h.cwd === void 0 ? h : { ...h, cwd: canonicalOf.get(h.cwd) });
 	const located = new Map();
@@ -185,6 +187,7 @@ test("workspace registry init with the fakes", async () => {
 	const registry = await mountWorkspaceRegistry(env);
 	assert.ok(env.ctx.get("workspaceRegistry") !== void 0, "registry service is provided");
 	assert.deepEqual(registry.list().map((w) => w.id), [A, B]);
+	assert.deepEqual(registry.get(A).sessionIds, [s1, s2], "工作区初始会话必须通过路径成员校验");
 	assert.deepEqual(env.global.archivedSessionIds, []);
 });
 

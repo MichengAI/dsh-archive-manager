@@ -4,6 +4,11 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 0.1.26 — 2026-09-03
+
+- Fixed the Windows CI host-test fixture to use the same native realpath representation as DSH's asynchronous session-path index, preventing valid workspace sessions from being filtered out only in the test environment.
+- Added an initialization regression assertion that verifies accounted workspace sessions remain visible after path membership validation.
+
 ## 0.1.25 — 2026-09-03
 
 - Added **Archive all chats** to each workspace action menu. The entry is hidden when no active chats remain, and the client refreshes its session list after a successful batch archive.
