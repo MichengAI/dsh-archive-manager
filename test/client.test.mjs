@@ -191,7 +191,7 @@ test("manifest keeps one DSH peer range and both client contracts optional", () 
 	assert.ok(dshPeerRanges.length > 0);
 	assert.deepEqual([...new Set(dshPeerRanges)], [">=0.1.0-rc.5 <0.2.0"]);
 	assert.ok(dshDevelopmentVersions.length > 0);
-	assert.deepEqual([...new Set(dshDevelopmentVersions)], ["0.1.2-alpha.5"]);
+	assert.deepEqual([...new Set(dshDevelopmentVersions)], ["0.1.2-rc.1"]);
 	assert.equal(PACKAGE_MANIFEST.peerDependenciesMeta?.["@deepseek-ai/dsh-client-store"]?.optional, true);
 	assert.equal(PACKAGE_MANIFEST.peerDependenciesMeta?.["@deepseek-ai/dsh-client-runtime"]?.optional, true);
 	assert.equal(PACKAGE_MANIFEST.dsh.client.inject.includes("@deepseek-ai/dsh-client-runtime"), false);

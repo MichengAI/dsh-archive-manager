@@ -4,6 +4,11 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 0.1.29 — 2026-09-03
+
+- Upgraded the complete DSH development and regression-test dependency set from `0.1.2-alpha.5` to `0.1.2-rc.1` after verifying no runtime API changes between the two releases.
+- Extended the approved minimum-release-age entries to include the exact RC packages, keeping clean installs reproducible under the existing supply-chain policy.
+
 ## 0.1.28 — 2026-09-03
 
 - Enforced LF for JavaScript source, build scripts, and generated `lib` output, fixing Windows CI incorrectly reporting esbuild output as out of sync after a build.
