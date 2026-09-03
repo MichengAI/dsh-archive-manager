@@ -4,6 +4,11 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 0.1.28 — 2026-09-03
+
+- Enforced LF for JavaScript source, build scripts, and generated `lib` output, fixing Windows CI incorrectly reporting esbuild output as out of sync after a build.
+- Added a cross-platform line-ending policy regression test so generated-output synchronization checks behave consistently on Windows and Linux.
+
 ## 0.1.27 — 2026-09-03
 
 - Moved the sole maintained source into `src` and atomically generate the publishable `lib` directory with esbuild. A failed build preserves the previous output so local installation remains usable.
