@@ -20,6 +20,7 @@ import { projectionCacheDomainSpec } from "@deepseek-ai/dsh-session-projection-c
 import { ArchiveWorkspaceRegistry } from "../lib/workspace.js";
 import {
 	ArchiveProjectionCache,
+	legacySafeProjectionCacheDomainSpec,
 	projectionCacheStorageKey,
 	safeProjectionCacheDomainSpec
 } from "../lib/projcache.js";
@@ -201,6 +202,49 @@ test("archiveSession + unarchiveSession round trip (idempotent, durable)", async
 	assert.deepEqual(env.global.archivedSessionIds, []);
 	const second = await registry.unarchiveSession(s1); // idempotent no-op
 	assert.deepEqual(second.archivedSessionIds, []);
+});
+
+test("archiveWorkspaceSessions archives every known workspace session atomically and idempotently", async () => {
+	const env = buildRoot({
+		headers: [header(s1, cwdA), header(s2, cwdA), header(s3, cwdB)],
+		workspaces: {
+			[A]: workspace("D:\\proj-a", [s1, s2]),
+			[B]: workspace("D:\\proj-b", [s3]),
+			["ws-empty"]: workspace("D:\\proj-empty", [])
+		},
+		archived: [s2]
+	});
+	const registry = await mountWorkspaceRegistry(env);
+	const first = await registry.archiveWorkspaceSessions(A);
+	assert.deepEqual(first, {
+		archivedSessionIds: [s2, s1],
+		archivedSessionIdsAdded: [s1]
+	});
+	assert.deepEqual(env.global.archivedSessionIds, [s2, s1]);
+	const second = await registry.archiveWorkspaceSessions(A);
+	assert.deepEqual(second, {
+		archivedSessionIds: [s2, s1],
+		archivedSessionIdsAdded: []
+	});
+
+	const secondWorkspace = await registry.archiveWorkspaceSessions(B);
+	assert.deepEqual(secondWorkspace, {
+		archivedSessionIds: [s2, s1, s3],
+		archivedSessionIdsAdded: [s3]
+	});
+	const empty = await registry.archiveWorkspaceSessions("ws-empty");
+	assert.deepEqual(empty, { archivedSessionIds: [s2, s1, s3], archivedSessionIdsAdded: [] });
+	await assert.rejects(() => registry.archiveWorkspaceSessions("missing"), /unknown workspace/);
+});
+
+test("archiveWorkspaceSessions rejects an unknown accounted session without a partial archive", async () => {
+	const env = buildRoot({
+		headers: [header(s1, cwdA)],
+		workspaces: { [A]: workspace("D:\\proj-a", [s1, sUnknown]) }
+	});
+	const registry = await mountWorkspaceRegistry(env);
+	await assert.rejects(() => registry.archiveWorkspaceSessions(A), /UNKNOWN_SESSION/);
+	assert.deepEqual(env.global.archivedSessionIds, []);
 });
 
 test("unarchiveSession rejects unknown sessions", async () => {
@@ -608,6 +652,7 @@ test("markRemoteMethod registers single and batch archive methods on the service
 	assert.ok(methods.includes("unarchiveSession"), "unarchiveSession must be marked Remote");
 	assert.ok(methods.includes("deleteSession"), "deleteSession must be marked Remote");
 	assert.ok(methods.includes("unarchiveSessions"), "unarchiveSessions must be marked Remote");
+	assert.ok(methods.includes("archiveWorkspaceSessions"), "archiveWorkspaceSessions must be marked Remote");
 	assert.ok(methods.includes("deleteArchivedSessions"), "deleteArchivedSessions must be marked Remote");
 	assert.ok(methods.includes("archivedSessionMetadata"), "archivedSessionMetadata must be marked Remote");
 });
@@ -662,6 +707,49 @@ test("ArchiveProjectionCache maps IM ids to fixed-length path-safe storage keys"
 	);
 });
 
+test("ArchiveProjectionCache migrates the v1 compatibility domain without reopening it as v2", async () => {
+	const sessionId = "im:qq:dm:1786974024109:AAFEA88ABD266D02959130D923C09741";
+	const legacyRecord = {
+		identity: { createdAt: 1700000000000, cwd: cwdB },
+		rows: { title: { ver: 1, seq: 9, val: "v1 compatibility cache" } }
+	};
+	const target = new FakeTable({});
+	const legacySafe = new FakeTable({
+		[projectionCacheStorageKey(sessionId)]: { sessionId, ...legacyRecord }
+	});
+	const legacy = new FakeTable({});
+	const current = new FakeTable({});
+	const opened = [];
+	const ctx = new Context();
+	ctx.provide("storageDomain", {
+		open: async (spec) => {
+			opened.push([spec.name, spec.version, spec.layout]);
+			if (spec.name === safeProjectionCacheDomainSpec.name) return new FakeDomain({ sessions: target }, null);
+			if (spec.name === legacySafeProjectionCacheDomainSpec.name && spec.version === 1) return new FakeDomain({ sessions: legacySafe }, null);
+			if (spec.name === "session_projcache" && spec.version === 3) return new FakeDomain({ sessions: legacy }, null);
+			if (spec.name === projectionCacheDomainSpec.name && spec.version === projectionCacheDomainSpec.version) return new FakeDomain({ sessions: current }, null);
+			throw new Error(`unexpected cache domain ${spec.name} v${spec.version}`);
+		}
+	});
+	ctx.provide("sessionProjections", {
+		checkpoint: () => ({}),
+		viewCheckpoint: (rows) => Object.fromEntries(Object.entries(rows).map(([key, value]) => [key, value.val]))
+	});
+	ctx.provide("sessions", { get: () => void 0 });
+	const cache = new ArchiveProjectionCache(ctx, { writeEveryEvents: 200, writeIntervalMs: 5000 });
+	await cache[Service.init]();
+
+	assert.deepEqual(opened.slice(0, 2), [
+		[safeProjectionCacheDomainSpec.name, 2, safeProjectionCacheDomainSpec.layout],
+		["session_projcache_archive_manager", 1, legacySafeProjectionCacheDomainSpec.layout]
+	]);
+	assert.deepEqual(target.get(projectionCacheStorageKey(sessionId)), {
+		sessionId,
+		identity: { ...legacyRecord.identity, isSeeded: false, inheritedEventCount: 0 },
+		rows: legacyRecord.rows
+	});
+});
+
 test("ArchiveProjectionCache imports legacy IM rows while also reading the current cache domain", async () => {
 	const imId = "im:qq:dm:1786974024109:AAFEA88ABD266D02959130D923C09741";
 	const record = {
@@ -696,6 +784,7 @@ test("ArchiveProjectionCache imports legacy IM rows while also reading the curre
 	const physicalKey = projectionCacheStorageKey(imId);
 	assert.deepEqual(opened, [
 		[safeProjectionCacheDomainSpec.name, 2, safeProjectionCacheDomainSpec.layout],
+		[legacySafeProjectionCacheDomainSpec.name, 1, legacySafeProjectionCacheDomainSpec.layout],
 		["session_projcache", 3, void 0],
 		[projectionCacheDomainSpec.name, projectionCacheDomainSpec.version, projectionCacheDomainSpec.layout]
 	]);
@@ -965,6 +1054,7 @@ test("typert gateway SRC: claims + dispatch single and batch archive methods end
 	assert.equal(captured.matches("workspaceRegistry/unarchiveSession"), true);
 	assert.equal(captured.matches("workspaceRegistry/deleteSession"), true);
 	assert.equal(captured.matches("workspaceRegistry/unarchiveSessions"), true);
+	assert.equal(captured.matches("workspaceRegistry/archiveWorkspaceSessions"), true);
 	assert.equal(captured.matches("workspaceRegistry/deleteArchivedSessions"), true);
 	assert.equal(captured.matches("workspaceRegistry/archivedSessionMetadata"), true);
 	// legacy endpoints stay with the apiproxy (not claimed)
@@ -981,11 +1071,14 @@ test("typert gateway SRC: claims + dispatch single and batch archive methods end
 	const unarchiveBatch = await captured.handler("workspaceRegistry/unarchiveSessions", { args: { target: { scope: "workspace", workspaceId: A } } }, void 0);
 	assert.equal(unarchiveBatch.ok, true);
 	assert.deepEqual(unarchiveBatch.value, { archivedSessionIds: [], unarchivedSessionIds: [s1] });
+	const archiveWorkspace = await captured.handler("workspaceRegistry/archiveWorkspaceSessions", { args: { workspaceId: A } }, void 0);
+	assert.equal(archiveWorkspace.ok, true);
+	assert.deepEqual(archiveWorkspace.value, { archivedSessionIds: [s1, s2], archivedSessionIdsAdded: [s1, s2] });
 	await registry.archiveSession(s2);
 	const deleteBatch = await captured.handler("workspaceRegistry/deleteArchivedSessions", { args: { target: { scope: "workspace", workspaceId: A } } }, void 0);
 	assert.equal(deleteBatch.ok, true);
-	assert.deepEqual(deleteBatch.value.requestedSessionIds, [s2]);
-	assert.deepEqual(deleteBatch.value.deletedSessionIds, [s2]);
+	assert.deepEqual(deleteBatch.value.requestedSessionIds, [s1, s2]);
+	assert.deepEqual(deleteBatch.value.deletedSessionIds, [s1, s2]);
 	assert.deepEqual(deleteBatch.value.failures, []);
 	// dispatch: deleteSession
 	const del = await captured.handler("workspaceRegistry/deleteSession", { args: { sessionId: s3 } }, void 0);
@@ -1014,6 +1107,7 @@ test("typert local contribution registers deleteSession before SRC discovery", a
 	assert.ok(local.get("workspaceRegistry/deleteSession") !== undefined, "host must register workspaceRegistry/deleteSession on typert.local");
 	assert.ok(local.get("workspaceRegistry/unarchiveSession") !== undefined, "host must register workspaceRegistry/unarchiveSession on typert.local");
 	assert.ok(local.get("workspaceRegistry/unarchiveSessions") !== undefined, "host must register workspaceRegistry/unarchiveSessions on typert.local");
+	assert.ok(local.get("workspaceRegistry/archiveWorkspaceSessions") !== undefined, "host must register workspaceRegistry/archiveWorkspaceSessions on typert.local");
 	assert.ok(local.get("workspaceRegistry/deleteArchivedSessions") !== undefined, "host must register workspaceRegistry/deleteArchivedSessions on typert.local");
 	assert.ok(local.get("workspaceRegistry/archivedSessionMetadata") !== undefined, "host must register workspaceRegistry/archivedSessionMetadata on typert.local");
 	assert.equal(local.get("workspaceRegistry/deleteSession").service, "workspaceRegistry");
