@@ -4,6 +4,11 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 0.1.27 — 2026-09-03
+
+- Moved the sole maintained source into `src` and atomically generate the publishable `lib` directory with esbuild. A failed build preserves the previous output so local installation remains usable.
+- Added generated-output synchronization checks and failed-build regression coverage, and unified CI and prepublish validation under `pnpm verify`.
+
 ## 0.1.26 — 2026-09-03
 
 - Fixed the Windows CI host-test fixture to use the same native realpath representation as DSH's asynchronous session-path index, preventing valid workspace sessions from being filtered out only in the test environment.

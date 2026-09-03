@@ -156,27 +156,24 @@ If the entry is missing after installation or upgrade, restart DSH Web and hard-
 - [src\client.js](src/client.js): Settings page and archive UI.
 - `test\*.test.mjs`: host, client, Remote, and styling coverage.
 
-After changing the runtime source, validate, test, and install from the local directory:
+After changing `src`, run the tests, confirm that generated `lib` output is committed with the source, then install from the local directory:
 
 ```powershell
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
-pnpm build
 pnpm test
 pnpm pack:check
 dsh plugin --profile web add .
 ```
 
-`pnpm build` generates all `lib` output from `src` in a temporary directory, then atomically replaces the previous output only after a successful build. A failed build preserves the existing `lib`.
+`pnpm test` runs `pnpm build` first. The build generates all `lib` output from `src` in a temporary directory, then atomically replaces the previous output only after a successful build. A failed build preserves the existing `lib`.
 
 ## Validation
 
 ```powershell
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
-pnpm build
-pnpm test
-pnpm pack:check
+pnpm verify
 ```
 
 `prepublishOnly` runs the full verification suite before publishing and verifies that committed `lib` output matches the current `src` build.

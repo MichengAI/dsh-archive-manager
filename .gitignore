@@ -3,6 +3,7 @@ node_modules/
 *.tsbuildinfo
 *.tgz
 pnpm-debug.log*
+.dsh-archive-manager-build-*
 
 # npm 本地缓存（发布时临时使用）
 .npm-cache*/

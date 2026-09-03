@@ -156,27 +156,24 @@ dsh --profile web --dump-config
 - [src\client.js](src/client.js)：设置页和归档会话界面。
 - `test\*.test.mjs`：Host、客户端、Remote 和样式边界测试。
 
-修改后运行检查、测试并用本地目录重新安装：
+修改 `src` 后，执行测试并确认生成的 `lib` 与 `src` 一同提交，再用本地目录重新安装：
 
 ```powershell
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
-pnpm build
 pnpm test
 pnpm pack:check
 dsh plugin --profile web add .
 ```
 
-`pnpm build` 会在临时目录中从 `src` 生成全部 `lib` 产物；仅在生成成功后才原子替换旧产物，构建失败时会保留旧的 `lib`。
+`pnpm test` 会先执行 `pnpm build`。构建在临时目录中从 `src` 生成全部 `lib` 产物；仅在生成成功后才原子替换旧产物，构建失败时会保留旧的 `lib`。
 
 ## 验证
 
 ```powershell
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
-pnpm build
-pnpm test
-pnpm pack:check
+pnpm verify
 ```
 
 `prepublishOnly` 会在发布前执行完整验证，并确认提交的 `lib` 与当前 `src` 构建结果一致。
