@@ -7,6 +7,7 @@ Published release notes are retained below; new versions are added without remov
 ## 0.1.25 — 2026-09-03
 
 - Added **Archive all chats** to each workspace action menu. The entry is hidden when no active chats remain, and the client refreshes its session list after a successful batch archive.
+- Added a red outlined confirmation style for **Archive all** with hover and keyboard-focus states.
 - Kept the path-safe `session_projcache_archive_manager_v2` domain as the only write target. Startup now imports missing entries from the short-lived old-name v2 domain, old-name v1 domain, and supported DSH cache formats without overwriting newer records.
 - Added RC2-to-current isolated compatibility coverage and made it a release gate: CI and `prepublishOnly` now run `test:compat`; CI no longer assumes pnpm exists before Corepack enables it.
 
