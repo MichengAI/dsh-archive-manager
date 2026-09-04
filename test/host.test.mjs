@@ -457,6 +457,27 @@ test("deleteSession removes transcript, archive marker, accounts, and cache row 
 	assert.deepEqual(env.sessions.detached, [s4, s2]);
 });
 
+test("deleteSession deletes only the backend-owned transcript artifact", async () => {
+	const env = buildRoot({
+		headers: [header(s1, cwdA), header(s2, cwdA)],
+		workspaces: { [A]: workspace("D:\\proj-a", [s1, s2]) }
+	});
+	const sharedDirectory = join(env.root, "shared-transcripts");
+	const firstArtifact = join(sharedDirectory, "first.jsonl");
+	const secondArtifact = join(sharedDirectory, "second.jsonl");
+	mkdirSync(sharedDirectory, { recursive: true });
+	writeFileSync(firstArtifact, "first");
+	writeFileSync(secondArtifact, "second");
+	env.located.set(s1, firstArtifact);
+	env.located.set(s2, secondArtifact);
+	const registry = await mountWorkspaceRegistry(env);
+
+	await registry.deleteSession(s1);
+
+	assert.equal(existsSync(firstArtifact), false, "目标会话工件必须被删除");
+	assert.equal(existsSync(secondArtifact), true, "同目录的其他会话工件不得被删除");
+});
+
 test("deleteArchivedSessions snapshots a workspace scope, continues after failures, and reports partial success", async () => {
 	const env = buildRoot({
 		headers: [header(s1, cwdA), header(s2, cwdA), header(s3, cwdB)],
@@ -476,7 +497,7 @@ test("deleteArchivedSessions snapshots a workspace scope, continues after failur
 	assert.equal(result.failures.length, 1);
 	assert.equal(result.failures[0].sessionId, s1);
 	assert.match(result.failures[0].message, /cache write failed/);
-	assert.deepEqual(env.global.archivedSessionIds, [s3], "both attempted workspace markers are removed while the other workspace remains archived");
+	assert.deepEqual(env.global.archivedSessionIds, [s1, s3], "失败会话保留归档标记，后续批量删除可重试");
 	assert.equal(existsSync(env.located.get(s1)), true, "failed target keeps its transcript for diagnosis");
 	assert.equal(existsSync(env.located.get(s2)), false, "later targets still complete");
 });
@@ -517,7 +538,7 @@ test("deleteArchivedSessions keeps the marker retryable when unknown-session cle
 	assert.deepEqual(env.table.get(A).sessionIds, [sUnknown], "cache cleanup runs before workspace bookkeeping changes");
 });
 
-test("deleteSession keeps the transcript when archive bookkeeping fails", async () => {
+test("deleteSession keeps retryable state when archive bookkeeping fails after physical deletion", async () => {
 	const env = buildRoot({
 		headers: [header(s1, cwdA), header(s2, cwdA)],
 		workspaces: { [A]: workspace("D:\\proj-a", [s1, s2]) },
@@ -526,9 +547,13 @@ test("deleteSession keeps the transcript when archive bookkeeping fails", async 
 	const registry = await mountWorkspaceRegistry(env);
 	env.domain.globalSetError = new Error("state write failed");
 	await assert.rejects(() => registry.deleteSession(s2), /state write failed/);
-	assert.equal(existsSync(env.located.get(s2)), true, "failed bookkeeping must not orphan the transcript");
-	assert.deepEqual(env.global.archivedSessionIds, [s2]);
-	assert.deepEqual(env.table.get(A).sessionIds, [s1, s2]);
+	assert.equal(existsSync(env.located.get(s2)), false, "物理删除成功后不得回滚已删除工件");
+	assert.deepEqual(env.global.archivedSessionIds, [s2], "失败记账必须保留归档标记供重试");
+	assert.deepEqual(env.table.get(A).sessionIds, [s1, s2], "失败记账必须保留工作区引用供重试");
+	env.domain.globalSetError = null;
+	await registry.deleteSession(s2);
+	assert.deepEqual(env.global.archivedSessionIds, []);
+	assert.deepEqual(env.table.get(A).sessionIds, [s1]);
 });
 
 test("deleteSession retains the transcript after a physical failure and succeeds on retry", async () => {
@@ -544,9 +569,9 @@ test("deleteSession retains the transcript after a physical failure and succeeds
 	fsPromises.rm = async () => { throw new Error("rm failed"); };
 	syncBuiltinESMExports();
 	try {
-		await assert.rejects(() => registry.deleteSession(s2), /transcript directory .* remains after bookkeeping cleanup/);
-		assert.deepEqual(env.global.archivedSessionIds, []);
-		assert.deepEqual(env.table.get(A).sessionIds, [s1]);
+		await assert.rejects(() => registry.deleteSession(s2), /transcript artifact .* remains before bookkeeping cleanup/);
+		assert.deepEqual(env.global.archivedSessionIds, [s2], "物理删除失败时必须保留归档标记");
+		assert.deepEqual(env.table.get(A).sessionIds, [s1, s2], "物理删除失败时必须保留工作区记账");
 		assert.equal(existsSync(env.located.get(s2)), true, "physical deletion failure leaves the transcript for recovery");
 		assert.equal(await registry.sessionKnown(s2), true, "failed physical delete must keep the header index for retry");
 	} finally {
@@ -556,6 +581,34 @@ test("deleteSession retains the transcript after a physical failure and succeeds
 	await registry.deleteSession(s2);
 	assert.equal(existsSync(env.located.get(s2)), false, "retry removes the retained transcript");
 	assert.equal(await registry.sessionKnown(s2), false, "successful retry forgets the header and records the tombstone");
+});
+
+test("deleteArchivedSessions keeps a physical failure in its retryable target", async () => {
+	const env = buildRoot({
+		headers: [header(s1, cwdA), header(s2, cwdA)],
+		workspaces: { [A]: workspace("D:\\proj-a", [s1, s2]) },
+		archived: [s2]
+	});
+	const fsPromises = require("node:fs/promises");
+	const originalRm = fsPromises.rm;
+	const registry = await mountWorkspaceRegistry(env);
+	fsPromises.rm = async () => { throw new Error("rm failed"); };
+	syncBuiltinESMExports();
+	try {
+		const failed = await registry.deleteArchivedSessions({ scope: "workspace", workspaceId: A });
+		assert.deepEqual(failed.requestedSessionIds, [s2]);
+		assert.equal(failed.failures.length, 1);
+		assert.deepEqual(env.global.archivedSessionIds, [s2]);
+		assert.deepEqual(env.table.get(A).sessionIds, [s1, s2]);
+	} finally {
+		fsPromises.rm = originalRm;
+		syncBuiltinESMExports();
+	}
+	const retried = await registry.deleteArchivedSessions({ scope: "workspace", workspaceId: A });
+	assert.deepEqual(retried.requestedSessionIds, [s2], "同一批量目标必须仍能选中失败会话");
+	assert.deepEqual(retried.deletedSessionIds, [s2]);
+	assert.deepEqual(env.global.archivedSessionIds, []);
+	assert.deepEqual(env.table.get(A).sessionIds, [s1]);
 });
 
 test("deleteSession on a live session flushes, detaches, emits session/disposed, and waits for the cache write-behind before deleting the row", async () => {

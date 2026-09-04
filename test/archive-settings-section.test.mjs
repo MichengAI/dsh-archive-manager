@@ -67,13 +67,15 @@ test("归档设置页原型支持筛选内全选、跨项目选择与确认批�
 	assert.match(client, /}, ArchivedSessionsSectionPrototype\)\);/);
 });
 
-test("恢复后刷新会话投影，使会话重新出现在侧栏", async () => {
+test("恢复和删除后刷新会话投影，使侧栏与宿主状态重新一致", async () => {
 	const client = await readFile(clientPath, "utf8");
 
 	assert.match(client, /const refreshSessionList = async \(\) =>/);
 	assert.match(client, /restored archived sessions but session list refresh failed/);
 	assert.match(client, /await registry\.unarchiveSession\(sessionId\);[\s\S]*await refreshSessionList\(\);/);
 	assert.match(client, /await registry\.unarchiveSessions\(target\);[\s\S]*await refreshSessionList\(\);/);
+	assert.match(client, /await registry\.deleteSession\(sessionId\);[\s\S]*await refreshSessionList\(\);/);
+	assert.match(client, /await registry\.deleteArchivedSessions\(target\);[\s\S]*await refreshSessionList\(\);/);
 });
 
 test("创建时间排序从宿主归档头部读取元数据，更新时间继续使用客户端摘要", async () => {

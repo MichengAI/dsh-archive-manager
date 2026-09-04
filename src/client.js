@@ -3965,6 +3965,7 @@ window.__ModuleLoader__.load({
 				if (registry === void 0) throw new Error("archive-manager remote service is unavailable");
 				const result = await registry.deleteSession(sessionId);
 				if (!result.ok) throw new Error(result.error.message);
+				await refreshSessionList();
 			};
 			const unarchiveSessions = async (target) => {
 				const registry = ctx.get("remote.workspaceRegistry");
@@ -3979,6 +3980,7 @@ window.__ModuleLoader__.load({
 				if (registry === void 0) throw new Error("archive-manager remote service is unavailable");
 				const result = await registry.deleteArchivedSessions(target);
 				if (!result.ok) throw new Error(result.error.message);
+				await refreshSessionList();
 				return result.value;
 			};
 			const archivedSessionMetadata = async () => {

@@ -1,5 +1,4 @@
 import { rm } from "node:fs/promises";
-import { dirname } from "node:path";
 import {
 	WorkspaceRegistry
 } from "@deepseek-ai/dsh-workspace";
@@ -15,9 +14,10 @@ import { trackTombstone } from "./tombstone.js";
 * 删除投影缓存，级联删除 SUBAGENT 子会话并清理 spill；最后才删除转录
 * 目录。fork 分支虽有 `parentSession`，但属于独立用户会话，不参与级联。
 *
-* 父会话的可失败记账清理先于其转录目录删除；父目录删除失败时保留头部
-* 索引，允许再次调用同一入口完成删除。SUBAGENT 级联跨多个转录目录，无法
-* 组成事务：子会话可能已先删除，重试会跳过它们并继续处理仍保留的父会话。
+* 转录工件删除成功后才提交父会话记账清理；任一步失败均保留归档标记、工作区
+* 记账和头部索引，以便再次调用同一入口完成删除。SUBAGENT 级联跨多个转录
+* 工件，无法组成事务：子会话可能已先删除，重试会跳过它们并继续处理仍保留的
+* 父会话。
 * 物理删除成功后必须遗忘父类内存索引（headers / sessionPaths /
 * invalidSessionPaths）并打上删除墓碑：父类 sessionKnown 以 headers.has
 * 短路，indexHeaders 只增不减，stale list() 否则会把已删 id 救活，
@@ -526,8 +526,12 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		// dispose 的写后落盘必须先于缓存行删除完成，
 		// 否则该行会在删除之后被写回（复活）。
 		await projCache?.whenIdle?.();
-		// 先完成父会话的可失败记账清理；SUBAGENT 级联跨目录且非事务，可能
-		// 部分完成，但父转录失败时仍保留索引供重试。
+		if (projCache !== void 0) await projCache.delete(sessionId);
+		await this.deleteDescendants(sessionId);
+		await this.cleanSpill(sessionId);
+		await this.removeTranscriptDirectory(sessionId);
+		// 只有物理工件删除成功后才能提交记账清理；否则批量目标会因归档标记
+		// 或工作区记账提前消失而无法重试。
 		const state = this.requireState();
 		if (state.archivedSessionIds.includes(sessionId)) {
 			await this.setState({
@@ -536,11 +540,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 			});
 		}
 		await this.removeFromWorkspaceAccounts(sessionId);
-		if (projCache !== void 0) await projCache.delete(sessionId);
-		await this.deleteDescendants(sessionId);
-		await this.cleanSpill(sessionId);
-		await this.removeTranscriptDirectory(sessionId);
-		// 物理删除已成功：此时再清父类索引。失败时保留索引，便于重试。
+		// 物理删除已成功：此时再清父类索引。后续记账失败时保留索引，便于重试。
 		this.forgetIndexedSession(sessionId);
 		if (deletedHeader !== void 0) this.deletedIdentities.set(sessionId, headerIdentity(deletedHeader));
 		return { deleted: true };
@@ -625,22 +625,21 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 			this.ctx.logger.warn(`archive-manager: could not publish removal for stored session "${sessionId}": ${String(error)}`);
 		}
 	}
-	/** 删除会话的转录目录；仅在所有记账清理完成后调用。 */
+	/** 删除后端定位到的会话转录工件，绝不推导或删除其父目录。 */
 	async removeTranscriptDirectory(sessionId) {
 		const persistence = this.ctx.get("sessionPersistence");
 		if (persistence === void 0 || typeof persistence.locate !== "function") {
-			throw new Error(`cannot delete session "${sessionId}": the session persistence backend does not expose locate() to resolve its transcript directory`);
+			throw new Error(`cannot delete session "${sessionId}": the session persistence backend does not expose locate() to resolve its transcript artifact`);
 		}
 		const header = await this.readSessionHeader(sessionId);
 		const location = persistence.locate(header);
 		if (location === void 0 || typeof location.path !== "string") {
-			throw new Error(`cannot delete session "${sessionId}": the session persistence backend could not resolve its transcript directory`);
+			throw new Error(`cannot delete session "${sessionId}": the session persistence backend could not resolve its transcript artifact`);
 		}
-		const transcriptDir = dirname(location.path);
 		try {
-			await rm(transcriptDir, { recursive: true, force: true });
+			await rm(location.path, { recursive: true, force: true });
 		} catch (error) {
-			const message = `cannot delete session "${sessionId}": transcript directory "${transcriptDir}" remains after bookkeeping cleanup`;
+			const message = `cannot delete session "${sessionId}": transcript artifact "${location.path}" remains before bookkeeping cleanup`;
 			const detail = `${message}: ${String(error)}`;
 			this.ctx.logger.warn(`archive-manager: ${detail}`);
 			throw new Error(detail, { cause: error });
