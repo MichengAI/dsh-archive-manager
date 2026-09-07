@@ -128,6 +128,10 @@ dsh --profile web --dump-config
 
 Restart DSH Web and hard-refresh the browser. `dsh plugin ... add .` reads the package metadata and `cordis.patch.yml`; do not install by copying `lib` directly.
 
+## Updates
+
+The settings title shows the installed version and a **Check for updates** button. When a newer release is available, **Update automatically** runs only when the DSH CLI or Desktop update service is available; otherwise, the dialog provides a profile-specific manual command to copy and run.
+
 ## Usage
 
 1. Open the sidebar session menu and choose **Archive session**.
