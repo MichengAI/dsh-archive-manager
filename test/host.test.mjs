@@ -1,14 +1,13 @@
 // dsh-archive-manager host self-tests (node:test).
 //
-// Resolution: the test tree contains a `node_modules` junction to the dsh
-// flat module fallback (`%USERPROFILE%\.dsh\profiles\node_modules`), so the
-// real @deepseek-ai packages resolve to the SAME copies the running harness
-// uses. Run: `node --test test/` from the dsh-archive-manager directory.
+// Tests exercise the generated publish artifacts in lib with installed dependencies.
+// Run `pnpm test` for the full suite (build included). For this file alone, run
+// `pnpm build && node --test test/host.test.mjs` so source changes are rebuilt first.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, realpathSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, realpathSync, existsSync, renameSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { createRequire, syncBuiltinESMExports } from "node:module";
 import { Context, Service } from "@deepseek-ai/cordis";
 import { WorkspaceUnknownSessionError } from "@deepseek-ai/dsh-workspace";
@@ -437,7 +436,7 @@ test("deleteSession removes transcript, archive marker, accounts, and cache row 
 	const registry = await mountWorkspaceRegistry(env);
 	// stray session s4: not accounted anywhere
 	await registry.deleteSession(s4);
-	assert.equal(existsSync(env.located.get(s4)), false, "stray transcript dir removed");
+	assert.equal(existsSync(env.located.get(s4)), false, "stray transcript artifact removed");
 	assert.deepEqual(env.cacheCalls.deleted, [s4]);
 	assert.deepEqual(env.global.archivedSessionIds, [s2]);
 	assert.deepEqual(env.persistence.prepared, [s4], "cold deletion publishes a session removal");
@@ -452,10 +451,174 @@ test("deleteSession removes transcript, archive marker, accounts, and cache row 
 	assert.deepEqual(wsA.sessionIds, [s1]);
 	// entity snapshot was refreshed (not just the table)
 	assert.deepEqual(env.table.get(A).sessionIds, [s1]);
-	assert.equal(existsSync(env.located.get(s2)), false, "archived session transcript dir removed");
+	assert.equal(existsSync(env.located.get(s2)), false, "archived session transcript artifact removed");
 	assert.deepEqual(env.persistence.prepared, [s4, s2]);
 	assert.deepEqual(env.sessions.detached, [s4, s2]);
 });
+
+// Official JSONL layout: root/project/encoded-session-id/session.jsonl[.zstd].
+function installJsonlLayout(env, id, { project = "_no-cwd", segment = id, filename = "session.jsonl.zstd" } = {}) {
+	const root = join(env.root, "transcripts");
+	const directory = join(root, project, segment);
+	mkdirSync(directory, { recursive: true });
+	const artifact = join(directory, filename);
+	writeFileSync(artifact, "stub");
+	env.persistence.name = "session-persistence-jsonl";
+	env.persistence.config = { root };
+	env.located.set(id, artifact);
+	return directory;
+}
+
+for (const filename of ["session.jsonl.zstd", "session.jsonl"]) {
+	test(`deleteSession removes the official JSONL session directory (${filename})`, async () => {
+		const env = buildRoot({ headers: [header(s1), header(s2)], archived: [s1] });
+		const directory = installJsonlLayout(env, s1, { filename });
+		const sibling = installJsonlLayout(env, s2, { filename });
+		mkdirSync(join(directory, "attachments"));
+		writeFileSync(join(directory, "attachments", "output.txt"), "session-owned output");
+		const registry = await mountWorkspaceRegistry(env);
+
+		await registry.deleteSession(s1);
+
+		assert.equal(existsSync(directory), false, "remove the directory, not just the log");
+		assert.equal(existsSync(sibling), true, "keep other sessions");
+		assert.equal(existsSync(dirname(directory)), true, "keep the project container");
+		assert.deepEqual(env.global.archivedSessionIds, []);
+	});
+}
+
+for (const [id, segment] of [[".", "~002E"], ["..", "~002E~002E"], ["a/b:中~😀", "a~002Fb~003A~4E2D~007E~D83D~DE00"]]) {
+	test(`deleteSession handles official JSONL encoded id ${segment}`, async () => {
+		const env = buildRoot({ headers: [header(s1)] });
+		// Change metadata only after the generic fixture has created its safe path.
+		env.persistence.headers[0].id = id;
+		const directory = installJsonlLayout(env, id, { segment });
+		const registry = await mountWorkspaceRegistry(env);
+		await registry.deleteSession(id);
+		assert.equal(existsSync(directory), false);
+		assert.equal(existsSync(dirname(directory)), true);
+	});
+}
+
+for (const [cwd, project] of [["/work/项目", "--work-~9879~76EE--"], ["C:\\work\\project", "--C-work-project--"], ["/", "--root--"], ["/" + "a".repeat(260), `--${"a".repeat(251)}--`]]) {
+	test(`deleteSession handles official JSONL project key ${project}`, async () => {
+		const env = buildRoot({ headers: [header(s1)] });
+		env.persistence.headers[0].cwd = cwd;
+		const directory = installJsonlLayout(env, s1, { project });
+		const registry = await mountWorkspaceRegistry(env);
+		await registry.deleteSession(s1);
+		assert.equal(existsSync(directory), false);
+		assert.equal(existsSync(dirname(directory)), true);
+	});
+}
+
+for (const scenario of ["unknown backend", "missing root", "wrong root", "wrong kind", "wrong filename", "wrong session", "wrong project", "storage root"]) {
+	test(`deleteSession preserves the parent for ${scenario}`, async () => {
+		const env = buildRoot({ headers: [header(s1)] });
+		let directory = installJsonlLayout(env, s1, {
+			...(scenario === "wrong filename" ? { filename: "custom.jsonl" } : {}),
+			...(scenario === "wrong session" ? { segment: s2 } : {}),
+			...(scenario === "wrong project" ? { project: "shared" } : {})
+		});
+		if (scenario === "unknown backend") env.persistence.name = "custom-persistence";
+		if (scenario === "missing root") delete env.persistence.config.root;
+		if (scenario === "wrong root") env.persistence.config.root = env.root;
+		if (scenario === "wrong kind") env.persistence.locate = () => ({ kind: "custom", path: env.located.get(s1) });
+		if (scenario === "storage root") {
+			directory = env.persistence.config.root;
+			env.located.set(s1, join(directory, "session.jsonl.zstd"));
+			writeFileSync(env.located.get(s1), "stub");
+		}
+		const retained = join(directory, "keep.txt");
+		writeFileSync(retained, "not proven to belong to this session");
+		const registry = await mountWorkspaceRegistry(env);
+		await registry.deleteSession(s1);
+		assert.equal(existsSync(env.located.get(s1)), false);
+		assert.equal(existsSync(retained), true);
+		assert.equal(existsSync(directory), true);
+	});
+}
+
+test("deleteSession does not follow links inside an owned JSONL directory", async () => {
+	const env = buildRoot({ headers: [header(s1)] });
+	const directory = installJsonlLayout(env, s1);
+	const external = join(env.root, "external");
+	mkdirSync(external);
+	const retained = join(external, "keep.txt");
+	writeFileSync(retained, "external data");
+	symlinkSync(external, join(directory, "attachment-link"), process.platform === "win32" ? "junction" : "dir");
+	const registry = await mountWorkspaceRegistry(env);
+	await registry.deleteSession(s1);
+	assert.equal(existsSync(directory), false);
+	assert.equal(existsSync(retained), true);
+});
+
+test("deleteArchivedSessions retries a partially removed official JSONL directory", async () => {
+	const env = buildRoot({ headers: [header(s1)], archived: [s1] });
+	const directory = installJsonlLayout(env, s1);
+	const retained = join(directory, "attachment.txt");
+	writeFileSync(retained, "retry me");
+	const registry = await mountWorkspaceRegistry(env);
+	const fsPromises = require("node:fs/promises");
+	const originalRm = fsPromises.rm;
+	fsPromises.rm = async (path, options) => {
+		if (path === directory) {
+			await originalRm(env.located.get(s1), { force: true });
+			throw new Error("directory cleanup failed");
+		}
+		return originalRm(path, options);
+	};
+	syncBuiltinESMExports();
+	try {
+		const failed = await registry.deleteArchivedSessions({ scope: "all" });
+		assert.equal(failed.failures.length, 1);
+		assert.match(failed.failures[0].message, /cleanup of session directory .* failed; bookkeeping retained for retry/);
+		assert.ok(failed.failures[0].message.includes(`"${directory}"`), "report the actual directory target");
+		assert.doesNotMatch(failed.failures[0].message, /remains before bookkeeping cleanup/);
+		assert.equal(existsSync(env.located.get(s1)), false);
+		assert.equal(existsSync(retained), true);
+		assert.deepEqual(env.global.archivedSessionIds, [s1]);
+		assert.equal(await registry.sessionKnown(s1), true);
+	} finally {
+		fsPromises.rm = originalRm;
+		syncBuiltinESMExports();
+	}
+	const retried = await registry.deleteArchivedSessions({ scope: "all" });
+	assert.deepEqual(retried.deletedSessionIds, [s1]);
+	assert.equal(existsSync(directory), false);
+	assert.deepEqual(env.global.archivedSessionIds, []);
+});
+
+test("deleteSession retries bookkeeping after the official JSONL directory is gone", async () => {
+	const env = buildRoot({ headers: [header(s1)], archived: [s1] });
+	const directory = installJsonlLayout(env, s1);
+	const registry = await mountWorkspaceRegistry(env);
+	env.domain.globalSetError = new Error("state write failed");
+	await assert.rejects(() => registry.deleteSession(s1), /state write failed/);
+	assert.equal(existsSync(directory), false);
+	env.domain.globalSetError = null;
+	await registry.deleteSession(s1);
+	assert.deepEqual(env.global.archivedSessionIds, []);
+});
+
+for (const level of ["project", "session"]) {
+	test(`deleteSession refuses a symlinked JSONL ${level} directory`, async () => {
+		const env = buildRoot({ headers: [header(s1)], archived: [s1] });
+		const directory = installJsonlLayout(env, s1);
+		const target = level === "project" ? dirname(directory) : directory;
+		const external = join(env.root, "external");
+		renameSync(target, external);
+		symlinkSync(external, target, process.platform === "win32" ? "junction" : "dir");
+		const retainedLog = join(external, ...(level === "project" ? [s1] : []), "session.jsonl.zstd");
+		const registry = await mountWorkspaceRegistry(env);
+
+		await assert.rejects(() => registry.deleteSession(s1), /symbolic link/);
+
+		assert.equal(existsSync(retainedLog), true, "never follow directory links during deletion");
+		assert.deepEqual(env.global.archivedSessionIds, [s1], "leave the operation retryable");
+		assert.equal(await registry.sessionKnown(s1), true);
+	});
+}
 
 test("deleteSession deletes only the backend-owned transcript artifact", async () => {
 	const env = buildRoot({
@@ -569,7 +732,12 @@ test("deleteSession retains the transcript after a physical failure and succeeds
 	fsPromises.rm = async () => { throw new Error("rm failed"); };
 	syncBuiltinESMExports();
 	try {
-		await assert.rejects(() => registry.deleteSession(s2), /transcript artifact .* remains before bookkeeping cleanup/);
+		await assert.rejects(() => registry.deleteSession(s2), (error) => {
+			assert.match(error.message, /cleanup of transcript artifact .* failed; bookkeeping retained for retry/);
+			assert.ok(error.message.includes(`"${env.located.get(s2)}"`), "report the actual artifact target");
+			assert.equal(error.cause.message, "rm failed");
+			return true;
+		});
 		assert.deepEqual(env.global.archivedSessionIds, [s2], "物理删除失败时必须保留归档标记");
 		assert.deepEqual(env.table.get(A).sessionIds, [s1, s2], "物理删除失败时必须保留工作区记账");
 		assert.equal(existsSync(env.located.get(s2)), true, "physical deletion failure leaves the transcript for recovery");
@@ -629,7 +797,7 @@ test("deleteSession on a live session flushes, detaches, emits session/disposed,
 	assert.deepEqual(order, ["whenIdle", `delete:${sLive}`]);
 	assert.deepEqual(env.table.get(A).sessionIds, [s1]);
 	assert.equal(registry.get(A).sessionIds.length, 1);
-	assert.equal(existsSync(env.located.get(sLive)), false, "live session transcript dir removed");
+	assert.equal(existsSync(env.located.get(sLive)), false, "live session transcript artifact removed");
 });
 
 test("deleteSession cascades to SUBAGENT children (origin = subagent) but never to fork branches", async () => {
@@ -647,7 +815,7 @@ test("deleteSession cascades to SUBAGENT children (origin = subagent) but never 
 	await registry.deleteSession(s4);
 	assert.deepEqual(env.cacheCalls.deleted.sort(), [s4, s5].sort(), "only the subagent child is cascade-deleted");
 	assert.deepEqual(env.table.get(A).sessionIds, [s2], "the fork branch survives");
-	assert.equal(existsSync(env.located.get(s5)), false, "cascade child transcript dir removed");
+	assert.equal(existsSync(env.located.get(s5)), false, "cascade child transcript artifact removed");
 	assert.equal(existsSync(env.located.get(s2)), true, "fork branch transcript dir kept");
 	assert.equal(await registry.sessionKnown(s4), false);
 	assert.equal(await registry.sessionKnown(s5), false, "cascade child must also leave the header index");

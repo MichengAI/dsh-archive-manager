@@ -1,4 +1,5 @@
-import { rm } from "node:fs/promises";
+import { lstat, rm } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import {
 	WorkspaceRegistry
 } from "@deepseek-ai/dsh-workspace";
@@ -28,6 +29,31 @@ import { trackTombstone } from "./tombstone.js";
 * 单会话与批量恢复/删除方法均通过 Typert Remote 暴露给浏览器，并注册到
 * typert.local，避免生产环境只靠 SRC 扫描时 404。
 */
+/**
+* Compatibility adapter for the official JSONL backend's session-owned layout.
+* A generic locate() path does NOT grant ownership of its parent directory.
+* Unknown backends/layouts keep artifact-only deletion. Do not prune ancestors.
+*/
+function jsonlSessionDirectory(persistence, header, location) {
+	if (persistence.name !== "session-persistence-jsonl" || location.kind !== "jsonl") return;
+	const root = persistence.config?.root;
+	if (typeof root !== "string" || root.length === 0 || !isAbsolute(location.path)) return;
+	if (!["session.jsonl", "session.jsonl.zstd"].includes(basename(location.path))) return;
+	if (typeof header.id !== "string" || header.id.length === 0) return;
+	// Upstream encodes UTF-16 code units as ~XXXX (including lone surrogates).
+	const encode = (text) => text.replace(/[^A-Za-z0-9._-]/g, (ch) => `~${ch.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`);
+	const segment = header.id === "." ? "~002E" : header.id === ".." ? "~002E~002E" : encode(header.id);
+	let project = "_no-cwd";
+	if (header.cwd !== void 0) {
+		if (typeof header.cwd !== "string" || header.cwd.length === 0) return;
+		const readable = encode(header.cwd.replace(/[\\/:]+/g, "-")).replace(/^-+/, "") || "root";
+		project = `--${readable.slice(0, 251)}--`;
+	}
+	const directory = join(resolve(root), project, segment);
+	if (location.path !== join(directory, basename(location.path))) return;
+	return directory;
+}
+
 function markRemoteMethod(instance, method) {
 	// 模拟 TS 装饰器管线 `@Remote(method)`：`Remote` 返回标准方法装饰器，
 	// 这里构造一个 addInitializer 立即以 `this` = instance 执行的装饰器上下文。
@@ -625,7 +651,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 			this.ctx.logger.warn(`archive-manager: could not publish removal for stored session "${sessionId}": ${String(error)}`);
 		}
 	}
-	/** 删除后端定位到的会话转录工件，绝不推导或删除其父目录。 */
+	/** 官方 JSONL 已知布局清理会话专属目录；其他后端只删除定位到的工件。 */
 	async removeTranscriptDirectory(sessionId) {
 		const persistence = this.ctx.get("sessionPersistence");
 		if (persistence === void 0 || typeof persistence.locate !== "function") {
@@ -636,10 +662,30 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		if (location === void 0 || typeof location.path !== "string") {
 			throw new Error(`cannot delete session "${sessionId}": the session persistence backend could not resolve its transcript artifact`);
 		}
+		let target = { path: location.path, kind: "transcript artifact" };
 		try {
-			await rm(location.path, { recursive: true, force: true });
+			const directory = jsonlSessionDirectory(persistence, header, location);
+			if (directory !== void 0) {
+				target = { path: directory, kind: "session directory" };
+				// The configured storage root may itself be an intentional alias, but
+				// project/session links must not redirect recursive deletion elsewhere.
+				// These checks assume trusted, stable storage ancestors; lstat + rm
+				// is not an atomic defense against another process swapping directories.
+				for (const path of [dirname(directory), directory]) {
+					let stat;
+					try {
+						stat = await lstat(path);
+					} catch (error) {
+						if (error?.code === "ENOENT") continue; // Already removed on an earlier attempt.
+						throw error;
+					}
+					if (stat.isSymbolicLink()) throw new Error(`refusing to delete through symbolic link "${path}"`);
+					if (!stat.isDirectory()) throw new Error(`expected session storage directory "${path}"`);
+				}
+			}
+			await rm(target.path, { recursive: true, force: true });
 		} catch (error) {
-			const message = `cannot delete session "${sessionId}": transcript artifact "${location.path}" remains before bookkeeping cleanup`;
+			const message = `cannot delete session "${sessionId}": cleanup of ${target.kind} "${target.path}" failed; bookkeeping retained for retry`;
 			const detail = `${message}: ${String(error)}`;
 			this.ctx.logger.warn(`archive-manager: ${detail}`);
 			throw new Error(detail, { cause: error });

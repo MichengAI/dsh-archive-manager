@@ -6,6 +6,9 @@ Published release notes are retained below; new versions are added without remov
 
 ## Unreleased
 
+- Fixed leftover session directories after deletion (#16): remove the entire session-owned directory after validating the official JSONL layout, preserve shared/unknown-backend parent directories, and refuse deletion through directory links.
+- Added regression coverage for directory and attachment cleanup, path encoding, shared-directory protection, and failed-deletion retries.
+
 ## 0.1.31 - 2026-09-07
 
 - Added independent in-product update checks with automatic updates when a verified DSH update service is available and a profile-specific manual fallback otherwise.
