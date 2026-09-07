@@ -25,7 +25,7 @@ async function exists(path) {
 
 try {
 	await build({
-		entryPoints: ["index.js", "workspace.js", "projcache.js", "tombstone.js"].map((file) => join(sourceDirectory, file)),
+		entryPoints: ["index.js", "workspace.js", "projcache.js", "tombstone.js", "plugin-updater.js"].map((file) => join(sourceDirectory, file)),
 		outdir: stagingDirectory,
 		outbase: sourceDirectory,
 		bundle: false,
@@ -37,7 +37,7 @@ try {
 	await build({
 		entryPoints: [join(sourceDirectory, "client.js")],
 		outfile: join(stagingDirectory, "client.js"),
-		bundle: false,
+		bundle: true,
 		format: "iife",
 		platform: "browser",
 		target: "es2022"

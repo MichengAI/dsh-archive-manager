@@ -182,6 +182,8 @@ test("bundle resolves the current client-store and keeps the legacy fallback", (
 });
 
 test("manifest keeps one DSH peer range and both client contracts optional", () => {
+	assert.equal(PACKAGE_MANIFEST.engines?.node, "^22.19.0 || >=24.0.0");
+	assert.equal(PACKAGE_MANIFEST.packageManager, "pnpm@11.22.0");
 	const dshPeerRanges = Object.entries(PACKAGE_MANIFEST.peerDependencies ?? {})
 		.filter(([name]) => name.startsWith("@deepseek-ai/dsh-"))
 		.map(([, range]) => range);

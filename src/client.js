@@ -1,3 +1,5 @@
+import { observePluginUpdate } from "./plugin-update-ui.js";
+
 window.__ModuleLoader__.load({
 	id: "@michengai/dsh-archive-manager",
 	factory: (require) => {
@@ -16,7 +18,19 @@ window.__ModuleLoader__.load({
 		}
 		let react_jsx_runtime = require("react/jsx-runtime");
 		let react = require("react");
+		let createRoot = require("react-dom/client").createRoot;
 		let _deepseek_ai_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
+		const UPDATE_ICON_COMPONENTS = {
+			refresh: _deepseek_ai_dsh_client_ui_primitives.IconRefreshOutline16,
+			download: _deepseek_ai_dsh_client_ui_primitives.IconDownloadOutline16,
+			copy: _deepseek_ai_dsh_client_ui_primitives.IconCopyOutline16,
+			close: _deepseek_ai_dsh_client_ui_primitives.IconCloseOutline16
+		};
+		function createPluginUpdateIcon(name) {
+			const element = document.createElement("span");
+			createRoot(element).render(react.createElement(UPDATE_ICON_COMPONENTS[name], { size: 16 }));
+			return element;
+		}
 		//#region dsh-archive-manager: typert remote contribution + archived styling
 		/**
 		* Strict codec shims for the archive-manager Remote descriptors. The
@@ -3483,9 +3497,9 @@ window.__ModuleLoader__.load({
 			"menu.addWorkspace": "添加工作区…",
 			"menu.unarchive": "取消归档",
 			"menu.deleteSession": "删除会话",
-			"archived.badge": "已归档",
+			"archived.badge": "归档会话",
 			"archived.notOpenable": "已归档，取消归档后可继续对话",
-			"archives.title": "已归档的聊天",
+			"archives.title": "归档会话",
 			"archives.description": "管理已归档的会话。",
 			"archives.viewProject": "GitHub",
 			"archives.feedback": "问题反馈",
@@ -3614,9 +3628,9 @@ window.__ModuleLoader__.load({
 			"menu.addWorkspace": "Add workspace…",
 			"menu.unarchive": "Unarchive",
 			"menu.deleteSession": "Delete session",
-			"archived.badge": "Archived",
+			"archived.badge": "Archived sessions",
 			"archived.notOpenable": "This session is archived. Unarchive it to continue the conversation.",
-			"archives.title": "Archived chats",
+			"archives.title": "Archived sessions",
 			"archives.description": "Manage archived sessions.",
 			"archives.viewProject": "GitHub",
 			"archives.feedback": "Issues",
@@ -3925,6 +3939,15 @@ window.__ModuleLoader__.load({
 				zh,
 				en
 			}), "dsh-archive-manager: dictionaries");
+			ctx.effect(() => observePluginUpdate({
+				endpoint: "/api/michengai/dsh-archive-manager/update",
+				packageName: "@michengai/dsh-archive-manager",
+				titleRowSelector: ".dsham_settingsTitleRow",
+				linksSelector: ".dsham_settingsLinks",
+				zhName: "归档会话",
+				enName: "Archived sessions",
+				createIcon: createPluginUpdateIcon
+			}), "dsh-archive-manager: plugin update ui");
 			// Resolve the navigation service lazily: this plugin provides the fallback
 			// implementation during its own apply, and cordis strict ctx.get only
 			// returns a service once the providing fiber is ACTIVE.

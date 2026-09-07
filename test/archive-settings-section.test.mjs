@@ -15,6 +15,16 @@ test("归档入口注册在设置的连接器之后，并移除旧的视图选�
   assert.doesNotMatch(client, /viewOptions\.showArchived/);
 });
 
+test("设置菜单与页面大标题统一命名为归档会话", async () => {
+  const client = await readFile(clientPath, "utf8");
+
+  assert.match(client, /"archived\.badge": "归档会话"/);
+  assert.match(client, /"archives\.title": "归档会话"/);
+  assert.match(client, /"archived\.badge": "Archived sessions"/);
+  assert.match(client, /"archives\.title": "Archived sessions"/);
+  assert.doesNotMatch(client, /"archives\.title": "已归档的聊天"/);
+});
+
 test("归档设置页提供搜索、排序、筛选、全部恢复和全部删除入口", async () => {
   const client = await readFile(clientPath, "utf8");
 

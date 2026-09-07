@@ -23,7 +23,7 @@
 
 - Archive a session from the sidebar session menu.
 - Archive every active chat in a workspace from its sidebar action menu.
-- Search archived chats, sort them by update time, creation time, or title, and filter them by workspace in **Settings → Archived**.
+- Search archived chats, sort them by update time, creation time, or title, and filter them by workspace in **Settings → Archived sessions**.
 - Restore a session to its original workspace with **Unarchive**.
 - Restore or permanently delete every archived chat in a project group.
 - Restore all archived chats from the page header.
@@ -38,9 +38,9 @@ Open the sidebar session menu and choose **Archive session**:
 
 ![Archive a session from the session menu](assets/screenshots/archive-session-menu.png)
 
-Search, sort, filter by project, unarchive, or permanently delete chats in **Settings → Archived**:
+Search, sort, filter by project, unarchive, or permanently delete chats in **Settings → Archived sessions**:
 
-![Archived chats settings page](assets/screenshots/archived-sessions.png)
+![Archived sessions settings page](assets/screenshots/archived-sessions.png)
 
 ## DSH product ecosystem
 
@@ -85,7 +85,7 @@ Install the DSH plugin from source at https://github.com/MichengAI/dsh-archive-m
 | Codex | Send one of the sentences above to Codex and let it install locally. |
 | WorkBuddy | Send one of the sentences above to WorkBuddy; for a source install you can also paste `https://github.com/MichengAI/dsh-archive-manager`. |
 
-Codex and WorkBuddy only install the plugin. After that, open DSH Web and use **Settings → Archived**.
+Codex and WorkBuddy only install the plugin. After that, open DSH Web and use **Settings → Archived sessions**.
 
 You can also run the same npm command yourself:
 
@@ -131,7 +131,7 @@ Restart DSH Web and hard-refresh the browser. `dsh plugin ... add .` reads the p
 ## Usage
 
 1. Open the sidebar session menu and choose **Archive session**.
-2. Open **Settings → Archived** to inspect sessions by workspace.
+2. Open **Settings → Archived sessions** to inspect sessions by workspace.
 3. Search by title, sort by update time, creation time, or title, or filter the list by project.
 4. Select **Unarchive** to restore one session, or select **Restore all** in the page header.
 5. Open a project heading's action menu to restore or delete all of that project's archived chats.

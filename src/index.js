@@ -11,6 +11,16 @@
  * 根入口对应 `ui-workspace-archive-manager` 服务行。浏览器端由 package.json
  * 的 `dsh.client` 声明发现，因此该宿主入口无需额外行为。
  */
-function apply() {}
+import { registerPluginUpdater } from "./plugin-updater.js";
+
+const inject = ["webServer"];
+
+function apply(ctx) {
+	return registerPluginUpdater(ctx, {
+		endpoint: "/api/michengai/dsh-archive-manager/update",
+		packageName: "@michengai/dsh-archive-manager",
+		manifestUrl: new URL("../package.json", import.meta.url),
+	});
+}
 //#endregion
-export { apply };
+export { apply, inject };
