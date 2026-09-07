@@ -36,8 +36,11 @@ import { trackTombstone } from "./tombstone.js";
 */
 function jsonlSessionDirectory(persistence, header, location) {
 	if (persistence.name !== "session-persistence-jsonl" || location.kind !== "jsonl") return;
-	const root = persistence.config?.root;
-	if (typeof root !== "string" || root.length === 0 || !isAbsolute(location.path)) return;
+	// Official JSONL stores its resolved root at construction. Re-resolving a
+	// relative config.root after process.chdir() would point to a different store.
+	// This backend-specific field is optional; only absolute config is a safe fallback.
+	const root = persistence.root ?? persistence.config?.root;
+	if (typeof root !== "string" || !isAbsolute(root) || !isAbsolute(location.path)) return;
 	if (!["session.jsonl", "session.jsonl.zstd"].includes(basename(location.path))) return;
 	if (typeof header.id !== "string" || header.id.length === 0) return;
 	// Upstream encodes UTF-16 code units as ~XXXX (including lone surrogates).
@@ -682,6 +685,8 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 					if (stat.isSymbolicLink()) throw new Error(`refusing to delete through symbolic link "${path}"`);
 					if (!stat.isDirectory()) throw new Error(`expected session storage directory "${path}"`);
 				}
+			} else if (persistence.name === "session-persistence-jsonl") {
+				this.ctx.logger.warn(`archive-manager: session "${sessionId}": JSONL directory ownership could not be verified; falling back to artifact-only deletion at "${location.path}" (parent directory retained)`);
 			}
 			await rm(target.path, { recursive: true, force: true });
 		} catch (error) {

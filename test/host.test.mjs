@@ -7,7 +7,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, realpathSync, existsSync, renameSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { createRequire, syncBuiltinESMExports } from "node:module";
 import { Context, Service } from "@deepseek-ai/cordis";
 import { WorkspaceUnknownSessionError } from "@deepseek-ai/dsh-workspace";
@@ -487,6 +487,26 @@ for (const filename of ["session.jsonl.zstd", "session.jsonl"]) {
 	});
 }
 
+test("deleteSession uses the initialized JSONL root after cwd changes", async () => {
+	const env = buildRoot({ headers: [header(s1)], archived: [s1] });
+	const directory = installJsonlLayout(env, s1);
+	const initialCwd = process.cwd();
+	try {
+		process.chdir(env.root);
+		env.persistence.config.root = "transcripts";
+		// The official backend resolves and stores root once in its constructor.
+		env.persistence.root = resolve(env.persistence.config.root);
+		const registry = await mountWorkspaceRegistry(env);
+		process.chdir(initialCwd);
+		await registry.deleteSession(s1);
+		assert.equal(existsSync(directory), false, "cwd changes must not leave a session directory");
+		assert.equal(existsSync(dirname(directory)), true);
+		assert.deepEqual(env.global.archivedSessionIds, []);
+	} finally {
+		process.chdir(initialCwd);
+	}
+});
+
 for (const [id, segment] of [[".", "~002E"], ["..", "~002E~002E"], ["a/b:中~😀", "a~002Fb~003A~4E2D~007E~D83D~DE00"]]) {
 	test(`deleteSession handles official JSONL encoded id ${segment}`, async () => {
 		const env = buildRoot({ headers: [header(s1)] });
@@ -512,7 +532,7 @@ for (const [cwd, project] of [["/work/项目", "--work-~9879~76EE--"], ["C:\\wor
 	});
 }
 
-for (const scenario of ["unknown backend", "missing root", "wrong root", "wrong kind", "wrong filename", "wrong session", "wrong project", "storage root"]) {
+for (const scenario of ["unknown backend", "missing root", "wrong root", "wrong initialized root", "relative initialized root", "wrong kind", "wrong filename", "wrong session", "wrong project", "storage root"]) {
 	test(`deleteSession preserves the parent for ${scenario}`, async () => {
 		const env = buildRoot({ headers: [header(s1)] });
 		let directory = installJsonlLayout(env, s1, {
@@ -523,6 +543,8 @@ for (const scenario of ["unknown backend", "missing root", "wrong root", "wrong 
 		if (scenario === "unknown backend") env.persistence.name = "custom-persistence";
 		if (scenario === "missing root") delete env.persistence.config.root;
 		if (scenario === "wrong root") env.persistence.config.root = env.root;
+		if (scenario === "wrong initialized root") env.persistence.root = env.root;
+		if (scenario === "relative initialized root") env.persistence.root = "transcripts";
 		if (scenario === "wrong kind") env.persistence.locate = () => ({ kind: "custom", path: env.located.get(s1) });
 		if (scenario === "storage root") {
 			directory = env.persistence.config.root;
@@ -538,6 +560,30 @@ for (const scenario of ["unknown backend", "missing root", "wrong root", "wrong 
 		assert.equal(existsSync(directory), true);
 	});
 }
+
+test("JSONL relative config without an initialized root warns and retains the parent", async () => {
+	const env = buildRoot({ headers: [header(s1)] });
+	const directory = installJsonlLayout(env, s1);
+	env.persistence.config.root = "transcripts";
+	const warnings = [];
+	const initialCwd = process.cwd();
+	try {
+		// Even when current cwd happens to match, there is no captured root identity.
+		process.chdir(env.root);
+		await ArchiveWorkspaceRegistry.prototype.removeTranscriptDirectory.call({
+			ctx: { get: () => env.persistence, logger: { warn: (message) => warnings.push(message) } },
+			readSessionHeader: async () => env.persistence.headers[0]
+		}, s1);
+		assert.equal(existsSync(env.located.get(s1)), false);
+		assert.equal(existsSync(directory), true);
+		assert.equal(warnings.length, 1, "official-backend fallback must be visible");
+		assert.match(warnings[0], /directory ownership could not be verified.*artifact-only deletion/);
+		assert.ok(warnings[0].includes(s1));
+		assert.ok(warnings[0].includes(env.located.get(s1)));
+	} finally {
+		process.chdir(initialCwd);
+	}
+});
 
 test("deleteSession does not follow links inside an owned JSONL directory", async () => {
 	const env = buildRoot({ headers: [header(s1)] });

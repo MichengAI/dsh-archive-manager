@@ -148,6 +148,7 @@ If the entry is missing after installation or upgrade, restart DSH Web and hard-
 - Deletion always requires confirmation.
 - It removes workspace records, archive markers, and the projection cache. For the official JSONL backend, a validated layout also allows removal of the session-owned directory and its contents, including attachments. Other backends or unknown layouts only lose the located transcript artifact, never its parent directory.
 - Project containers and storage roots are retained. Deletion refuses symbolic links or Windows junctions at the official layout's project/session directory levels and keeps the operation retryable.
+- Layout validation uses the official backend's initialized absolute root, so a relative root remains stable across host working-directory changes. If that field is unavailable, only an absolute configured root is accepted. An unverified official JSONL layout emits a warning with the session ID and artifact path before falling back to artifact-only deletion.
 - Directory validation is not a cross-process filesystem lock: do not concurrently move or replace storage directories or change directory links during deletion. Storage paths writable by untrusted processes are not a security isolation boundary.
 - A live session finishes writing before cleanup to prevent data truncation.
 - The plugin replaces DSH’s default workspace and projection services. Install through the DSH profile instead of manually composing the patch.
