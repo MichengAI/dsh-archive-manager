@@ -6,6 +6,8 @@ Published release notes are retained below; new versions are added without remov
 
 ## Unreleased
 
+## 0.1.32 - 2026-09-07
+
 - Fixed leftover session directories after deletion (#16): remove the entire session-owned directory after validating the official JSONL layout, preserve shared/unknown-backend parent directories, and refuse deletion through directory links.
 - Added regression coverage for directory and attachment cleanup, path encoding, shared-directory protection, and failed-deletion retries.
 - Kept relative JSONL storage roots stable across host working-directory changes and added warnings when directory ownership cannot be verified.
