@@ -7,8 +7,12 @@ import { isNewerVersion, isTrustedUpdateRequest, PLUGIN_UPDATE_HEADER } from '..
 test('归档会话独立更新只接受同源专用请求', () => {
   assert.equal(isNewerVersion('0.1.30', '0.1.31'), true)
   assert.equal(isNewerVersion('0.1.30', '0.1.30'), false)
-  assert.equal(isTrustedUpdateRequest({ headers: { [PLUGIN_UPDATE_HEADER]: '1', origin: 'http://localhost:3000', host: 'localhost:3000' } }), true)
+  assert.equal(isNewerVersion('0.1.0-rc.2', '0.1.0-rc.10'), true)
+  assert.equal(isNewerVersion('0.1.0-rc.10', '0.1.0-rc.2'), false)
+  assert.equal(isTrustedUpdateRequest({ headers: { [PLUGIN_UPDATE_HEADER]: '1', origin: 'http://localhost:3000', host: 'localhost:3000' }, socket: { remoteAddress: '::ffff:127.0.0.1' } }), true)
   assert.equal(isTrustedUpdateRequest({ headers: { [PLUGIN_UPDATE_HEADER]: '1', 'sec-fetch-site': 'cross-site' } }), false)
+  assert.equal(isTrustedUpdateRequest({ headers: { [PLUGIN_UPDATE_HEADER]: '1', host: 'localhost:3000' }, socket: { remoteAddress: '127.0.0.1' } }), false)
+  assert.equal(isTrustedUpdateRequest({ headers: { [PLUGIN_UPDATE_HEADER]: '1', origin: 'http://localhost:3000', host: 'localhost:3000' }, socket: { remoteAddress: '10.0.0.9' } }), false)
   assert.equal(manualPluginUpdateCommand('web', '@michengai/dsh-archive-manager', '0.1.31'), 'dsh plugin --profile web add @michengai/dsh-archive-manager@0.1.31 --registry=https://registry.npmjs.org/')
 })
 
@@ -41,5 +45,8 @@ test('归档客户端与 Host 绑定自身更新入口', async () => {
   assert.match(updateUi, /background:var\(--dsw-alias-bg-layer-2/)
   assert.match(updateUi, /box-shadow:var\(--dsw-shadow-lv3/)
   assert.match(updateUi, /border-radius:14px/)
+  assert.match(updateUi, /if \(version\.textContent !== versionLabel\)/)
+  assert.match(updateUi, /else if \(payload\.latestCheckFailed\)/)
   assert.match(host, /endpoint: "\/api\/michengai\/dsh-archive-manager\/update"/)
+  assert.match(await readFile(new URL('../src/plugin-updater.js', import.meta.url), 'utf8'), /const notifyParent = target\.desktopPnpm === void 0 && typeof process\.send === "function"/)
 })

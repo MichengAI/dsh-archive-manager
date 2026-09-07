@@ -69,7 +69,7 @@ function ensureStyle() {
 function validPayload(value) {
   if (value === null || typeof value !== "object") return false;
   const item = value;
-  return typeof item.packageName === "string" && typeof item.currentVersion === "string" && typeof item.updateAvailable === "boolean" && typeof item.profileName === "string" && typeof item.canAutoUpdate === "boolean" && (item.latestVersion === void 0 || typeof item.latestVersion === "string");
+  return typeof item.packageName === "string" && typeof item.currentVersion === "string" && typeof item.updateAvailable === "boolean" && typeof item.profileName === "string" && typeof item.canAutoUpdate === "boolean" && typeof item.latestCheckFailed === "boolean" && (item.latestVersion === void 0 || typeof item.latestVersion === "string");
 }
 async function requestStatus(endpoint, method, signal) {
   const signalOption = signal === void 0 ? {} : { signal };
@@ -129,7 +129,8 @@ function observePluginUpdate(options) {
         version.dataset.package = options.packageName;
         heading.append(version);
       }
-      version.textContent = `v${payload.currentVersion}`;
+      const versionLabel = `v${payload.currentVersion}`;
+      if (version.textContent !== versionLabel) version.textContent = versionLabel;
     }
     const links = row.querySelector(options.linksSelector);
     if (links === null || links.querySelector(`[data-mpi-check="${options.packageName}"]`) !== null) return;
@@ -202,6 +203,7 @@ function observePluginUpdate(options) {
       command.textContent = manualPluginUpdateCommand(payload?.profileName ?? "", options.packageName, payload?.latestVersion ?? "latest");
       update.disabled = busy || payload?.canAutoUpdate !== true || payload.updateAvailable !== true;
       if (payload === void 0) setMessage(text.checking);
+      else if (payload.latestCheckFailed) setMessage(text.failed, "error");
       else if (payload.updateAvailable) setMessage(`${text.found}: v${payload.latestVersion ?? text.unknown}`);
       else setMessage(text.latest, "success");
       if (payload !== void 0 && !payload.canAutoUpdate && payload.updateAvailable) setMessage(text.unavailable);
