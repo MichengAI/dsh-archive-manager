@@ -64,6 +64,58 @@ async function setup(t, compression = "none") {
 }
 
 for (const compression of ["none", "zstd"]) {
+	test(`最新宿主实时会话落盘并释放写句柄后删除，重开存储不复活 (${compression})`, async (t) => {
+		const env = await setup(t, compression);
+		const session = env.sessions.prepare("live", { meta: { cwd: env.cwd, createdAt: 1700000000000 } });
+		const writer = await env.persistence.create(session.header);
+		// 只观察真实 close 的完成，不提前关闭，也不替换其锁释放和文件操作。
+		const close = writer.close.bind(writer);
+		let closePromise;
+		let closed = false;
+		writer.close = () => closePromise ??= close().then(() => { closed = true; });
+		t.after(() => writer.close());
+		env.sessions.enter(session);
+		env.sessions.announce(session);
+		await env.registry.archiveSession(session.id);
+		const directory = dirname(env.persistence.locate(session.header).path);
+		let flushedEvents;
+		const flush = env.sessions.flush.bind(env.sessions);
+		env.sessions.flush = async (live) => {
+			const result = await flush(live);
+			// 使用另一个真实只读句柄确认落盘，不以 live buffer 的内容冒充持久结果。
+			const reader = await env.persistence.open(live.id, "read");
+			try { flushedEvents = (await reader.read(0)).events; }
+			finally { await reader.close(); }
+			return result;
+		};
+		let closedBeforeRemoval;
+		const remove = env.registry.removeTranscriptDirectory.bind(env.registry);
+		env.registry.removeTranscriptDirectory = async (id) => {
+			closedBeforeRemoval = closed;
+			return remove(id);
+		};
+		const removed = [];
+		env.ctx.on("api-session/removed", (id) => removed.push(id));
+		// 紧接写入执行删除，不在两者之间主动 flush 或等待后台批量定时器。
+		const event = session.append("session/title", { title: "实时删除回归" });
+		await env.registry.deleteSession(session.id);
+		assert.deepEqual(flushedEvents, [event], "删除屏障必须落盘尚未手动 flush 的实时事件");
+		assert.equal(closedBeforeRemoval, true, "开始目录删除前真实写句柄必须释放完成");
+		assert.deepEqual(removed, [session.id]);
+		assert.equal(env.sessions.get(session.id), void 0);
+		assert.deepEqual(env.state.archivedSessionIds, []);
+		await assert.rejects(access(directory), { code: "ENOENT" });
+		assert.equal(await env.persistence.stat(session.id), void 0);
+		assert.deepEqual(await env.query.listSessions(), []);
+		const fresh = new Context();
+		new SessionStore(fresh);
+		const reopened = new JsonlSessionPersistence(fresh, { root: join(env.root, "sessions"), compression });
+		assert.deepEqual(await reopened.list(), []);
+		assert.deepEqual(await new SessionQueryEngine(fresh).listSessions(), []);
+		await env.persistence.flush();
+		await assert.rejects(access(directory), { code: "ENOENT" });
+	});
+
 	test(`最新宿主批量删除冷归档会话及子会话，刷新和重启后不复活 (${compression})`, async (t) => {
 		const env = await setup(t, compression);
 		const parent = await env.create("parent");

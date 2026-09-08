@@ -67,7 +67,7 @@ Run `pnpm test:compat` to test the same plugin artifacts with isolated host depe
 
 - `pnpm test`: build and run local tests, excluding `test/fixtures`; local host links may affect dependency resolution.
 - `pnpm test:matrix`: build, then install three isolated host versions and run the full matrix.
-- `pnpm test:latest`: build, then run the four real storage tests against the isolated latest baseline.
+- `pnpm test:latest`: build, then run the six real storage tests against the isolated latest baseline.
 - `pnpm test:compat`: validate legacy cache migration and run the full matrix.
 
 Do not run `test/fixtures/*.mjs` directly. Fixtures validate the isolated entry point, dependency versions, and resolved paths before loading the host. If local dependencies have drifted, run `pnpm install --frozen-lockfile` to restore declared development dependencies. This does not guarantee removal of undeclared packages or host links under `test/node_modules`; use the isolated commands for compatibility acceptance.
@@ -76,7 +76,7 @@ Do not run `test/fixtures/*.mjs` directly. Fixtures validate the isolated entry 
 | --- | --- | --- |
 | `0.1.1-rc.2` | `4.0.1` | 134 passed, plus legacy cache migration validation |
 | `0.1.2-rc.1` | `4.0.2` | 134 passed |
-| `0.1.3-alpha.2` | `4.0.2` | 135 passed |
+| `0.1.3-alpha.2` | `4.0.2` | 137 passed |
 
 Coverage includes client Remote integration, archive/restore, real JSONL/Zstandard deletion and subagent cascades, and queries/reopened storage after deletion. Tested on Windows / Node.js 24; a full DSH Web browser acceptance run has not been performed. The latest storage fixture isolates only the upstream POSIX `fs-ext` import that cannot load on Windows; file operations and native Windows locking still use the official implementation.
 
