@@ -55,11 +55,23 @@ For a ready-to-use workbench, download [DSH Codex Desktop](https://github.com/Mi
 
 ## Prerequisites
 
+- The current source targets DeepSeek Harness `0.1.3-alpha.2` (official master `c389f96`). These changes are unreleased; npm `0.1.32` does not yet support that host version. Later master commits require separate validation.
+
 - A working DeepSeek Harness Web installation with `dsh` available in PowerShell.
 - Examples use the `web` profile; replace it with the target profile.
 - Source installation and development require Node.js 22+ and pnpm. npm installation does not require running `pnpm install` separately.
 
 ## Installation
+
+Run `pnpm test:compat` to test the same plugin artifacts with isolated host dependencies. The following combinations have passed; this does not claim coverage of every intermediate release:
+
+| DSH | Cordis | Automated regression |
+| --- | --- | --- |
+| `0.1.1-rc.2` | `4.0.1` | 134 passed, plus legacy cache migration validation |
+| `0.1.2-rc.1` | `4.0.2` | 134 passed |
+| `0.1.3-alpha.2` | `4.0.2` | 135 passed |
+
+Coverage includes client Remote integration, archive/restore, real JSONL/Zstandard deletion and subagent cascades, and queries/reopened storage after deletion. Tested on Windows / Node.js 24; a full DSH Web browser acceptance run has not been performed. The latest storage fixture isolates only the upstream POSIX `fs-ext` import that cannot load on Windows; file operations and native Windows locking still use the official implementation.
 
 The installation commands below use the official npm registry.
 

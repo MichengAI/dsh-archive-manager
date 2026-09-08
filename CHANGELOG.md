@@ -6,6 +6,12 @@ Published release notes are retained below; new versions are added without remov
 
 ## Unreleased
 
+- Added an isolated full regression matrix for DSH `0.1.1-rc.2` / Cordis `4.0.1`, `0.1.2-rc.1` / `4.0.2`, and `0.1.3-alpha.2` / `4.0.2`, passing 134, 134, and 135 tests respectively; corrected legacy client/event test fixtures and explicitly accepted the `0.1.1-rc.2` prerelease peer range.
+
+- Added compatibility with DeepSeek Harness `0.1.3-alpha.2` (official master `c389f96`), including persistence snapshot listings and read-only session handles while retaining legacy API paths.
+- Fixed sessions remaining under Ungrouped after batch deletion on the newer host (#19): remove every log generation in the session directory, confirm persistence removal before committing bookkeeping and broadcasting completion, and include cold subagents in cascading deletion.
+- Updated development dependencies and added isolated tests against real JSONL / Zstandard storage, covering queries and reopening storage after deletion, fork preservation, and archived projection reads.
+
 ## 0.1.32 - 2026-09-07
 
 - Fixed leftover session directories after deletion (#16): remove the entire session-owned directory after validating the official JSONL layout, preserve shared/unknown-backend parent directories, and refuse deletion through directory links.

@@ -14,12 +14,15 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { Context } from "@deepseek-ai/cordis";
+import { loadClientStore } from "./helpers/client-store.mjs";
 
 const requireFallback = createRequire(import.meta.url);
 const statics = {};
-for (const spec of ["react", "react/jsx-runtime", "react-dom", "react-dom/client", "@deepseek-ai/cordis", "@deepseek-ai/dsh-client-store", "@deepseek-ai/dsh-client-ui-slots"]) {
+for (const spec of ["react", "react/jsx-runtime", "react-dom", "react-dom/client", "@deepseek-ai/cordis", "@deepseek-ai/dsh-client-ui-slots"]) {
 	statics[spec] = await import(pathToFileURL(requireFallback.resolve(spec)).href);
 }
+const clientStore = await loadClientStore();
+statics[clientStore.id] = clientStore.exports;
 statics["@deepseek-ai/dsh-client-ui-primitives"] = new Proxy({}, { get: (t, p) => (typeof p === "string" ? (t[p] ??= () => null) : t[p]) });
 
 globalThis.window = globalThis;

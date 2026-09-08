@@ -469,13 +469,15 @@ function installJsonlLayout(env, id, { project = "_no-cwd", segment = id, filena
 	return directory;
 }
 
-for (const filename of ["session.jsonl.zstd", "session.jsonl"]) {
+for (const filename of ["session.jsonl.zstd", "session.jsonl", "session.v1.jsonl", "session.v2.jsonl.zstd"]) {
 	test(`deleteSession removes the official JSONL session directory (${filename})`, async () => {
 		const env = buildRoot({ headers: [header(s1), header(s2)], archived: [s1] });
 		const directory = installJsonlLayout(env, s1, { filename });
 		const sibling = installJsonlLayout(env, s2, { filename });
 		mkdirSync(join(directory, "attachments"));
 		writeFileSync(join(directory, "attachments", "output.txt"), "session-owned output");
+		// 新宿主仍能读取旧代际；不能只移除 locate() 指向的当前代际。
+		writeFileSync(join(directory, "session.v3.jsonl"), "older generation");
 		const registry = await mountWorkspaceRegistry(env);
 
 		await registry.deleteSession(s1);
@@ -486,6 +488,54 @@ for (const filename of ["session.jsonl.zstd", "session.jsonl"]) {
 		assert.deepEqual(env.global.archivedSessionIds, []);
 	});
 }
+
+test("新版快照列表中的冷子会话仍被级联删除，fork 保留", async () => {
+	const env = buildRoot({ headers: [header(s1), header(s2, void 0, { parentSession: s1, origin: "subagent" }), header(s3, void 0, { parentSession: s1, origin: "fork" })], archived: [s1] });
+	const registry = await mountWorkspaceRegistry(env);
+	env.persistence.list = async () => env.persistence.headers.map((header) => ({ header, revision: "r1" }));
+	delete env.persistence.prepare;
+	const removed = [];
+	env.ctx.on("api-session/removed", (id) => {
+		assert.equal(existsSync(env.located.get(id)), false, "只在物理删除后发送完成通知");
+		removed.push(id);
+	});
+	await registry.deleteSession(s1);
+	assert.equal(existsSync(env.located.get(s2)), false);
+	assert.equal(existsSync(env.located.get(s3)), true);
+	assert.deepEqual(removed, [s2, s1]);
+});
+
+test("新版快照列表允许已删除 id 的新冷生命周期复用", async () => {
+	const env = buildRoot({ headers: [header(s1)], archived: [s1] });
+	const registry = await mountWorkspaceRegistry(env);
+	await registry.deleteSession(s1);
+	env.persistence.headers[0] = { ...env.persistence.headers[0], createdAt: 1800000000000 };
+	env.persistence.list = async () => env.persistence.headers.map((header) => ({ header, revision: "r2" }));
+	assert.equal(await registry.sessionKnown(s1), true);
+});
+
+test("持久化仍能观察到会话时不得提交删除记账或完成通知", async () => {
+	const env = buildRoot({ headers: [header(s1)], archived: [s1] });
+	const registry = await mountWorkspaceRegistry(env);
+	env.persistence.stat = async () => ({ header: env.persistence.headers[0], revision: "still-readable" });
+	const removed = [];
+	env.ctx.on("api-session/removed", (id) => removed.push(id));
+	await assert.rejects(registry.deleteSession(s1), /still present in persistence/);
+	assert.deepEqual(env.global.archivedSessionIds, [s1]);
+	assert.equal(registry.deletedSessionIds.has(s1), false);
+	assert.deepEqual(removed, []);
+});
+
+test("新版投影读取失败仍关闭只读句柄", async () => {
+	let closed = false;
+	await assert.rejects(ArchiveWorkspaceRegistry.prototype.readStoredProjectionSource.call({}, {
+		open: async (_id, access) => {
+			assert.equal(access, "read");
+			return { read: async () => { throw new Error("read failed"); }, close: async () => { closed = true; } };
+		}
+	}, s1), /read failed/);
+	assert.equal(closed, true);
+});
 
 test("deleteSession uses the initialized JSONL root after cwd changes", async () => {
 	const env = buildRoot({ headers: [header(s1)], archived: [s1] });
@@ -1101,7 +1151,8 @@ test("ArchiveProjectionCache imports legacy IM rows while also reading the curre
 		[legacySafeV2ProjectionCacheDomainSpec.name, 2, legacySafeV2ProjectionCacheDomainSpec.layout],
 		[legacySafeProjectionCacheDomainSpec.name, 1, legacySafeProjectionCacheDomainSpec.layout],
 		["session_projcache", 3, void 0],
-		[projectionCacheDomainSpec.name, projectionCacheDomainSpec.version, projectionCacheDomainSpec.layout]
+		// rc.2 的当前域就是旧版 v3，不应凭空要求打开两次同一存储。
+		...(projectionCacheDomainSpec.version === 3 && projectionCacheDomainSpec.layout === void 0 ? [] : [[projectionCacheDomainSpec.name, projectionCacheDomainSpec.version, projectionCacheDomainSpec.layout]])
 	]);
 	assert.equal(legacySpec.tables.sessions.valueSchema.safeParse(record).success, true, "旧域读取 schema 必须接受缺少新增身份字段的历史行");
 	const normalized = {
@@ -1127,6 +1178,12 @@ test("ArchiveProjectionCache merges current records before legacy records", asyn
 	const safe = new FakeTable({});
 	const legacy = new FakeTable({ [shared]: legacyShared, [legacyOnly]: legacyRecord });
 	const current = new FakeTable({ [shared]: currentShared, [currentOnly]: currentRecord });
+	const unified = projectionCacheDomainSpec.version === 3 && projectionCacheDomainSpec.layout === void 0;
+	if (unified) {
+		// 旧宿主只有一个官方域，所有当前有效记录实际共存于该域。
+		await legacy.put(shared, currentShared);
+		await legacy.put(currentOnly, currentRecord);
+	}
 	const ctx = new Context();
 	ctx.provide("storageDomain", {
 		open: async (spec) => {

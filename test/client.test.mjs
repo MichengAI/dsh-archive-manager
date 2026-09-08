@@ -28,7 +28,8 @@ for (const spec of [
 ]) {
 	statics[spec] = await import(pathToFileURL(requireFallback.resolve(spec)).href);
 }
-const { defineStore } = await import("@deepseek-ai/dsh-client-store");
+const { loadClientStore } = await import("./helpers/client-store.mjs");
+const { exports: { defineStore } } = await loadClientStore();
 // The primitives package imports CSS through its bundler pipeline, which
 // 纯 Node ESM 无法加载；客户端仅在组件
 // bodies, so a no-op facade suffices for materialization + derivation tests.
@@ -191,9 +192,9 @@ test("manifest keeps one DSH peer range and both client contracts optional", () 
 		.filter(([name]) => name.startsWith("@deepseek-ai/dsh-"))
 		.map(([, version]) => version);
 	assert.ok(dshPeerRanges.length > 0);
-	assert.deepEqual([...new Set(dshPeerRanges)], [">=0.1.0-rc.5 <0.2.0"]);
+	assert.deepEqual([...new Set(dshPeerRanges)], [">=0.1.0-rc.5 <0.2.0 || >=0.1.1-rc.2 <0.1.2 || >=0.1.2-rc.1 <0.1.3 || >=0.1.3-alpha.2 <0.1.4"]);
 	assert.ok(dshDevelopmentVersions.length > 0);
-	assert.deepEqual([...new Set(dshDevelopmentVersions)], ["0.1.2-rc.1"]);
+	assert.deepEqual([...new Set(dshDevelopmentVersions)], ["0.1.3-alpha.2"]);
 	assert.equal(PACKAGE_MANIFEST.peerDependenciesMeta?.["@deepseek-ai/dsh-client-store"]?.optional, true);
 	assert.equal(PACKAGE_MANIFEST.peerDependenciesMeta?.["@deepseek-ai/dsh-client-runtime"]?.optional, true);
 	assert.equal(PACKAGE_MANIFEST.dsh.client.inject.includes("@deepseek-ai/dsh-client-runtime"), false);

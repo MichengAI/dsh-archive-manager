@@ -41,7 +41,8 @@ function jsonlSessionDirectory(persistence, header, location) {
 	// This backend-specific field is optional; only absolute config is a safe fallback.
 	const root = persistence.root ?? persistence.config?.root;
 	if (typeof root !== "string" || !isAbsolute(root) || !isAbsolute(location.path)) return;
-	if (!["session.jsonl", "session.jsonl.zstd"].includes(basename(location.path))) return;
+	// 新版使用不可变代际文件；删除整个已验证的会话目录，避免旧代际被重新发现。
+	if (!/^session(?:\.v[1-9][0-9]*)?\.jsonl(?:\.zstd)?$/.test(basename(location.path))) return;
 	if (typeof header.id !== "string" || header.id.length === 0) return;
 	// Upstream encodes UTF-16 code units as ~XXXX (including lone surrogates).
 	const encode = (text) => text.replace(/[^A-Za-z0-9._-]/g, (ch) => `~${ch.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`);
@@ -340,11 +341,11 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		const persistence = this.ctx.get("sessionPersistence");
 		const projections = this.ctx.get("sessionProjections");
 		if (cache === void 0 || typeof cache.cachedSnapshot !== "function" || typeof cache.put !== "function") return false;
-		if (persistence === void 0 || typeof persistence.readFrom !== "function" || projections === void 0 || typeof projections.restore !== "function") return false;
+		if (persistence === void 0 || (typeof persistence.readFrom !== "function" && typeof persistence.open !== "function") || projections === void 0 || typeof projections.restore !== "function") return false;
 		try {
 			// 未播种会话的继承事件数恒为零，先查缓存可避免读取完整会话原文。
 			if (!header.isSeeded && cache.cachedSnapshot(header, 0) !== void 0) return false;
-			const stored = await persistence.readFrom(header.id, 0);
+			const stored = await this.readStoredProjectionSource(persistence, header.id);
 			const meta = stored.meta ?? header;
 			if (meta.isSeeded === true && stored.inheritedEventCount === void 0) {
 				this.ctx.logger.warn(`archive-manager: projection repair for seeded archived session "${header.id}" skipped because its inherited event count is unavailable`);
@@ -368,6 +369,17 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		} catch (error) {
 			this.ctx.logger.warn(`archive-manager: projection repair for archived session "${header.id}" failed: ${String(error)}`);
 			return false;
+		}
+	}
+	/** 新版读句柄必须关闭；旧版仍沿用 readFrom，避免激活 Agent 或写入会话日志。 */
+	async readStoredProjectionSource(persistence, sessionId) {
+		if (typeof persistence.readFrom === "function") return persistence.readFrom(sessionId, 0);
+		const handle = await persistence.open(sessionId, "read");
+		try {
+			const { events } = await handle.read(0);
+			return { meta: handle.header, inheritedEventCount: handle.inheritedEventCount, events };
+		} finally {
+			await handle.close();
 		}
 	}
 	/**
@@ -572,7 +584,16 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		// 物理删除已成功：此时再清父类索引。后续记账失败时保留索引，便于重试。
 		this.forgetIndexedSession(sessionId);
 		if (deletedHeader !== void 0) this.deletedIdentities.set(sessionId, headerIdentity(deletedHeader));
+		this.publishDeletedSession(sessionId);
 		return { deleted: true };
+	}
+	/** 删除完成后通知全部客户端；新版不再通过伪造冷会话生命周期触发通知。 */
+	publishDeletedSession(sessionId) {
+		try {
+			this.ctx.emit("api-session/removed", sessionId);
+		} catch (error) {
+			this.ctx.logger.warn(`archive-manager: session "${sessionId}" deleted but removal notification failed: ${String(error)}`);
+		}
 	}
 	/**
 	* 从父类内存索引中遗忘已删除会话，并阻止后续 indexHeaders 把它加回。
@@ -617,7 +638,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		if (persistence === void 0 || typeof persistence.list !== "function") return false;
 		let header;
 		try {
-			header = (await persistence.list()).find((item) => item.id === id);
+			header = (await this.listStoredHeaders()).find((item) => item.id === id);
 		} catch (error) {
 			this.ctx.logger.warn(`archive-manager: cold-reuse probe for "${id}" failed: ${String(error)}`);
 			return false;
@@ -636,6 +657,13 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 	async indexHeader(header) {
 		if (this.deletedSessionIds.has(header.id)) return;
 		return super.indexHeader(header);
+	}
+	/** 统一旧版头部数组与 0.1.3 的持久化快照，供父类索引和本插件枚举共用。 */
+	async listStoredHeaders() {
+		return (await this.ctx.sessionPersistence.list()).map((item) => item.header ?? item);
+	}
+	async indexHeaders(items) {
+		for (const item of items) await this.indexHeader(item.header ?? item);
 	}
 	/** 为未处于实时状态的持久化会话发布相同的移除事件。 */
 	async publishColdSessionRemoval(sessionId, sessions) {
@@ -689,6 +717,11 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 				this.ctx.logger.warn(`archive-manager: session "${sessionId}": JSONL directory ownership could not be verified; falling back to artifact-only deletion at "${location.path}" (parent directory retained)`);
 			}
 			await rm(target.path, { recursive: true, force: true });
+			// 新版 locate() 只是当前代际的诊断路径；以存储观察确认删除已生效，
+			// 避免不存在的目标被 force 忽略后，仍把可读会话记为已删除。
+			if (typeof persistence.stat === "function" && await persistence.stat(sessionId) !== void 0) {
+				throw new Error(`session "${sessionId}" is still present in persistence after artifact removal`);
+			}
 		} catch (error) {
 			const message = `cannot delete session "${sessionId}": cleanup of ${target.kind} "${target.path}" failed; bookkeeping retained for retry`;
 			const detail = `${message}: ${String(error)}`;
@@ -722,7 +755,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 			if (sessions !== void 0) for (const session of sessions.list()) {
 				if (session.header.parentSession === sessionId && session.header.origin === "subagent") descendants.push(session.id);
 			}
-			for (const header of await this.ctx.sessionPersistence.list()) {
+			for (const header of await this.listStoredHeaders()) {
 				if (header.parentSession === sessionId && header.origin === "subagent" && !descendants.includes(header.id)) descendants.push(header.id);
 			}
 			for (const childId of descendants) {

@@ -55,11 +55,23 @@
 
 ## 前置条件
 
+- 当前源码适配基线为 DeepSeek Harness `0.1.3-alpha.2`（官方 master `c389f96`）；这些改动尚未发布，npm `0.1.32` 尚未适配该新版宿主。后续 master 提交需另行验证。
+
 - 已可正常运行 DeepSeek Harness Web，且可在 PowerShell 中使用 `dsh`。
 - 以下示例使用 `web` profile；请替换为实际目标 profile。
 - 从源码安装或二次开发需要 Node.js 22+ 与 pnpm；仅从 npm 安装无需另外执行 `pnpm install`。
 
 ## 安装
+
+源码回归使用 `pnpm test:compat`，在隔离依赖环境中运行同一份插件产物，已验证以下组合（不代表覆盖所有中间版本）：
+
+| DSH | Cordis | 自动回归 |
+| --- | --- | --- |
+| `0.1.1-rc.2` | `4.0.1` | 134 项通过，另含旧缓存迁移验证 |
+| `0.1.2-rc.1` | `4.0.2` | 134 项通过 |
+| `0.1.3-alpha.2` | `4.0.2` | 135 项通过 |
+
+覆盖客户端 Remote、归档/恢复、真实 JSONL/Zstandard 删除与子会话级联、删除后重新查询及重新打开存储。验证环境为 Windows / Node.js 24；尚未执行完整 DSH Web 浏览器人工验收。新版存储夹具仅隔离上游无法在 Windows 加载的 POSIX `fs-ext` 导入，实际文件操作与 Windows 原生锁仍使用官方实现。
 
 以下安装命令使用官方 npm 源。
 
