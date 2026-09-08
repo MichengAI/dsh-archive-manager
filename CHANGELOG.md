@@ -4,7 +4,7 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
-## Unreleased
+## 0.1.33 - 2026-09-08
 
 - Added real live-session deletion coverage for `0.1.3-alpha.2` with JSONL and Zstandard: verify pending event durability, write-handle closure before directory removal, completion notification, archive bookkeeping cleanup, and no resurrection after reopening storage or a later flush; no production deletion change was required.
 

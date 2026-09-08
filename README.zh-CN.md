@@ -55,7 +55,7 @@
 
 ## 前置条件
 
-- 当前源码适配基线为 DeepSeek Harness `0.1.3-alpha.2`（官方 master `c389f96`）；这些改动尚未发布，npm `0.1.32` 尚未适配该新版宿主。后续 master 提交需另行验证。
+- 从插件 `0.1.33` 起支持 DeepSeek Harness `0.1.3-alpha.2`（官方 master `c389f96`），同时兼容下表中已验证的旧版宿主。后续 master 提交需另行验证。
 
 - 已可正常运行 DeepSeek Harness Web，且可在 PowerShell 中使用 `dsh`。
 - 以下示例使用 `web` profile；请替换为实际目标 profile。

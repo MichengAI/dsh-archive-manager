@@ -55,7 +55,7 @@ For a ready-to-use workbench, download [DSH Codex Desktop](https://github.com/Mi
 
 ## Prerequisites
 
-- The current source targets DeepSeek Harness `0.1.3-alpha.2` (official master `c389f96`). These changes are unreleased; npm `0.1.32` does not yet support that host version. Later master commits require separate validation.
+- Plugin `0.1.33` and later support DeepSeek Harness `0.1.3-alpha.2` (official master `c389f96`) alongside the verified legacy hosts listed below. Later master commits require separate validation.
 
 - A working DeepSeek Harness Web installation with `dsh` available in PowerShell.
 - Examples use the `web` profile; replace it with the target profile.
