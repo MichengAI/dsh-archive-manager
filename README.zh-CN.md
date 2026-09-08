@@ -21,16 +21,12 @@
 
 ## 功能概览
 
-- 在侧栏会话菜单中选择「归档会话」。
-- 在工作区侧栏操作菜单中一键归档该工作区全部未归档聊天。
-- 在「设置 → 归档会话」按工作区查看归档会话，并支持搜索、按更新时间/创建时间/标题排序和按项目筛选。
-- 安全取消归档，将会话恢复到原工作区位置。
-- 在项目分组中批量恢复或永久删除该项目的全部已归档聊天。
-- 在页面顶部一键恢复全部已归档聊天。
-- 经确认后永久删除会话、工作区归属、归档标记和投影缓存。
-- 经确认后删除全部已归档聊天，包含子代理。
-- 已删除的未加载归档会话会立即从已连接客户端的侧栏移除。
-- 可把一句话复制到 DSH、Codex 或 WorkBuddy，让对方代装到本机 DSH。
+把暂时不用的会话收起来，需要时再找回。集中搜索、恢复和清理归档记录，让日常任务列表更清爽。
+
+- **收起已完成的任务**：归档单条聊天，也可归档整个工作区的未归档聊天。
+- **快速找回历史**：在「设置 → 归档会话」搜索标题、按项目筛选，或按时间和标题排序。
+- **恢复继续工作**：恢复单条会话、整个项目或全部归档会话。
+- **按需清理记录**：支持单条或批量永久删除，执行前会要求确认。**永久删除无法撤销。**
 
 ## 界面预览
 
@@ -44,14 +40,20 @@
 
 ## DSH 产品生态
 
-本产品既可以独立安装，也可以随桌面端或 Web 套件一起使用。它们共享同一个 DSH 核心，但面向不同的使用方式：
+想直接使用完整工作台，可下载 [DSH Codex Desktop](https://github.com/MichengAI/dsh-codex-desktop/releases)；已有 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 环境，可按需独立安装以下 8 个自研插件。桌面端已随附这些插件。
 
-| 产品 | 与本产品的关系 |
+| 插件 | 你可以用它做什么 |
 | --- | --- |
-| [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) | 本产品的运行宿主，提供模型、会话、工具和插件系统 |
-| [DSH Codex Desktop](https://github.com/MichengAI/dsh-codex-desktop) | 下载安装即用的桌面产品，已内置本产品和其他 5 个功能产品 |
-| [DSH Codex Suite](https://github.com/MichengAI/dsh-codex-ui/tree/main/packages/dsh-codex-suite) | 面向已有 DSH Web 环境的一键套件，会安装本产品和其他 5 个功能产品 |
-| 6 个功能产品 | [Codex UI](https://github.com/MichengAI/dsh-codex-ui) · [IM Connect](https://github.com/MichengAI/dsh-im-connect) · [Automation](https://github.com/MichengAI/dsh-automation) · [Skills Manager](https://github.com/MichengAI/dsh-skills-manager) · [Archive Manager](https://github.com/MichengAI/dsh-archive-manager) · [Agency Agents](https://github.com/MichengAI/dsh-agency-agents) |
+| [Codex UI](https://github.com/MichengAI/dsh-codex-ui) | 整理项目与会话、搜索任务、跳转对话轮次 |
+| [IM Connect](https://github.com/MichengAI/dsh-im-connect) | 从微信、飞书、钉钉等消息平台下任务、收回复 |
+| [Automation](https://github.com/MichengAI/dsh-automation) | 按计划执行任务，查看每次运行的结果 |
+| [Skills Manager](https://github.com/MichengAI/dsh-skills-manager) | 统一查找、启停、创建和导入本机技能 |
+| [Archive Manager](https://github.com/MichengAI/dsh-archive-manager) | 搜索、恢复或清理已归档会话 |
+| [Agency Agents](https://github.com/MichengAI/dsh-agency-agents) | 按任务选择并召唤专业角色 |
+| [BTW](https://github.com/MichengAI/dsh-btw) | 在当前上下文中临时旁问，不打断主任务 |
+| [Simplify](https://github.com/MichengAI/dsh-simplify) | 用 /simplify 整理 Git 改动范围内的代码 |
+
+桌面端介绍与下载站的源码见[官网仓库](https://github.com/MichengAI/dsh-codex-desktop-website)。
 
 ## 前置条件
 
@@ -61,39 +63,15 @@
 
 ## 安装
 
-`dsh plugin add` 会转发到 profile 目录里的 `pnpm add`。不写版本、不指定官方源时，本机镜像和最短发布间隔可能让你停在旧版。
+以下安装命令使用官方 npm 源。
 
-### 交给其他 Agent 一句话安装
+### 让 Agent 帮你安装（推荐）
 
-本插件运行在 DeepSeek Harness Web 里。把下面其中一句复制到 DSH、Codex 或 WorkBuddy，让它代你安装到本机 `web` profile。
-
-从 npm 安装：
+把下面这段话发给任意能够执行本机终端命令的 Agent。将 `web` 替换为实际使用的 profile；安装完成后，在 DSH 中使用本插件。
 
 ```text
-请把 DSH 插件 @michengai/dsh-archive-manager 最新版装进本机 web profile，使用官方 npm 源执行：dsh plugin --profile web add @michengai/dsh-archive-manager@latest --registry=https://registry.npmjs.org/。装完执行 dsh --profile web --dump-config，确认已挂载 archive-manager，并提醒我重启 DSH Web 后硬刷新浏览器。
+请将 DSH 插件 @michengai/dsh-archive-manager 安装到本机 web profile，执行：dsh plugin --profile web add @michengai/dsh-archive-manager@latest --registry=https://registry.npmjs.org/。安装后执行 dsh --profile web --dump-config，确认配置包含 workspace-archive-manager, ui-workspace-archive-manager，并告诉我如何重新加载 DSH 和开始使用。
 ```
-
-从源码安装：
-
-```text
-请从源码安装 DSH 插件 https://github.com/MichengAI/dsh-archive-manager：克隆到本机后执行 pnpm install --frozen-lockfile 和 pnpm build，再用 dsh plugin --profile web add . 把当前目录装进 web profile。不要只复制 lib。装完执行 dsh --profile web --dump-config，确认已挂载 archive-manager，并提醒我重启 DSH Web 后硬刷新浏览器。
-```
-
-| 产品 | 怎么用 |
-| --- | --- |
-| DSH | 把上面其中一句发给当前会话。 |
-| Codex | 把上面其中一句发给 Codex，让它在本机执行安装。 |
-| WorkBuddy | 把上面其中一句发给 WorkBuddy；源码安装也可同时粘贴仓库地址 `https://github.com/MichengAI/dsh-archive-manager`。 |
-
-Codex 和 WorkBuddy 只负责代装；装好后仍要打开 DSH Web 使用「设置 → 归档会话」。
-
-也可以自己执行同一条 npm 命令：
-
-```powershell
-dsh plugin --profile web add @michengai/dsh-archive-manager@latest --registry=https://registry.npmjs.org/
-```
-
-未把 `dsh` 装进 PATH 时，把开头的 `dsh` 换成 `npx --yes @deepseek-ai/dsh`。
 
 ### 从官方 npm 安装最新版
 
@@ -109,24 +87,6 @@ dsh --profile web --dump-config
 需要钉死某一版时，把 `@latest` 换成具体版本，例如 `@x.y.z`。
 
 配置输出中应包含 `workspace-archive-manager` 与 `ui-workspace-archive-manager`。安装后重启 DSH Web 并在浏览器硬刷新；请勿手工复制客户端文件，否则设置页和归档菜单不会被挂载。
-
-### 从源码安装
-
-适用于调试或使用未发布改动。克隆后的目录会直接作为插件安装路径：
-
-```powershell
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$OutputEncoding = [System.Text.Encoding]::UTF8
-Set-Location D:\Repository\deepseek-harness-plugin
-git clone https://github.com/MichengAI/dsh-archive-manager.git
-Set-Location .\dsh-archive-manager
-pnpm install --frozen-lockfile
-pnpm build
-dsh plugin --profile web add .
-dsh --profile web --dump-config
-```
-
-完成后重启 DSH Web 并硬刷新浏览器。`dsh plugin ... add .` 会读取当前目录的包信息和 `cordis.patch.yml`；不要改为直接复制 `lib` 目录。
 
 ## 在线更新
 
@@ -154,6 +114,24 @@ dsh --profile web --dump-config
 - 本插件替换 DSH 默认的工作区和会话投影服务；请仅通过 DSH profile 安装，避免手工拼接补丁配置。
 
 ## 二次开发
+
+### 从源码安装
+
+适用于调试或使用未发布改动。克隆后的目录会直接作为插件安装路径：
+
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+Set-Location D:\Repository\deepseek-harness-plugin
+git clone https://github.com/MichengAI/dsh-archive-manager.git
+Set-Location .\dsh-archive-manager
+pnpm install --frozen-lockfile
+pnpm build
+dsh plugin --profile web add .
+dsh --profile web --dump-config
+```
+
+完成后重启 DSH Web 并硬刷新浏览器。`dsh plugin ... add .` 会读取当前目录的包信息和 `cordis.patch.yml`；不要改为直接复制 `lib` 目录。
 
 `src` 是唯一可维护源码目录，`pnpm build` 使用 esbuild 将其编译为可发布的 `lib`。请勿直接修改 `lib`，否则下次构建会覆盖改动：
 

@@ -21,16 +21,12 @@
 
 ## Features
 
-- Archive a session from the sidebar session menu.
-- Archive every active chat in a workspace from its sidebar action menu.
-- Search archived chats, sort them by update time, creation time, or title, and filter them by workspace in **Settings → Archived sessions**.
-- Restore a session to its original workspace with **Unarchive**.
-- Restore or permanently delete every archived chat in a project group.
-- Restore all archived chats from the page header.
-- Permanently delete a confirmed session, its workspace association, archive marker, and projection cache.
-- Delete all archived chats after confirmation, including child agents.
-- Remove unloaded deleted sessions from connected sidebars immediately.
-- Paste one sentence into DSH, Codex, or WorkBuddy and let that agent install the plugin locally.
+Put inactive conversations away and find them again when needed. Search, restore, and clean up archives in one place while keeping everyday task lists tidy.
+
+- **Put finished tasks away**: archive one conversation or all active chats in a workspace.
+- **Find past work**: search titles, filter by project, and sort by time or title in **Settings → Archived sessions**.
+- **Resume your work**: restore one conversation, a project group, or all archived chats.
+- **Clean up records**: permanently delete individual chats or batches after confirmation. **Permanent deletion cannot be undone.**
 
 ## Screenshots
 
@@ -44,14 +40,20 @@ Search, sort, filter by project, unarchive, or permanently delete chats in **Set
 
 ## DSH product ecosystem
 
-This product can be installed independently or used through the desktop app or Web suite. They share the same DSH core but serve different ways of working:
+For a ready-to-use workbench, download [DSH Codex Desktop](https://github.com/MichengAI/dsh-codex-desktop/releases). If you already use [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), install any of these eight plugins individually. The desktop app includes all eight.
 
-| Product | Relationship to this product |
+| Plugin | What you can do |
 | --- | --- |
-| [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) | The host runtime that provides models, sessions, tools, and the plugin system |
-| [DSH Codex Desktop](https://github.com/MichengAI/dsh-codex-desktop) | A ready-to-install desktop product with this product and the other five feature products built in |
-| [DSH Codex Suite](https://github.com/MichengAI/dsh-codex-ui/tree/main/packages/dsh-codex-suite) | A one-click suite for existing DSH Web environments that installs this product and the other five feature products |
-| Six feature products | [Codex UI](https://github.com/MichengAI/dsh-codex-ui) · [IM Connect](https://github.com/MichengAI/dsh-im-connect) · [Automation](https://github.com/MichengAI/dsh-automation) · [Skills Manager](https://github.com/MichengAI/dsh-skills-manager) · [Archive Manager](https://github.com/MichengAI/dsh-archive-manager) · [Agency Agents](https://github.com/MichengAI/dsh-agency-agents) |
+| [Codex UI](https://github.com/MichengAI/dsh-codex-ui) | Organize projects and conversations, search tasks, and navigate chat turns |
+| [IM Connect](https://github.com/MichengAI/dsh-im-connect) | Send tasks and receive replies through your usual messenger |
+| [Automation](https://github.com/MichengAI/dsh-automation) | Schedule tasks and review each run |
+| [Skills Manager](https://github.com/MichengAI/dsh-skills-manager) | Find, enable, create, and import local skills |
+| [Archive Manager](https://github.com/MichengAI/dsh-archive-manager) | Search, restore, or clean up archived conversations |
+| [Agency Agents](https://github.com/MichengAI/dsh-agency-agents) | Choose and summon specialists for your task |
+| [BTW](https://github.com/MichengAI/dsh-btw) | Ask side questions without interrupting the main task |
+| [Simplify](https://github.com/MichengAI/dsh-simplify) | Use /simplify to improve code within your Git changes |
+
+The desktop introduction and download site is maintained in the [website repository](https://github.com/MichengAI/dsh-codex-desktop-website).
 
 ## Prerequisites
 
@@ -61,39 +63,15 @@ This product can be installed independently or used through the desktop app or W
 
 ## Installation
 
-`dsh plugin add` forwards to `pnpm add` in the profile directory. Without a version and official registry, a local mirror or minimum-release-age policy can leave you on an older build.
+The installation commands below use the official npm registry.
 
-### Ask another agent to install it
+### Ask an agent to install it (recommended)
 
-This plugin runs inside DeepSeek Harness Web. Copy one of the sentences below into DSH, Codex, or WorkBuddy and let that agent install it into your local `web` profile.
-
-From npm:
+Send the prompt below to any agent that can run terminal commands on your computer. Replace `web` with your actual profile. Once installed, use the plugin in DSH.
 
 ```text
-Install the latest DSH plugin @michengai/dsh-archive-manager into my local web profile using the official npm registry: dsh plugin --profile web add @michengai/dsh-archive-manager@latest --registry=https://registry.npmjs.org/. Then run dsh --profile web --dump-config, confirm archive-manager is mounted, and remind me to restart DSH Web and hard-refresh the browser.
+Install the DSH plugin @michengai/dsh-archive-manager into my local web profile by running: dsh plugin --profile web add @michengai/dsh-archive-manager@latest --registry=https://registry.npmjs.org/. Then run dsh --profile web --dump-config, confirm the configuration includes workspace-archive-manager, ui-workspace-archive-manager, and explain how to reload DSH and start using the plugin.
 ```
-
-From source:
-
-```text
-Install the DSH plugin from source at https://github.com/MichengAI/dsh-archive-manager: clone it, run pnpm install --frozen-lockfile and pnpm build, then run dsh plugin --profile web add . from that directory. Do not copy lib by itself. Then run dsh --profile web --dump-config, confirm archive-manager is mounted, and remind me to restart DSH Web and hard-refresh the browser.
-```
-
-| Product | How to use it |
-| --- | --- |
-| DSH | Send one of the sentences above to the current session. |
-| Codex | Send one of the sentences above to Codex and let it install locally. |
-| WorkBuddy | Send one of the sentences above to WorkBuddy; for a source install you can also paste `https://github.com/MichengAI/dsh-archive-manager`. |
-
-Codex and WorkBuddy only install the plugin. After that, open DSH Web and use **Settings → Archived sessions**.
-
-You can also run the same npm command yourself:
-
-```powershell
-dsh plugin --profile web add @michengai/dsh-archive-manager@latest --registry=https://registry.npmjs.org/
-```
-
-If `dsh` is not on PATH, replace the leading `dsh` with `npx --yes @deepseek-ai/dsh`.
 
 ### Install the latest package from the official npm registry
 
@@ -109,24 +87,6 @@ dsh --profile web --dump-config
 To pin a release, replace `@latest` with a specific version such as `@x.y.z`.
 
 The configuration output should contain `workspace-archive-manager` and `ui-workspace-archive-manager`. Restart DSH Web and hard-refresh the browser. Do not copy client files manually: the Settings page and archive menu need the mounted plugin.
-
-### Install from source
-
-Use this for debugging or unpublished changes. The cloned directory becomes the plugin source path:
-
-```powershell
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$OutputEncoding = [System.Text.Encoding]::UTF8
-Set-Location D:\Repository\deepseek-harness-plugin
-git clone https://github.com/MichengAI/dsh-archive-manager.git
-Set-Location .\dsh-archive-manager
-pnpm install --frozen-lockfile
-pnpm build
-dsh plugin --profile web add .
-dsh --profile web --dump-config
-```
-
-Restart DSH Web and hard-refresh the browser. `dsh plugin ... add .` reads the package metadata and `cordis.patch.yml`; do not install by copying `lib` directly.
 
 ## Updates
 
@@ -154,6 +114,24 @@ If the entry is missing after installation or upgrade, restart DSH Web and hard-
 - The plugin replaces DSH’s default workspace and projection services. Install through the DSH profile instead of manually composing the patch.
 
 ## Secondary development
+
+### Install from source
+
+Use this for debugging or unpublished changes. The cloned directory becomes the plugin source path:
+
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+Set-Location D:\Repository\deepseek-harness-plugin
+git clone https://github.com/MichengAI/dsh-archive-manager.git
+Set-Location .\dsh-archive-manager
+pnpm install --frozen-lockfile
+pnpm build
+dsh plugin --profile web add .
+dsh --profile web --dump-config
+```
+
+Restart DSH Web and hard-refresh the browser. `dsh plugin ... add .` reads the package metadata and `cordis.patch.yml`; do not install by copying `lib` directly.
 
 `src` is the sole maintained source directory. `pnpm build` uses esbuild to compile it into publishable `lib` output. Do not edit `lib` directly because the next build overwrites it.
 
