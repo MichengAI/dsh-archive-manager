@@ -53,8 +53,6 @@ For a ready-to-use workbench, download [DSH Codex Desktop](https://github.com/Mi
 | [BTW](https://github.com/MichengAI/dsh-btw) | Ask side questions without interrupting the main task |
 | [Simplify](https://github.com/MichengAI/dsh-simplify) | Use /simplify to improve code within your Git changes |
 
-The desktop introduction and download site is maintained in the [website repository](https://github.com/MichengAI/dsh-codex-desktop-website).
-
 ## Prerequisites
 
 - A working DeepSeek Harness Web installation with `dsh` available in PowerShell.
@@ -166,7 +164,3 @@ pnpm verify
 ## License
 
 Licensed under [Apache License 2.0](LICENSE).
-
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for retained release notes.
