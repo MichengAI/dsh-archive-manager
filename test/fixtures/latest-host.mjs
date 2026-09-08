@@ -5,11 +5,15 @@ import { mkdtemp, mkdir, rm, writeFile, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { registerHooks } from "node:module";
-import { Context, Service } from "@deepseek-ai/cordis";
-import { SessionStore } from "@deepseek-ai/dsh-session";
-import { SessionPersistence } from "@deepseek-ai/dsh-session-persistence";
-import { SessionQueryEngine } from "@deepseek-ai/dsh-session-query";
-import { ArchiveWorkspaceRegistry } from "../../lib/workspace.js";
+import { assertIsolatedHost } from "../helpers/isolated-host.mjs";
+
+assertIsolatedHost();
+// 先核对版本和实际解析路径，再加载宿主，避免旧版模块先抛出误导性接口错误。
+const { Context, Service } = await import("@deepseek-ai/cordis");
+const { SessionStore } = await import("@deepseek-ai/dsh-session");
+const { SessionPersistence } = await import("@deepseek-ai/dsh-session-persistence");
+const { SessionQueryEngine } = await import("@deepseek-ai/dsh-session-query");
+const { ArchiveWorkspaceRegistry } = await import("../../lib/workspace.js");
 
 assert.equal(typeof SessionPersistence.prototype.prepare, "undefined", "新版夹具必须运行在已移除 prepare 的宿主上");
 // 上游静态导入仅 POSIX 使用的 fs-ext；Windows 实际锁仍使用原生 Koffi。

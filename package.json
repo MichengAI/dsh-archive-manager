@@ -28,7 +28,8 @@
   "scripts": {
     "build": "node scripts/build.mjs && node scripts/check-package.mjs",
     "test": "pnpm build && node --test test/*.test.mjs",
-    "test:matrix": "node scripts/test-version-matrix.mjs",
+    "test:matrix": "pnpm build && node scripts/test-version-matrix.mjs",
+    "test:latest": "pnpm build && node scripts/test-latest-compatibility.mjs",
     "test:compat": "node scripts/test-legacy-compatibility.mjs && pnpm test:matrix",
     "pack:check": "pnpm pack --dry-run",
     "verify": "pnpm test && pnpm test:compat && pnpm pack:check && node scripts/check-generated.mjs",

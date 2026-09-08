@@ -16,9 +16,9 @@ const npm = process.platform === "win32" ? process.execPath : "npm";
 const npmPrefix = process.platform === "win32" ? [join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js")] : [];
 const testNames = (await readdir(join(root, "test"))).filter((name) => name.endsWith(".test.mjs"));
 
-function run(command, args, cwd) {
+function run(command, args, cwd, env = process.env) {
 	return new Promise((resolve, reject) => {
-		const child = spawn(command, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+		const child = spawn(command, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
 		let output = "";
 		child.stdout.setEncoding("utf8").on("data", (data) => { output += data; });
 		child.stderr.setEncoding("utf8").on("data", (data) => { output += data; });
@@ -60,7 +60,7 @@ for (const profile of profiles) {
 			await cp(join(root, file), join(isolated, file));
 		}
 		const fixture = profile.latest ? "latest-host.mjs" : "legacy-host.mjs";
-		const output = await run(process.execPath, ["--test", "--test-reporter=spec", ...testNames.map((name) => join("test", name)), join("test", "fixtures", fixture)], isolated);
+		const output = await run(process.execPath, ["--test", "--test-reporter=spec", ...testNames.map((name) => join("test", name)), join("test", "fixtures", fixture)], isolated, { ...process.env, DSH_ARCHIVE_TEST_HOST_VERSION: profile.version });
 		console.log(output.trim().split(/\r?\n/).slice(-8).join("\n"));
 	} catch (error) {
 		console.error(`DSH ${profile.version} 回归失败：${String(error)}`);

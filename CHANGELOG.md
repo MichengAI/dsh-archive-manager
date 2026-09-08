@@ -6,6 +6,8 @@ Published release notes are retained below; new versions are added without remov
 
 ## Unreleased
 
+- Validate isolated storage test entry points, dependency versions, and resolved paths before loading host modules to prevent false failures from local legacy links; add `test:latest`, build before the matrix, and assert a single completion event for legacy live deletion.
+
 - Added an isolated full regression matrix for DSH `0.1.1-rc.2` / Cordis `4.0.1`, `0.1.2-rc.1` / `4.0.2`, and `0.1.3-alpha.2` / `4.0.2`, passing 134, 134, and 135 tests respectively; corrected legacy client/event test fixtures and explicitly accepted the `0.1.1-rc.2` prerelease peer range.
 
 - Added compatibility with DeepSeek Harness `0.1.3-alpha.2` (official master `c389f96`), including persistence snapshot listings and read-only session handles while retaining legacy API paths.

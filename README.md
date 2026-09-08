@@ -65,6 +65,13 @@ For a ready-to-use workbench, download [DSH Codex Desktop](https://github.com/Mi
 
 Run `pnpm test:compat` to test the same plugin artifacts with isolated host dependencies. The following combinations have passed; this does not claim coverage of every intermediate release:
 
+- `pnpm test`: build and run local tests, excluding `test/fixtures`; local host links may affect dependency resolution.
+- `pnpm test:matrix`: build, then install three isolated host versions and run the full matrix.
+- `pnpm test:latest`: build, then run the four real storage tests against the isolated latest baseline.
+- `pnpm test:compat`: validate legacy cache migration and run the full matrix.
+
+Do not run `test/fixtures/*.mjs` directly. Fixtures validate the isolated entry point, dependency versions, and resolved paths before loading the host. If local dependencies have drifted, run `pnpm install --frozen-lockfile` to restore declared development dependencies. This does not guarantee removal of undeclared packages or host links under `test/node_modules`; use the isolated commands for compatibility acceptance.
+
 | DSH | Cordis | Automated regression |
 | --- | --- | --- |
 | `0.1.1-rc.2` | `4.0.1` | 134 passed, plus legacy cache migration validation |

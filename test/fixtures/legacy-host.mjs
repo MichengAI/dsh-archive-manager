@@ -4,11 +4,14 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, rm, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
-import { Context, Service } from "@deepseek-ai/cordis";
-import { SessionStore } from "@deepseek-ai/dsh-session";
-import JsonlSessionPersistence from "@deepseek-ai/dsh-session-persistence-jsonl";
-import { SessionQueryEngine } from "@deepseek-ai/dsh-session-query";
-import { ArchiveWorkspaceRegistry } from "../../lib/workspace.js";
+import { assertIsolatedHost } from "../helpers/isolated-host.mjs";
+
+assertIsolatedHost();
+const { Context, Service } = await import("@deepseek-ai/cordis");
+const { SessionStore } = await import("@deepseek-ai/dsh-session");
+const { default: JsonlSessionPersistence } = await import("@deepseek-ai/dsh-session-persistence-jsonl");
+const { SessionQueryEngine } = await import("@deepseek-ai/dsh-session-query");
+const { ArchiveWorkspaceRegistry } = await import("../../lib/workspace.js");
 
 async function setup(t, compression) {
 	const root = await mkdtemp(join(tmpdir(), "dsh-am-old-storage-"));
@@ -82,7 +85,10 @@ test("旧宿主实时会话删除先落盘再分离，后续查询不复活", as
 	env.sessions.enter(preparation.session);
 	env.sessions.announce(preparation.session);
 	preparation[Symbol.dispose]();
+	const removed = [];
+	env.ctx.on("api-session/removed", (id) => removed.push(id));
 	await env.registry.deleteSession("live");
+	assert.deepEqual(removed, ["live"], "实时删除只发送一次完成事件");
 	assert.equal(env.sessions.get("live"), void 0);
 	await assert.rejects(access(dirname(env.persistence.locate(header).path)), { code: "ENOENT" });
 	assert.deepEqual(await env.query.listSessions(), []);
