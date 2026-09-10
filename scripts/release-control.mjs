@@ -9,8 +9,8 @@ const exec = promisify(execFile);
 const registry = "https://registry.npmjs.org";
 
 /** 仅 404 表示未发布；其他异常及提交不一致均阻断发布。 */
-export async function readPublishedVersion(expected, fetcher = fetch) {
-  const response = await fetcher(`${registry}/${encodeURIComponent(expected.name)}/${encodeURIComponent(expected.version)}`, { signal: AbortSignal.timeout(15000) });
+export async function readPublishedVersion(expected, fetcher = fetch, signal = AbortSignal.timeout(15000)) {
+  const response = await fetcher(`${registry}/${encodeURIComponent(expected.name)}/${encodeURIComponent(expected.version)}`, { signal });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`npm registry 查询失败：HTTP ${response.status}`);
   const value = await response.json();
@@ -20,14 +20,46 @@ export async function readPublishedVersion(expected, fetcher = fetch) {
   return value;
 }
 
-/** 只重试尚未可见的版本，不掩盖网络、权限及内容错误。 */
-export async function waitForPublication(expected, { fetcher = fetch, pause: sleep = pause, attempts = 6 } = {}) {
-  for (let i = 0; i < attempts; i++) {
-    const value = await readPublishedVersion(expected, fetcher);
+// 使用截止时间限制请求与休眠；传播延迟可重试，权限和内容错误直接传播。
+async function waitFor(check, message, { timeoutMs = 120000, now = Date.now, pause: sleep = pause } = {}) {
+  const deadline = now() + timeoutMs;
+  while (now() < deadline) {
+    const remaining = deadline - now();
+    const value = await check(AbortSignal.timeout(Math.min(15000, remaining)));
     if (value !== null) return value;
-    if (i + 1 < attempts) await sleep(5000);
+    const rest = deadline - now();
+    if (rest > 0) await sleep(Math.min(5000, rest));
   }
-  throw new Error("npm 发布版本尚不可查询，暂不公开 GitHub Release");
+  throw new Error(message);
+}
+
+/** 最多等待两分钟让精确版本可见，内容冲突立即失败。 */
+export async function waitForPublication(expected, { fetcher = fetch, ...timing } = {}) {
+  return waitFor((signal) => readPublishedVersion(expected, fetcher, signal), "npm 发布版本尚不可查询，暂不公开 GitHub Release", timing);
+}
+
+// 工作流仅发布正式版本；无依赖比较三段数字，确保安装前和旧标签恢复也可使用。
+function stableVersion(value) {
+  if (typeof value !== "string" || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(value)) throw new Error("npm latest 版本不是有效的正式版本");
+  return value.split(".").map(BigInt);
+}
+
+/** latest 落后则等待，相等才标最新；更高版本表示旧标签重试。 */
+export async function waitForLatest(expected, { fetcher = fetch, ...timing } = {}) {
+  const target = stableVersion(expected.version);
+  return waitFor(async (signal) => {
+    const response = await fetcher(`${registry}/${encodeURIComponent(expected.name)}/latest`, { signal });
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(`npm latest 查询失败：HTTP ${response.status}`);
+    const latest = await response.json();
+    if (latest?.name !== expected.name) throw new Error("npm latest 包名不一致");
+    const current = stableVersion(latest.version);
+    for (let i = 0; i < 3; i++) {
+      if (current[i] > target[i]) return false;
+      if (current[i] < target[i]) return null;
+    }
+    return true;
+  }, "npm latest 尚未传播到目标版本，暂不公开 GitHub Release", timing);
 }
 
 /** 分页精确查找标签；查询失败直接退出，旧标签重试不更新 Latest。 */
@@ -59,11 +91,9 @@ async function main() {
   }
   if (!notes || !process.env.GITHUB_REPOSITORY) throw new Error("缺少版本说明或 GitHub 仓库");
   await waitForPublication(expected);
-  const response = await fetch(`${registry}/${encodeURIComponent(manifest.name)}/latest`, { signal: AbortSignal.timeout(15000) });
-  if (!response.ok) throw new Error(`npm latest 查询失败：HTTP ${response.status}`);
-  const latest = await response.json();
-  if (latest?.name !== manifest.name || typeof latest.version !== "string") throw new Error("npm latest 响应异常");
-  await syncGithubRelease(process.env.GITHUB_REPOSITORY, tag, notes, latest.version === manifest.version);
+  const latest = await waitForLatest(expected);
+  await syncGithubRelease(process.env.GITHUB_REPOSITORY, tag, notes, latest);
+
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();

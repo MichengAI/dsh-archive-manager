@@ -76,10 +76,10 @@ Do not run `test/fixtures/*.mjs` directly. Fixtures validate the isolated entry 
 
 | DSH | Cordis | Automated regression |
 | --- | --- | --- |
-| `0.1.0-rc.8` | `4.0.1` | 141 passed |
-| `0.1.1-rc.2` | `4.0.1` | 141 passed, plus legacy cache migration validation |
-| `0.1.2-rc.1` | `4.0.2` | 141 passed |
-| `0.1.5-rc.1` | `4.0.2` | 144 passed |
+| `0.1.0-rc.8` | `4.0.1` | 150 passed |
+| `0.1.1-rc.2` | `4.0.1` | 150 passed, plus legacy cache migration validation |
+| `0.1.2-rc.1` | `4.0.2` | 150 passed |
+| `0.1.5-rc.1` | `4.0.2` | 153 passed |
 
 Coverage includes workspace navigation, global-panel dismissal, cancellation of stale navigation, sidebar wiring, peer version acceptance, client Remote integration, archive/restore, real JSONL/Zstandard deletion and subagent cascades, and queries/reopened storage after deletion. Tested on Windows / Node.js 24. A real browser acceptance run also passed in an isolated DSH 0.1.5-rc.1 Web Profile: package installation, archive/restore, deletion cancellation and confirmation, subagent cascades, cross-filter batch deletion, workspace selection, returning from global panels, new sessions and forks, content search, and restart persistence. Content search requires an open host query database; it passed after changing the isolated Profile from `openAt: never` to `startup`. The other three versions have isolated automated coverage only; no external model calls were made. The latest storage fixture isolates only the upstream POSIX `fs-ext` import that cannot load on Windows; file operations and native Windows locking still use the official implementation.
 
@@ -187,6 +187,10 @@ pnpm verify
 
 Licensed under [Apache License 2.0](LICENSE).
 
-Before creating or pushing a release tag, run `pnpm release:preflight` in Windows PowerShell. It installs from the official npm registry with a frozen lockfile and the same 1440-minute release-age policy as CI, then runs the full `verify` suite. Recent dependencies require committed, exact-version exclusions; manual retries never add exclusions dynamically.
+Before creating or pushing a release tag, run `pnpm release:preflight` in PowerShell 7 (`pwsh`). It installs from the official npm registry with a frozen lockfile and the same 1440-minute release-age policy as CI, then runs the full `verify` suite. Recent dependencies require committed, exact-version exclusions; manual retries never add exclusions dynamically.
 
 Tag releases and manual retries verify the exact npm version and `gitHead` before creating or updating the bilingual GitHub Release. Network, authorization, or metadata errors stop the flow. Retrying an older tag does not take GitHub Latest away from the npm latest version. These release controls do not change the four supported host versions.
+
+Recovery checks the npm package name, version, and tag commit first. An exact match skips dependency installation, full builds, and republishing, and only synchronizes the Release. Unpublished old tags must still satisfy their original cooling policy. Exact-version and latest propagation each have a two-minute deadline; a lagging latest tag does not create a non-Latest Release prematurely.
+
+Updating main does not retrigger an existing tag. After pushing workflow changes, manually run `publish.yml` on main with the original tag (for example, `v0.1.35`); do not move or recreate the tag.

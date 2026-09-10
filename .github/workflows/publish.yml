@@ -52,18 +52,21 @@ jobs:
           node .release-tools/scripts/release-control.mjs validate "$RELEASE_TAG"
           node .release-tools/scripts/extract-release-notes.mjs "$RELEASE_TAG" "$RUNNER_TEMP/release-notes.md"
 
-      - name: Enable pnpm
-        run: corepack enable
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile --config.minimumReleaseAge=1440 --registry=https://registry.npmjs.org
-
-      - name: 完整发布验证
-        run: pnpm verify
-
       - name: 检查 npm 精确版本与提交
         id: check
         run: node .release-tools/scripts/release-control.mjs check "$RELEASE_TAG"
+
+      - name: Enable pnpm
+        if: steps.check.outputs.published != 'true'
+        run: corepack enable
+
+      - name: Install dependencies
+        if: steps.check.outputs.published != 'true'
+        run: pnpm install --frozen-lockfile --config.minimumReleaseAge=1440 --registry=https://registry.npmjs.org
+
+      - name: 完整发布验证
+        if: steps.check.outputs.published != 'true'
+        run: pnpm verify
 
       - name: Publish to npm
         if: steps.check.outputs.published != 'true'
