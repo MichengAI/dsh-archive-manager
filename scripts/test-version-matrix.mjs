@@ -4,6 +4,7 @@ import { basename, dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
+import { hostTestOverrides } from "./host-test-dependencies.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
@@ -45,7 +46,7 @@ for (const profile of profiles) {
 			dependencies["@deepseek-ai/cordis-plugin-loader"] = "1.0.2";
 		}
 		for (const name of ["session-persistence-jsonl", "session-query"]) dependencies[`@deepseek-ai/dsh-${name}`] = profile.version;
-		await writeFile(join(isolated, "package.json"), JSON.stringify({ private: true, type: "module", dependencies }), "utf8");
+		await writeFile(join(isolated, "package.json"), JSON.stringify({ private: true, type: "module", dependencies, overrides: hostTestOverrides(profile.version) }), "utf8");
 		await run(npm, [...npmPrefix, "install", "--ignore-scripts", "--no-audit", "--no-fund"], isolated);
 		if (profile.latest && process.platform !== "win32") await run(npm, [...npmPrefix, "rebuild", "fs-ext"], isolated);
 		for (const [name, version] of Object.entries(dependencies)) {

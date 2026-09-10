@@ -4,6 +4,10 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## Unreleased
+
+- Fix rebuilt archive summaries remaining unusable on DSH `0.1.5-rc.1`; caches with missing or outdated format versions are rebuilt from the session transcript and reused on subsequent visits.
+
 ## 0.1.36 - 2026-09-10
 
 - Harden release delivery: align dependency cooling preflight and synchronize bilingual GitHub Releases only after confirming the exact npm version and commit; recover already-published releases without reinstalling or republishing.

@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
+import { hostTestOverrides } from "./host-test-dependencies.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const isolated = await mkdtemp(join(tmpdir(), "dsh-am-latest-compat-"));
@@ -20,10 +21,10 @@ function run(command, args, env = process.env) {
 }
 try {
 	const dependencies = Object.fromEntries([
-		"session", "session-persistence", "session-persistence-jsonl", "session-query", "workspace", "spill-local", "typert-protocol", "typert-registry"
+		"session", "session-persistence", "session-persistence-jsonl", "session-query", "session-projection", "session-projection-cache", "workspace", "spill-local", "typert-protocol", "typert-registry"
 	].map((name) => [`@deepseek-ai/dsh-${name}`, version]));
 	dependencies["@deepseek-ai/cordis"] = manifest.devDependencies["@deepseek-ai/cordis"];
-	await writeFile(join(isolated, "package.json"), JSON.stringify({ private: true, type: "module", dependencies }), "utf8");
+	await writeFile(join(isolated, "package.json"), JSON.stringify({ private: true, type: "module", dependencies, overrides: hostTestOverrides(version) }), "utf8");
 	await cp(join(root, "lib"), join(isolated, "lib"), { recursive: true });
 	await mkdir(join(isolated, "test", "fixtures"), { recursive: true });
 	await cp(join(root, "test", "fixtures", "latest-host.mjs"), join(isolated, "test", "fixtures", "latest-host.mjs"));

@@ -11,7 +11,7 @@ export function assertIsolatedHost() {
 	const root = fileURLToPath(new URL("../../", import.meta.url));
 	const modulesRoot = realpathSync(resolve(root, "node_modules"));
 	const require = createRequire(import.meta.url);
-	for (const name of ["session", "session-persistence", "session-persistence-jsonl", "session-query", "workspace"]) {
+	for (const name of ["session", "session-persistence", "session-persistence-jsonl", "session-query", "session-projection", "session-projection-cache", "workspace"]) {
 		const specifier = `@deepseek-ai/dsh-${name}/package.json`;
 		let path;
 		let actual;

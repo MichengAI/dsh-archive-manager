@@ -360,6 +360,8 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 			const restored = projections.restore({}, stored.events, 0, meta, inheritedEventCount);
 			if (restored === void 0 || typeof restored !== "object" || restored.checkpoint === void 0) return false;
 			await cache.put(header.id, {
+				// 新版缓存按日志格式代际校验身份；旧宿主没有版本字段时保留原身份形状。
+				...(meta.version === void 0 ? {} : { formatVersion: meta.version }),
 				createdAt: meta.createdAt,
 				...(meta.cwd === void 0 ? {} : { cwd: meta.cwd }),
 				isSeeded: meta.isSeeded ?? false,
