@@ -55,33 +55,34 @@ For a ready-to-use workbench, download [DSH Codex Desktop](https://github.com/Mi
 
 ## Prerequisites
 
-- The current source supports DeepSeek Harness `0.1.5-rc.1` and the legacy hosts below. These changes were published in plugin `0.1.35`. Later versions require separate validation.
+- Plugin `0.1.38` supports DeepSeek Harness `0.1.5-rc.2` and retains the four previously supported hosts below. Later versions require separate validation.
 
 - A working DeepSeek Harness Web installation with `dsh` available in PowerShell.
 - Examples use the `web` profile; replace it with the target profile.
 - Source installation and development require Node.js 22+ and pnpm. npm installation does not require running `pnpm install` separately.
 
-DSH peer dependencies accept only `0.1.0-rc.8 || 0.1.1-rc.2 || 0.1.2-rc.1 || 0.1.5-rc.1`; other RCs and stable versions are not automatically accepted. Development dependencies remain pinned to `0.1.5-rc.1`.
+DSH peer dependencies accept only `0.1.0-rc.8 || 0.1.1-rc.2 || 0.1.2-rc.1 || 0.1.5-rc.1 || 0.1.5-rc.2`; other RCs and stable versions are not automatically accepted. Development dependencies are pinned to `0.1.5-rc.2`.
 
 ## Installation
 
 Run `pnpm test:compat` to test the same plugin artifacts with isolated host dependencies. The following combinations have passed; this does not claim coverage of every intermediate release:
 
 - `pnpm test`: build and run local tests, excluding `test/fixtures`; local host links may affect dependency resolution.
-- `pnpm test:matrix`: build, then install four isolated host versions and run the full matrix.
-- `pnpm test:latest`: build, then run the six real storage tests against the isolated latest baseline.
+- `pnpm test:matrix`: build, then install five isolated host versions and run the full matrix.
+- `pnpm test:latest`: build, then run the real storage regressions against the isolated latest baseline.
 - `pnpm test:compat`: validate legacy cache migration and run the full matrix.
 
 Do not run `test/fixtures/*.mjs` directly. Fixtures validate the isolated entry point, dependency versions, and resolved paths before loading the host. If local dependencies have drifted, run `pnpm install --frozen-lockfile` to restore declared development dependencies. This does not guarantee removal of undeclared packages or host links under `test/node_modules`; use the isolated commands for compatibility acceptance.
 
 | DSH | Cordis | Automated regression |
 | --- | --- | --- |
-| `0.1.0-rc.8` | `4.0.1` | 153 passed |
-| `0.1.1-rc.2` | `4.0.1` | 153 passed, plus legacy cache migration validation |
-| `0.1.2-rc.1` | `4.0.2` | 153 passed |
-| `0.1.5-rc.1` | `4.0.2` | 156 passed |
+| `0.1.0-rc.8` | `4.0.1` | 154 passed |
+| `0.1.1-rc.2` | `4.0.1` | 154 passed, plus legacy cache migration validation |
+| `0.1.2-rc.1` | `4.0.2` | 154 passed |
+| `0.1.5-rc.1` | `4.0.2` | 163 passed |
+| `0.1.5-rc.2` | `4.0.2` | 163 passed |
 
-Coverage includes workspace navigation, global-panel dismissal, cancellation of stale navigation, sidebar wiring, peer version acceptance, client Remote integration, archive/restore, real JSONL/Zstandard deletion and subagent cascades, and queries/reopened storage after deletion. Tested on Windows / Node.js 24. A real browser acceptance run also passed in an isolated DSH 0.1.5-rc.1 Web Profile: package installation, archive/restore, deletion cancellation and confirmation, subagent cascades, cross-filter batch deletion, workspace selection, returning from global panels, new sessions and forks, content search, and restart persistence. Content search requires an open host query database; it passed after changing the isolated Profile from `openAt: never` to `startup`. The other three versions have isolated automated coverage only; no external model calls were made. The latest storage fixture isolates only the upstream POSIX `fs-ext` import that cannot load on Windows; file operations and native Windows locking still use the official implementation.
+Coverage includes workspace navigation, global-panel dismissal, cancellation of stale navigation, sidebar wiring, peer version acceptance, client Remote integration, archive/restore, real JSONL/Zstandard deletion and subagent cascades, and queries/reopened storage after deletion. Tested on Windows / Node.js 24. A real browser acceptance run also passed in an isolated DSH 0.1.5-rc.1 Web Profile: package installation, archive/restore, deletion cancellation and confirmation, subagent cascades, cross-filter batch deletion, workspace selection, returning from global panels, new sessions and forks, content search, and restart persistence. Content search requires an open host query database; it passed after changing the isolated Profile from `openAt: never` to `startup`. This release also passed an isolated rc.2 Web smoke run covering settings loading, seeded archive listing, restore, deletion cancellation and confirmation, and restart persistence with dedicated JSONL data. The full rc.1 browser flow was not repeated item by item. The other three versions have isolated automated coverage only; no external model calls were made. The latest storage fixture isolates only the upstream POSIX `fs-ext` import that cannot load on Windows; file operations and native Windows locking still use the official implementation.
 
 The installation commands below use the official npm registry.
 

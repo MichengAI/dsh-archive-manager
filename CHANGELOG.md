@@ -4,6 +4,10 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 0.1.38 - 2026-09-11
+
+- Support DeepSeek Harness `0.1.5-rc.2` while retaining compatibility with the four previously supported versions.
+
 ## 0.1.37 - 2026-09-10
 
 - Fix rebuilt archive summaries remaining unusable on DSH `0.1.5-rc.1`; caches with missing or outdated format versions are rebuilt from the session transcript and reused on subsequent visits.

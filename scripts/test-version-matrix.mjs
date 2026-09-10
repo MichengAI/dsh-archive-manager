@@ -12,6 +12,7 @@ const profiles = [
 	{ version: "0.1.0-rc.8", cordis: "4.0.1", runtime: true },
 	{ version: "0.1.1-rc.2", cordis: "4.0.1", runtime: true },
 	{ version: "0.1.2-rc.1", cordis: "4.0.2" },
+	{ version: "0.1.5-rc.1", cordis: "4.0.2", latest: true },
 	{ version: manifest.devDependencies["@deepseek-ai/dsh-session"], cordis: "4.0.2", latest: true }
 ];
 const npm = process.platform === "win32" ? process.execPath : "npm";
