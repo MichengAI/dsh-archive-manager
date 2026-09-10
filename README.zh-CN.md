@@ -4,7 +4,7 @@
 
 <div align="center">
 
-  # DSH Archive Manager
+# DSH Archive Manager
 
   **在 DeepSeek Harness 中安全管理已归档会话**
 
