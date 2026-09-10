@@ -25,7 +25,18 @@ async function waitFor(check, message, { timeoutMs = 120000, now = Date.now, pau
   const deadline = now() + timeoutMs;
   while (now() < deadline) {
     const remaining = deadline - now();
-    const value = await check(AbortSignal.timeout(Math.min(15000, remaining)));
+    if (remaining <= 0) break;
+    const signal = AbortSignal.timeout(Math.min(15000, remaining));
+    let value;
+    try {
+      value = await check(signal);
+    } catch (error) {
+      // 仅转换总窗口限定的中止，保留单请求超时和其他异常的原始语义。
+      if (remaining <= 15000 && signal.aborted && error === signal.reason) {
+        throw new Error(message, { cause: error });
+      }
+      throw error;
+    }
     if (value !== null) return value;
     const rest = deadline - now();
     if (rest > 0) await sleep(Math.min(5000, rest));

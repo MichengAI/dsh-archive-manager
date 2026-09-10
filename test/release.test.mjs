@@ -120,3 +120,56 @@ test("双语说明 CLI 缺失任一语言拒绝生成，完整时中文在前", 
     await assert.rejects(run(), /Both Chinese and English/);
   } finally { await rm(cwd, { recursive: true, force: true }); }
 });
+
+test("两次读取时钟跨过截止点时，不再发起请求", async () => {
+  for (const wait of [waitForPublication, waitForLatest]) {
+    const times = [0, 119999, 120001];
+    let calls = 0;
+    await assert.rejects(wait(expected, {
+      now: () => times.shift(),
+      fetcher: async () => { calls++; return response(404, {}); },
+    }), (error) => {
+      assert.equal(error.name, "Error");
+      assert.match(error.message, /暂不公开 GitHub Release/);
+      return true;
+    });
+    assert.equal(calls, 0);
+  }
+});
+
+test("总窗口截止中止使用明确报错并保留原始原因", async (t) => {
+  const reason = new DOMException("test deadline", "TimeoutError");
+  t.mock.method(AbortSignal, "timeout", (milliseconds) => {
+    assert.equal(milliseconds, 10);
+    return AbortSignal.abort(reason);
+  });
+  for (const wait of [waitForPublication, waitForLatest]) {
+    await assert.rejects(wait(expected, {
+      timeoutMs: 10,
+      now: () => 0,
+      fetcher: async (_url, { signal }) => { throw signal.reason; },
+    }), (error) => {
+      assert.equal(error.name, "Error");
+      assert.match(error.message, /暂不公开 GitHub Release/);
+      assert.equal(error.cause, reason);
+      return true;
+    });
+  }
+});
+
+test("单请求超时和非信号异常保留原始错误", async (t) => {
+  const reason = new DOMException("request timeout", "TimeoutError");
+  t.mock.method(AbortSignal, "timeout", () => AbortSignal.abort(reason));
+  for (const wait of [waitForPublication, waitForLatest]) {
+    await assert.rejects(wait(expected, {
+      now: () => 0,
+      fetcher: async (_url, { signal }) => { throw signal.reason; },
+    }), (error) => error === reason);
+    const offline = new Error("offline");
+    await assert.rejects(wait(expected, {
+      timeoutMs: 10,
+      now: () => 0,
+      fetcher: async () => { throw offline; },
+    }), (error) => error === offline);
+  }
+});

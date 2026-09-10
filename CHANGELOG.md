@@ -4,6 +4,12 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 0.1.36 - 2026-09-10
+
+- Harden release delivery: align dependency cooling preflight and synchronize bilingual GitHub Releases only after confirming the exact npm version and commit; recover already-published releases without reinstalling or republishing.
+- Wait for npm latest propagation to avoid incorrectly marking new releases as non-Latest; fix negative timeout values and deadline diagnostics while preserving abort causes and ordinary network errors.
+- Add release recovery, CLI, bilingual notes, and deadline regressions; plugin runtime behavior and the four-version compatibility range remain unchanged.
+
 ## 0.1.35 - 2026-09-10
 
 - Support DSH `0.1.5-rc.1`: restore workspace selection, session opening, and fork navigation; dismiss global panels when opening or creating sessions, and suppress stale navigation and draft handoff after panel switches or disposal.

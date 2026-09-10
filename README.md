@@ -76,10 +76,10 @@ Do not run `test/fixtures/*.mjs` directly. Fixtures validate the isolated entry 
 
 | DSH | Cordis | Automated regression |
 | --- | --- | --- |
-| `0.1.0-rc.8` | `4.0.1` | 150 passed |
-| `0.1.1-rc.2` | `4.0.1` | 150 passed, plus legacy cache migration validation |
-| `0.1.2-rc.1` | `4.0.2` | 150 passed |
-| `0.1.5-rc.1` | `4.0.2` | 153 passed |
+| `0.1.0-rc.8` | `4.0.1` | 153 passed |
+| `0.1.1-rc.2` | `4.0.1` | 153 passed, plus legacy cache migration validation |
+| `0.1.2-rc.1` | `4.0.2` | 153 passed |
+| `0.1.5-rc.1` | `4.0.2` | 156 passed |
 
 Coverage includes workspace navigation, global-panel dismissal, cancellation of stale navigation, sidebar wiring, peer version acceptance, client Remote integration, archive/restore, real JSONL/Zstandard deletion and subagent cascades, and queries/reopened storage after deletion. Tested on Windows / Node.js 24. A real browser acceptance run also passed in an isolated DSH 0.1.5-rc.1 Web Profile: package installation, archive/restore, deletion cancellation and confirmation, subagent cascades, cross-filter batch deletion, workspace selection, returning from global panels, new sessions and forks, content search, and restart persistence. Content search requires an open host query database; it passed after changing the isolated Profile from `openAt: never` to `startup`. The other three versions have isolated automated coverage only; no external model calls were made. The latest storage fixture isolates only the upstream POSIX `fs-ext` import that cannot load on Windows; file operations and native Windows locking still use the official implementation.
 
