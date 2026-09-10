@@ -8,6 +8,7 @@ import { spawn } from "node:child_process";
 const root = fileURLToPath(new URL("..", import.meta.url));
 const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
 const profiles = [
+	{ version: "0.1.0-rc.8", cordis: "4.0.1", runtime: true },
 	{ version: "0.1.1-rc.2", cordis: "4.0.1", runtime: true },
 	{ version: "0.1.2-rc.1", cordis: "4.0.2" },
 	{ version: manifest.devDependencies["@deepseek-ai/dsh-session"], cordis: "4.0.2", latest: true }

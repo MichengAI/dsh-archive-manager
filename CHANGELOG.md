@@ -4,6 +4,14 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 0.1.35 - 2026-09-10
+
+- Support DSH `0.1.5-rc.1`: restore workspace selection, session opening, and fork navigation; dismiss global panels when opening or creating sessions, and suppress stale navigation and draft handoff after panel switches or disposal.
+- Route sidebar open/fork actions through the new navigation service with legacy fallbacks; restrict DSH peers to `0.1.0-rc.8 || 0.1.1-rc.2 || 0.1.2-rc.1 || 0.1.5-rc.1` and pin development dependencies to `0.1.5-rc.1`.
+- Add navigation and sidebar wiring regressions, validate those four exact versions in the isolated matrix; explicitly provide Zustand/Immer required by the official Store in Node tests.
+- Passed real browser acceptance in an isolated DSH `0.1.5-rc.1` Web Profile: archive/restore, deletion and subagent cascades, cross-filter batch deletion, workspace and global-panel navigation, forks, content search, and restart persistence; no external model calls were made.
+
+
 ## 0.1.34 - 2026-09-09
 
 - Unified settings headings, descriptions, and action layouts; maintenance controls no longer squeeze titles or versions. The layout adapts to native DSH settings without Codex UI.

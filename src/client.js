@@ -3791,6 +3791,13 @@ window.__ModuleLoader__.load({
 			const sessions = ctx.sessions;
 			const workspaces = ctx.workspaces;
 			const connecting = new Map();
+			const lifetime = new AbortController();
+			// 延迟查询可选服务，兼容旧宿主及新版 layout 的激活顺序。
+			const layoutAt = () => ctx.get("layout");
+			const beginNavigation = () => {
+				const signal = layoutAt()?.beginNavigation?.();
+				return signal === void 0 ? lifetime.signal : AbortSignal.any([signal, lifetime.signal]);
+			};
 			const recentWorkspace = () => {
 				const workspaceState = workspaces.list.getSnapshot();
 				const sessionState = sessions.list.getSnapshot();
@@ -3830,6 +3837,26 @@ window.__ModuleLoader__.load({
 					connecting.set(workspaceId, attempt);
 					return attempt;
 				},
+				/** 打开指定会话，并从新版全局面板回到对话。 */
+				openSession(sessionId) {
+					if (lifetime.signal.aborted) return;
+					sessions.open(sessionId);
+					layoutAt()?.selectPanel?.(null);
+				},
+				/** 创建或复用工作区会话；导航仍有效时先交接草稿，失败向调用方传播。 */
+				async openWorkspace(workspaceId, beforeOpen) {
+					const navigation = beginNavigation();
+					const sessionId = await service.connectWorkspace(workspaceId);
+					if (navigation.aborted) return;
+					beforeOpen?.(sessionId);
+					if (!navigation.aborted) service.openSession(sessionId);
+				},
+				/** 分叉落盘后仅在导航未取消时打开结果，保留失败语义。 */
+				async forkSession(sessionId) {
+					const navigation = beginNavigation();
+					const childId = await sessions.fork({ sessionId, increaseTitle: true });
+					if (!navigation.aborted) service.openSession(childId);
+				},
 				startSession(workspaceId) {
 					const workspaceState = workspaces.list.getSnapshot();
 					const sessionState = sessions.list.getSnapshot();
@@ -3838,11 +3865,10 @@ window.__ModuleLoader__.load({
 					const target = workspaceId ?? currentWorkspaceId ?? recent;
 					if (target === void 0) {
 						sessions.clear();
+						layoutAt()?.selectPanel?.(null);
 						return;
 					}
-					void service.connectWorkspace(target).then((sessionId) => {
-						sessions.open(sessionId);
-					}, (reason) => {
+					void service.openWorkspace(target).catch((reason) => {
 						console.warn("new session failed:", reason);
 					});
 				},
@@ -3910,11 +3936,15 @@ window.__ModuleLoader__.load({
 				reconcile();
 				return () => {
 					disposed = true;
+					lifetime.abort();
 					disposeSessions();
 					disposeWorkspaces();
 				};
 			}, "dsh-archive-manager: uiWorkspace navigation policy");
-			return dispose;
+			return () => {
+				lifetime.abort();
+				dispose();
+			};
 		}
 		/**
 		* Plugin body: mount the archive-manager Remote contribution, then
@@ -4041,7 +4071,9 @@ window.__ModuleLoader__.load({
 					else ctx.workspaces.startSession(workspaceId);
 				},
 				open: (sessionId) => {
-					ctx.sessions.open(sessionId);
+					const uiWorkspace = uiWorkspaceAt();
+					if (typeof uiWorkspace?.openSession === "function") uiWorkspace.openSession(sessionId);
+					else ctx.sessions.open(sessionId);
 				},
 				searchSessions,
 				searchResultLimit: ctx.sessions.searchResultLimit,
@@ -4051,12 +4083,13 @@ window.__ModuleLoader__.load({
 					const result = await session.rename(title);
 					if (!result.ok) throw new Error(result.error.message);
 				},
-				forkSession: (sessionId) => ctx.sessions.fork({
-					sessionId,
-					increaseTitle: true
-				}).then((childId) => {
-					ctx.sessions.open(childId);
-				}),
+				forkSession: (sessionId) => {
+					const uiWorkspace = uiWorkspaceAt();
+					if (typeof uiWorkspace?.forkSession === "function") return uiWorkspace.forkSession(sessionId);
+					return ctx.sessions.fork({ sessionId, increaseTitle: true }).then((childId) => {
+						ctx.sessions.open(childId);
+					});
+				},
 				renameWorkspace: async (workspaceId, title) => {
 					await ctx.workspaces.rename(workspaceId, title);
 				},

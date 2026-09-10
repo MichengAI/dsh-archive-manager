@@ -11,6 +11,7 @@ import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import semver from "semver";
 
 const FALLBACK = fileURLToPath(new URL("../node_modules", import.meta.url));
 
@@ -192,9 +193,16 @@ test("manifest keeps one DSH peer range and both client contracts optional", () 
 		.filter(([name]) => name.startsWith("@deepseek-ai/dsh-"))
 		.map(([, version]) => version);
 	assert.ok(dshPeerRanges.length > 0);
-	assert.deepEqual([...new Set(dshPeerRanges)], [">=0.1.0-rc.5 <0.2.0 || >=0.1.1-rc.2 <0.1.2 || >=0.1.2-rc.1 <0.1.3 || >=0.1.3-alpha.2 <0.1.4"]);
+	assert.equal(new Set(dshPeerRanges).size, 1);
+	assert.equal(dshPeerRanges[0], "0.1.0-rc.8 || 0.1.1-rc.2 || 0.1.2-rc.1 || 0.1.5-rc.1");
+	for (const version of ["0.1.0-rc.8", "0.1.1-rc.2", "0.1.2-rc.1", "0.1.5-rc.1"]) {
+		assert.ok(semver.satisfies(version, dshPeerRanges[0]), `peer 范围必须接纳已验证宿主 ${version}`);
+	}
+	for (const version of ["0.1.0-rc.5", "0.1.0-rc.9", "0.1.3-alpha.2", "0.1.5-rc.2", "0.1.5", "0.2.0"]) {
+		assert.equal(semver.satisfies(version, dshPeerRanges[0]), false, `不接纳未声明版本 ${version}`);
+	}
 	assert.ok(dshDevelopmentVersions.length > 0);
-	assert.deepEqual([...new Set(dshDevelopmentVersions)], ["0.1.3-alpha.2"]);
+	assert.deepEqual([...new Set(dshDevelopmentVersions)], ["0.1.5-rc.1"]);
 	assert.equal(PACKAGE_MANIFEST.peerDependenciesMeta?.["@deepseek-ai/dsh-client-store"]?.optional, true);
 	assert.equal(PACKAGE_MANIFEST.peerDependenciesMeta?.["@deepseek-ai/dsh-client-runtime"]?.optional, true);
 	assert.equal(PACKAGE_MANIFEST.dsh.client.inject.includes("@deepseek-ai/dsh-client-runtime"), false);
@@ -305,12 +313,150 @@ test("provideUiWorkspace restores alpha navigation, archive, and directory capab
 	assert.equal(services.has("uiWorkspace"), false);
 });
 
+function navigationFixture({ legacy = false, empty = false } = {}) {
+	const services = new Map();
+	const effects = [];
+	const opened = [];
+	const pending = [];
+	let panel = "search";
+	let navigation = new AbortController();
+	const observable = (state) => ({ getSnapshot: () => state, subscribe: () => () => {} });
+	const layout = {
+		beginNavigation() { navigation.abort(); navigation = new AbortController(); return navigation.signal; },
+		selectPanel(id) { navigation.abort(); panel = id; }
+	};
+	if (!legacy) services.set("layout", layout);
+	const ctx = {
+		get: (name) => services.get(name),
+		provide(name, value) { services.set(name, value); return () => services.delete(name); },
+		sessions: {
+			list: observable({ phase: "ready", current: empty ? void 0 : "s1", ids: [], byId: {} }),
+			create: () => new Promise((resolve, reject) => pending.push({ resolve, reject })),
+			fork: () => new Promise((resolve, reject) => pending.push({ resolve, reject })),
+			open: (id) => opened.push(id), clear: () => opened.push(null)
+		},
+		workspaces: { list: observable({ phase: "ready", items: empty ? [] : [{ workspaceId: "w1", path: "D:\\project", sessionIds: [], createdAt: "2026-01-01" }], archivedSessionIds: [] }) },
+		slots: {}, effect(factory) { effects.push(factory()); }
+	};
+	const dispose = t.provideUiWorkspace(ctx);
+	return { service: services.get("uiWorkspace"), opened, pending, layout, panel: () => panel, dispose() { dispose(); for (const stop of effects) stop(); } };
+}
+
+test("新版导航选择工作区先交接草稿，再打开会话并退出全局面板", async () => {
+	const env = navigationFixture();
+	const task = env.service.openWorkspace("w1", (id) => {
+		assert.equal(id, "s2");
+		assert.deepEqual(env.opened, []);
+	});
+	env.pending[0].resolve("s2");
+	await task;
+	assert.deepEqual(env.opened, ["s2"]);
+	assert.equal(env.panel(), null);
+	env.dispose();
+});
+
+test("新版会话导航与无工作区新建均退出全局面板", () => {
+	const env = navigationFixture({ empty: true });
+	env.service.openSession("s2");
+	assert.equal(env.panel(), null);
+	env.layout.selectPanel("search");
+	env.service.startSession();
+	assert.deepEqual(env.opened, ["s2", null]);
+	assert.equal(env.panel(), null);
+	env.dispose();
+});
+
+test("新建和分叉会话完成后退出全局面板", async () => {
+	const env = navigationFixture();
+	env.service.startSession("w1");
+	env.pending[0].resolve("s2");
+	await new Promise((resolve) => setImmediate(resolve));
+	assert.equal(env.panel(), null);
+	env.layout.selectPanel("search");
+	const fork = env.service.forkSession("s2");
+	env.pending[1].resolve("fork");
+	await fork;
+	assert.deepEqual(env.opened, ["s2", "fork"]);
+	assert.equal(env.panel(), null);
+	env.dispose();
+});
+
+test("切换全局面板或卸载后，异步导航不得抢回会话和草稿", async () => {
+	for (const action of ["panel", "dispose"]) {
+		const env = navigationFixture();
+		let handedOff = false;
+		const task = env.service.openWorkspace("w1", () => { handedOff = true; });
+		if (action === "panel") env.layout.selectPanel("other");
+		else env.dispose();
+		env.pending[0].resolve("s2");
+		await task;
+		assert.deepEqual(env.opened, []);
+		assert.equal(handedOff, false);
+		if (action === "panel") env.dispose();
+	}
+});
+
+test("分叉期间打开其他会话不被迟到结果覆盖，失败继续向调用方传播", async () => {
+	const env = navigationFixture();
+	const fork = env.service.forkSession("s1");
+	env.service.openSession("other");
+	env.pending[0].resolve("fork");
+	await fork;
+	assert.deepEqual(env.opened, ["other"]);
+	const failed = env.service.openWorkspace("w1");
+	env.pending[1].reject(new Error("create failed"));
+	await assert.rejects(failed, /create failed/);
+	env.dispose();
+});
+
+test("旧宿主没有全局面板 API 时仍可选择工作区与分叉", async () => {
+	const env = navigationFixture({ legacy: true });
+	const task = env.service.openWorkspace("w1");
+	env.pending[0].resolve("s2");
+	await task;
+	const fork = env.service.forkSession("s2");
+	env.pending[1].resolve("fork");
+	await fork;
+	assert.deepEqual(env.opened, ["s2", "fork"]);
+	env.dispose();
+});
+
 test("provideUiWorkspace leaves an existing host service untouched", () => {
 	const existing = {};
 	const ctx = { get: (name) => name === "uiWorkspace" ? existing : void 0 };
 	const dispose = t.provideUiWorkspace(ctx);
 	assert.equal(ctx.get("uiWorkspace"), existing);
 	dispose();
+});
+
+test("侧栏注册的打开和分叉操作委托新版导航服务，并保留旧宿主回退", async () => {
+	for (const modern of [true, false]) {
+		const opened = [];
+		const forked = [];
+		const registrations = new Map();
+		const navigation = modern ? {
+			openSession: (id) => opened.push(id),
+			forkSession: async (id) => { forked.push(id); }
+		} : {};
+		const ctx = {
+			get: (name) => name === "uiWorkspace" ? navigation : void 0,
+			sessions: {
+				open: (id) => { assert.equal(modern, false); opened.push(id); },
+				fork: async ({ sessionId }) => { assert.equal(modern, false); forked.push(sessionId); return "fork"; }
+			},
+			workspaces: {},
+			slots: { inject: (_, callback) => callback(), register: (options) => registrations.set(options.name, options) },
+			// 本测试只执行槽位接线；字典、观察器和自动选中由各自测试覆盖。
+			effect() {}
+		};
+		const dispose = await bundle.apply(ctx);
+		const actions = registrations.get("sidebar.workspaces").inject();
+		actions.open("s1");
+		await actions.forkSession("s1");
+		assert.deepEqual(opened, modern ? ["s1"] : ["s1", "fork"]);
+		assert.deepEqual(forked, ["s1"]);
+		await dispose();
+	}
 });
 
 test("displayTitle: SessionSummary 使用 displayTitle，包括未命名会话", () => {
