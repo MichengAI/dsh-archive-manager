@@ -1,6 +1,12 @@
 name: publish.yml
 
 on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '重试发布的既有版本标签，例如 v0.1.35'
+        required: true
+        type: string
   push:
     tags:
       - 'v*'
@@ -18,6 +24,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -28,6 +36,22 @@ jobs:
 
       - name: Enable pnpm
         run: corepack enable
+
+      # 只调整 CI 安装策略，重试仍检出原标签且完整运行发布验证。
+      - name: 校验重试标签并应用已验证版本例外
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          const manifest = JSON.parse(readFileSync('package.json', 'utf8'));
+          if (!/^v\d+\.\d+\.\d+$/.test(process.env.RELEASE_TAG) || process.env.RELEASE_TAG !== `v${manifest.version}`) throw new Error('标签与包版本不一致');
+          if (manifest.devDependencies['@deepseek-ai/dsh-session'] !== '0.1.5-rc.1') throw new Error('重试例外仅适用于已验证的 DSH 0.1.5-rc.1');
+          const packages = [...new Set([...readFileSync('pnpm-lock.yaml', 'utf8').matchAll(/^  '(@deepseek-ai\/[^'@]+)@0\.1\.5-rc\.1':/gm)].map(match => match[1]))];
+          if (packages.length === 0) throw new Error('锁文件未包含已验证的 DSH 版本');
+          appendFileSync('pnpm-workspace.yaml', '\n' + packages.map(name => `  - '${name}@0.1.5-rc.1'\n`).join(''));
+          NODE
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
