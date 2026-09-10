@@ -1,6 +1,7 @@
 allowBuilds:
   esbuild: true
 autoInstallPeers: false
+minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - '@deepseek-ai/dsh-invariants@0.1.2-alpha.5 || 0.1.2-rc.1'
   - '@deepseek-ai/dsh-brand@0.1.2-alpha.5 || 0.1.2-rc.1'

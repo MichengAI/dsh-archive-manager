@@ -33,6 +33,7 @@
     "test:compat": "node scripts/test-legacy-compatibility.mjs && pnpm test:matrix",
     "pack:check": "pnpm pack --dry-run",
     "verify": "pnpm test && pnpm test:compat && pnpm pack:check && node scripts/check-generated.mjs",
+    "release:preflight": "pwsh -NoProfile -File scripts/release-preflight.ps1",
     "prepublishOnly": "pnpm verify"
   },
   "peerDependencies": {

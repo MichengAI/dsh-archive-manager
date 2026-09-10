@@ -26,7 +26,7 @@ jobs:
           [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           $OutputEncoding = [System.Text.Encoding]::UTF8
           corepack enable
-          pnpm install --frozen-lockfile
+          pnpm install --frozen-lockfile --config.minimumReleaseAge=1440 --registry=https://registry.npmjs.org
 
       - name: 执行完整验证
         shell: pwsh

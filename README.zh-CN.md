@@ -55,7 +55,7 @@
 
 ## 前置条件
 
-- 当前源码已适配 DeepSeek Harness `0.1.5-rc.1`，并保留下表中的旧版兼容路径；本次改动尚未发布到 npm。后续版本需另行验证。
+- 当前源码已适配 DeepSeek Harness `0.1.5-rc.1`，并保留下表中的旧版兼容路径；已随插件 `0.1.35` 发布到 npm。后续版本需另行验证。
 
 - 已可正常运行 DeepSeek Harness Web，且可在 PowerShell 中使用 `dsh`。
 - 以下示例使用 `web` profile；请替换为实际目标 profile。
@@ -186,3 +186,7 @@ pnpm verify
 ## 许可证
 
 本项目采用 [Apache License 2.0](LICENSE)。
+
+发布前在 Windows PowerShell 执行 `pnpm release:preflight`，通过后再创建、推送版本标签。该入口使用官方 npm registry、冻结锁文件及与 CI 一致的 1440 分钟依赖冷却策略，然后运行完整 `verify`。刚发布的依赖仅通过已提交的精确版本豁免接纳；手动重试不会动态修改豁免配置。
+
+标签发布与手动重试统一经过 npm 精确版本和 `gitHead` 校验，确认 npm 可查询后才创建或更新双语 GitHub Release。网络、权限或元数据异常会停止流程；旧标签重试不会抢占 npm 最新版本对应的 GitHub Latest。仅新增了发布控制，不改变四个宿主版本的兼容范围。

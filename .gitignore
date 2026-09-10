@@ -14,3 +14,6 @@ pnpm-debug.log*
 
 # 本地交接文档（不入库，仅本机维护）
 docs/
+
+# 本机代码索引
+.codegraph/

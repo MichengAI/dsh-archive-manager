@@ -55,7 +55,7 @@ For a ready-to-use workbench, download [DSH Codex Desktop](https://github.com/Mi
 
 ## Prerequisites
 
-- The current source supports DeepSeek Harness `0.1.5-rc.1` and the legacy hosts below. These changes have not yet been published to npm. Later versions require separate validation.
+- The current source supports DeepSeek Harness `0.1.5-rc.1` and the legacy hosts below. These changes were published in plugin `0.1.35`. Later versions require separate validation.
 
 - A working DeepSeek Harness Web installation with `dsh` available in PowerShell.
 - Examples use the `web` profile; replace it with the target profile.
@@ -186,3 +186,7 @@ pnpm verify
 ## License
 
 Licensed under [Apache License 2.0](LICENSE).
+
+Before creating or pushing a release tag, run `pnpm release:preflight` in Windows PowerShell. It installs from the official npm registry with a frozen lockfile and the same 1440-minute release-age policy as CI, then runs the full `verify` suite. Recent dependencies require committed, exact-version exclusions; manual retries never add exclusions dynamically.
+
+Tag releases and manual retries verify the exact npm version and `gitHead` before creating or updating the bilingual GitHub Release. Network, authorization, or metadata errors stop the flow. Retrying an older tag does not take GitHub Latest away from the npm latest version. These release controls do not change the four supported host versions.
