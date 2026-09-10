@@ -153,13 +153,20 @@ test("新版缺失投影使用只读句柄恢复并释放句柄", async (t) => {
 	await writer.close();
 });
 
-for (const previousCache of ["缺失", "无版本", "旧代际"]) {
-	test(`新版归档摘要修复后真实缓存可用且再次访问不重复修复（缓存：${previousCache}）`, async (t) => {
+for (const { previousCache, seeded } of ["缺失", "无版本", "旧代际"].flatMap((previousCache) => [false, true].map((seeded) => ({ previousCache, seeded })))) {
+	test(`新版归档摘要修复后真实缓存可用且再次访问不重复修复（缓存：${previousCache}，播种：${seeded}）`, async (t) => {
 		const env = await setup(t);
-		const session = env.sessions.prepare("projection-repair", { meta: { cwd: env.cwd } });
+		const parent = env.sessions.prepare("projection-parent", { meta: { cwd: env.cwd } });
+		const seed = [parent.append("session/title", { title: "父会话继承标题" })];
+		const session = env.sessions.prepare("projection-repair", seeded ? {
+			seed, inheritedEventCount: seed.length,
+			meta: { cwd: env.cwd, isSeeded: true, parentSession: parent.id }
+		} : { meta: { cwd: env.cwd } });
+		const inheritedEventCount = seeded ? seed.length : 0;
+		assert.equal(session.inheritedEventCount, inheritedEventCount);
 		const event = session.append("session/title", { title: "从原文恢复的标题" });
-		const writer = await env.persistence.create(session.header);
-		try { await writer.append([event]); }
+		const writer = await env.persistence.create(session.header, { inheritedEventCount });
+		try { await writer.append(session.snapshotEvents()); }
 		finally { await writer.close(); }
 		await env.registry.archiveSession(session.id);
 		// 使用官方投影驱动和缓存匹配逻辑，仅缓存存储层使用内存表。
@@ -167,7 +174,12 @@ for (const previousCache of ["缺失", "无版本", "旧代际"]) {
 		const stringSchema = { parse(value) { assert.equal(typeof value, "string"); return value; } };
 		projections.register({
 			key: "title", stateVersion: 1, stateSchema: stringSchema,
-			init: () => "", apply: (state, item) => item.type === "session/title" ? item.data.title : state,
+			init: (header, count) => {
+				assert.equal(header.isSeeded, seeded);
+				assert.equal(count, inheritedEventCount, "投影恢复必须使用持久化的继承切点");
+				return "";
+			},
+			apply: (state, item) => item.type === "session/title" ? item.data.title : state,
 			wire: { viewSchema: stringSchema, view: (state) => state }
 		});
 		const cache = new SessionProjectionCache(env.ctx, { writeEveryEvents: 100, writeIntervalMs: 60000 });
@@ -177,21 +189,23 @@ for (const previousCache of ["缺失", "无版本", "旧代际"]) {
 		if (previousCache !== "缺失") {
 			const { version, createdAt, cwd, isSeeded } = session.header;
 			records.set(session.id, {
-				identity: { ...(previousCache === "无版本" ? {} : { formatVersion: version - 1 }), createdAt, cwd, isSeeded, inheritedEventCount: 0 },
+				identity: { ...(previousCache === "无版本" ? {} : { formatVersion: version - 1 }), createdAt, cwd, isSeeded, inheritedEventCount },
 				rows: { title: { ver: 1, seq: event.seq, val: "旧代际标题" } }
 			});
 		}
-		assert.equal(cache.cachedSnapshot(session.header, 0), void 0);
+		assert.equal(cache.cachedSnapshot(session.header, inheritedEventCount), void 0);
 		let reads = 0;
 		const read = env.registry.readStoredProjectionSource.bind(env.registry);
 		env.registry.readStoredProjectionSource = async (...args) => { reads++; return read(...args); };
 		const first = await env.registry.archivedSessionMetadata();
 		assert.deepEqual(first.repairedSessionIds, [session.id]);
-		assert.equal(cache.cachedSnapshot(session.header, 0)?.values.title, "从原文恢复的标题", "修复成功必须产生官方缓存可读取的真实标题");
+		assert.deepEqual(cache.cachedSnapshot(session.header, inheritedEventCount), { asOfSeq: event.seq, values: { title: "从原文恢复的标题" } }, "修复成功必须产生官方缓存可读取的标题和正确水位");
 		assert.equal(records.get(session.id).identity.formatVersion, session.header.version);
+		assert.equal(records.get(session.id).identity.inheritedEventCount, inheritedEventCount);
+		if (seeded) assert.equal(cache.cachedSnapshot(session.header, inheritedEventCount + 1), void 0, "错误的继承切点不能命中缓存");
 		const second = await env.registry.archivedSessionMetadata();
 		assert.equal(second.repairedSessionIds, void 0);
-		assert.equal(reads, 1, "缓存命中后不再读取原文");
+		assert.equal(reads, seeded ? 2 : 1, "播种会话需再次读取继承切点，普通会话直接命中缓存");
 		assert.equal(writes, 1, "缓存命中后不再写回");
 		assert.equal(env.sessions.get(session.id), void 0, "修复不能激活冷会话");
 	});

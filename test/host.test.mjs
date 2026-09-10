@@ -167,7 +167,7 @@ async function mountWorkspaceRegistry(env) {
 }
 
 function header(id, cwd, extra = {}) {
-	return { id, cwd, createdAt: 1700000000000, isSeeded: false, ...extra };
+	return { version: 0, id, cwd, createdAt: 1700000000000, isSeeded: false, ...extra };
 }
 
 function workspace(path, sessionIds) {
@@ -268,13 +268,14 @@ test("archivedSessionMetadata returns host header creation times and skips stale
 	});
 });
 
-test("archivedSessionMetadata rebuilds a seeded legacy projection and keeps non-seeded cached archives zero-I/O", async () => {
+for (const version of [0, 3]) test(`归档摘要保留格式版本 ${version} 和播种身份，普通已缓存会话不读取原文`, async () => {
 	const env = buildRoot({
-		headers: [header(s1, cwdA, { createdAt: 100 }), header(s2, cwdA, { createdAt: 200, isSeeded: true })],
+		headers: [header(s1, cwdA, { version, createdAt: 100 }), header(s2, cwdA, { version, createdAt: 200, isSeeded: true })],
 		workspaces: { [A]: workspace("D:\\proj-a", [s1, s2]) },
 		archived: [s1, s2]
 	});
 	const identityOf = (meta, inheritedEventCount) => ({
+		formatVersion: meta.version,
 		createdAt: meta.createdAt,
 		...(meta.cwd === void 0 ? {} : { cwd: meta.cwd }),
 		isSeeded: meta.isSeeded,
@@ -329,6 +330,7 @@ test("archivedSessionMetadata rebuilds a seeded legacy projection and keeps non-
 	assert.deepEqual(puts, [{
 		id: s2,
 		identity: {
+			formatVersion: version,
 			createdAt: 200,
 			cwd: env.persistence.headers.find((item) => item.id === s2).cwd,
 			isSeeded: true,
