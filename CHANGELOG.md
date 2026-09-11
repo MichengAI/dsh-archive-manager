@@ -4,6 +4,12 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## Unreleased
+
+- Preserve the Codex UI workspace list, styling, and dedicated interactions when both plugins are installed, while keeping archive management available.
+
+- Delegate the home workspace picker and session navigation to the official DSH plugin while retaining the custom archive sidebar, directory creation, restore, and batch management, reducing navigation API drift across host upgrades.
+
 ## 0.1.38 - 2026-09-11
 
 - Support DeepSeek Harness `0.1.5-rc.2` while retaining compatibility with the four previously supported versions.

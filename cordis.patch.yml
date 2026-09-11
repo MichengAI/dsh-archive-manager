@@ -1,12 +1,12 @@
-# @michengai/dsh-archive-manager 插件补丁：禁用默认服务行，
-# 并替换为归档会话管理实现。发布后的安装命令：
+# 保留官方工作区 UI，仅替换归档需要的后端服务。
+# 自定义侧栏通过优先级覆盖插槽；发布后的安装命令：
 #   dsh plugin --profile web add @michengai/dsh-archive-manager
 - id: workspace
   disabled: true
 - id: session-projection-cache
   disabled: true
 - id: ui-workspace
-  disabled: true
+  disabled: false
 - insert:
     - id: workspace-archive-manager
       name: '@michengai/dsh-archive-manager/workspace'

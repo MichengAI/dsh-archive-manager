@@ -116,7 +116,7 @@ const noPendingInteractions = new Map();
 
 test("bundle materializes with apply/inject and the __test surface", () => {
 	assert.equal(typeof bundle.apply, "function");
-	assert.deepEqual(bundle.inject, ["slots", "sessions", "workspaces", "locale", "remote", "typert"]);
+	assert.deepEqual(bundle.inject, ["slots", "sessions", "workspaces", "locale", "remote", "typert", "uiWorkspace"]);
 	assert.equal(typeof t.sessionVisible, "function");
 	assert.equal(typeof t.deriveGroups, "function");
 	assert.equal(typeof t.deriveFlat, "function");
@@ -227,208 +227,6 @@ test("bindObservable preserves receiver-sensitive alpha store methods", () => {
 	assert.equal(observed, 42);
 });
 
-test("provideUiWorkspace restores alpha navigation, archive, and directory capabilities", async () => {
-	function observable(state) {
-		const listeners = new Set();
-		return {
-			state,
-			getSnapshot() { return this.state; },
-			subscribe(listener) {
-				listeners.add(listener);
-				return () => listeners.delete(listener);
-			},
-			set(next) {
-				this.state = next;
-				for (const listener of listeners) listener();
-			}
-		};
-	}
-
-	const workspaceList = observable({
-		phase: "ready",
-		items: [{ workspaceId: "w1", path: "D:\\proj-a", title: "proj-a", createdAt: "2026-01-01T00:00:00.000Z", sessionIds: [] }],
-		archivedSessionIds: []
-	});
-	const sessionList = observable({ phase: "ready", current: "existing-session", ids: ["existing-session"], byId: { "existing-session": summary("existing-session") } });
-	const opened = [];
-	const archived = [];
-	let cleared = 0;
-	let created = 0;
-	const roots = [];
-	const effectDisposers = [];
-	const services = new Map([
-		["remote.directoryPicker", {
-			pick: async () => ({ ok: true, value: "D:\\picked" }),
-			list: async (path) => ({ ok: true, value: [{ path }] }),
-			createDirectory: async (path, name) => ({ ok: true, value: `${path}\\${name}` })
-		}]
-	]);
-	const ctx = {
-		get: (name) => services.get(name),
-		provide(name, value) {
-			services.set(name, value);
-			return () => services.delete(name);
-		},
-		sessions: {
-			list: sessionList,
-			async create({ workspaceId }) {
-				created += 1;
-				assert.equal(workspaceId, "w1");
-				return "new-session";
-			},
-			open: (sessionId) => opened.push(sessionId),
-			clear: () => { cleared += 1; }
-		},
-		workspaces: {
-			list: workspaceList,
-			archiveSession: async (sessionId) => {
-				archived.push(sessionId);
-				return sessionId;
-			}
-		},
-		slots: { provideRoot: (root) => { roots.push(root); } },
-		effect(factory) { effectDisposers.push(factory()); }
-	};
-
-	const dispose = t.provideUiWorkspace(ctx);
-	const service = services.get("uiWorkspace");
-	assert.ok(service);
-	assert.equal(roots[0].hooks.workspaces, workspaceList);
-	assert.deepEqual(await Promise.all([service.connectWorkspace("w1"), service.connectWorkspace("w1")]), ["new-session", "new-session"]);
-	assert.equal(created, 1, "concurrent workspace connections share one session creation");
-	service.startSession("w1");
-	await new Promise((resolve) => setImmediate(resolve));
-	assert.deepEqual(opened, ["new-session"]);
-	assert.equal(await service.archiveSession("new-session"), "new-session");
-	assert.deepEqual(archived, ["new-session"]);
-	assert.equal(await service.pickDirectory(), "D:\\picked");
-	assert.deepEqual(await service.listDirectory("D:\\proj-a"), [{ path: "D:\\proj-a" }]);
-	assert.equal(await service.createDirectory("D:\\proj-a", "child"), "D:\\proj-a\\child");
-
-	sessionList.set({ phase: "ready", current: "new-session", ids: ["new-session"], byId: { "new-session": summary("new-session") } });
-	workspaceList.set({ ...workspaceList.getSnapshot(), archivedSessionIds: ["new-session"] });
-	assert.equal(cleared, 1, "archiving the current session clears alpha navigation state");
-	for (const stop of effectDisposers) stop();
-	dispose();
-	assert.equal(services.has("uiWorkspace"), false);
-});
-
-function navigationFixture({ legacy = false, empty = false } = {}) {
-	const services = new Map();
-	const effects = [];
-	const opened = [];
-	const pending = [];
-	let panel = "search";
-	let navigation = new AbortController();
-	const observable = (state) => ({ getSnapshot: () => state, subscribe: () => () => {} });
-	const layout = {
-		beginNavigation() { navigation.abort(); navigation = new AbortController(); return navigation.signal; },
-		selectPanel(id) { navigation.abort(); panel = id; }
-	};
-	if (!legacy) services.set("layout", layout);
-	const ctx = {
-		get: (name) => services.get(name),
-		provide(name, value) { services.set(name, value); return () => services.delete(name); },
-		sessions: {
-			list: observable({ phase: "ready", current: empty ? void 0 : "s1", ids: [], byId: {} }),
-			create: () => new Promise((resolve, reject) => pending.push({ resolve, reject })),
-			fork: () => new Promise((resolve, reject) => pending.push({ resolve, reject })),
-			open: (id) => opened.push(id), clear: () => opened.push(null)
-		},
-		workspaces: { list: observable({ phase: "ready", items: empty ? [] : [{ workspaceId: "w1", path: "D:\\project", sessionIds: [], createdAt: "2026-01-01" }], archivedSessionIds: [] }) },
-		slots: {}, effect(factory) { effects.push(factory()); }
-	};
-	const dispose = t.provideUiWorkspace(ctx);
-	return { service: services.get("uiWorkspace"), opened, pending, layout, panel: () => panel, dispose() { dispose(); for (const stop of effects) stop(); } };
-}
-
-test("新版导航选择工作区先交接草稿，再打开会话并退出全局面板", async () => {
-	const env = navigationFixture();
-	const task = env.service.openWorkspace("w1", (id) => {
-		assert.equal(id, "s2");
-		assert.deepEqual(env.opened, []);
-	});
-	env.pending[0].resolve("s2");
-	await task;
-	assert.deepEqual(env.opened, ["s2"]);
-	assert.equal(env.panel(), null);
-	env.dispose();
-});
-
-test("新版会话导航与无工作区新建均退出全局面板", () => {
-	const env = navigationFixture({ empty: true });
-	env.service.openSession("s2");
-	assert.equal(env.panel(), null);
-	env.layout.selectPanel("search");
-	env.service.startSession();
-	assert.deepEqual(env.opened, ["s2", null]);
-	assert.equal(env.panel(), null);
-	env.dispose();
-});
-
-test("新建和分叉会话完成后退出全局面板", async () => {
-	const env = navigationFixture();
-	env.service.startSession("w1");
-	env.pending[0].resolve("s2");
-	await new Promise((resolve) => setImmediate(resolve));
-	assert.equal(env.panel(), null);
-	env.layout.selectPanel("search");
-	const fork = env.service.forkSession("s2");
-	env.pending[1].resolve("fork");
-	await fork;
-	assert.deepEqual(env.opened, ["s2", "fork"]);
-	assert.equal(env.panel(), null);
-	env.dispose();
-});
-
-test("切换全局面板或卸载后，异步导航不得抢回会话和草稿", async () => {
-	for (const action of ["panel", "dispose"]) {
-		const env = navigationFixture();
-		let handedOff = false;
-		const task = env.service.openWorkspace("w1", () => { handedOff = true; });
-		if (action === "panel") env.layout.selectPanel("other");
-		else env.dispose();
-		env.pending[0].resolve("s2");
-		await task;
-		assert.deepEqual(env.opened, []);
-		assert.equal(handedOff, false);
-		if (action === "panel") env.dispose();
-	}
-});
-
-test("分叉期间打开其他会话不被迟到结果覆盖，失败继续向调用方传播", async () => {
-	const env = navigationFixture();
-	const fork = env.service.forkSession("s1");
-	env.service.openSession("other");
-	env.pending[0].resolve("fork");
-	await fork;
-	assert.deepEqual(env.opened, ["other"]);
-	const failed = env.service.openWorkspace("w1");
-	env.pending[1].reject(new Error("create failed"));
-	await assert.rejects(failed, /create failed/);
-	env.dispose();
-});
-
-test("旧宿主没有全局面板 API 时仍可选择工作区与分叉", async () => {
-	const env = navigationFixture({ legacy: true });
-	const task = env.service.openWorkspace("w1");
-	env.pending[0].resolve("s2");
-	await task;
-	const fork = env.service.forkSession("s2");
-	env.pending[1].resolve("fork");
-	await fork;
-	assert.deepEqual(env.opened, ["s2", "fork"]);
-	env.dispose();
-});
-
-test("provideUiWorkspace leaves an existing host service untouched", () => {
-	const existing = {};
-	const ctx = { get: (name) => name === "uiWorkspace" ? existing : void 0 };
-	const dispose = t.provideUiWorkspace(ctx);
-	assert.equal(ctx.get("uiWorkspace"), existing);
-	dispose();
-});
-
 test("侧栏注册的打开和分叉操作委托新版导航服务，并保留旧宿主回退", async () => {
 	for (const modern of [true, false]) {
 		const opened = [];
@@ -445,7 +243,7 @@ test("侧栏注册的打开和分叉操作委托新版导航服务，并保留�
 				fork: async ({ sessionId }) => { assert.equal(modern, false); forked.push(sessionId); return "fork"; }
 			},
 			workspaces: {},
-			slots: { inject: (_, callback) => callback(), register: (options) => registrations.set(options.name, options) },
+			slots: { inject: (name, callback) => name === "archiveManager.sidebar.directoryFlow" ? () => {} : callback(), register: (options) => registrations.set(options.name, options) },
 			// 本测试只执行槽位接线；字典、观察器和自动选中由各自测试覆盖。
 			effect() {}
 		};

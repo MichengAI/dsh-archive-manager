@@ -82,7 +82,7 @@ Do not run `test/fixtures/*.mjs` directly. Fixtures validate the isolated entry 
 | `0.1.5-rc.1` | `4.0.2` | 163 passed |
 | `0.1.5-rc.2` | `4.0.2` | 163 passed |
 
-Coverage includes workspace navigation, global-panel dismissal, cancellation of stale navigation, sidebar wiring, peer version acceptance, client Remote integration, archive/restore, real JSONL/Zstandard deletion and subagent cascades, and queries/reopened storage after deletion. Tested on Windows / Node.js 24. A real browser acceptance run also passed in an isolated DSH 0.1.5-rc.1 Web Profile: package installation, archive/restore, deletion cancellation and confirmation, subagent cascades, cross-filter batch deletion, workspace selection, returning from global panels, new sessions and forks, content search, and restart persistence. Content search requires an open host query database; it passed after changing the isolated Profile from `openAt: never` to `startup`. This release also passed an isolated rc.2 Web smoke run covering settings loading, seeded archive listing, restore, deletion cancellation and confirmation, and restart persistence with dedicated JSONL data. The full rc.1 browser flow was not repeated item by item. The other three versions have isolated automated coverage only; no external model calls were made. The latest storage fixture isolates only the upstream POSIX `fs-ext` import that cannot load on Windows; file operations and native Windows locking still use the official implementation.
+Coverage includes official workspace composition, sidebar shadowing and restoration on unload, directory-slot lifecycles, sidebar wiring, peer version acceptance, client Remote integration, archive/restore, real JSONL/Zstandard deletion and subagent cascades, and queries/reopened storage after deletion. Tested on Windows / Node.js 24. A real browser acceptance run also passed in an isolated DSH 0.1.5-rc.1 Web Profile: package installation, archive/restore, deletion cancellation and confirmation, subagent cascades, cross-filter batch deletion, workspace selection, returning from global panels, new sessions and forks, content search, and restart persistence. Content search requires an open host query database; it passed after changing the isolated Profile from `openAt: never` to `startup`. This release also passed an isolated rc.2 Web smoke run covering settings loading, seeded archive listing, restore, deletion cancellation and confirmation, and restart persistence with dedicated JSONL data. The full rc.1 browser flow was not repeated item by item. The other three versions have isolated automated coverage only; no external model calls were made. The latest storage fixture isolates only the upstream POSIX `fs-ext` import that cannot load on Windows; file operations and native Windows locking still use the official implementation.
 
 The installation commands below use the official npm registry.
 
@@ -107,7 +107,7 @@ dsh --profile web --dump-config
 
 To pin a release, replace `@latest` with a specific version such as `@x.y.z`.
 
-The configuration output should contain `workspace-archive-manager` and `ui-workspace-archive-manager`. Restart DSH Web and hard-refresh the browser. Do not copy client files manually: the Settings page and archive menu need the mounted plugin.
+The configuration output should contain `workspace-archive-manager` and `ui-workspace-archive-manager`, with the official `ui-workspace` still enabled. Restart DSH Web and hard-refresh the browser. Do not copy client files manually: the Settings page and archive menu need the mounted plugin.
 
 ## Updates
 
@@ -132,7 +132,9 @@ If the entry is missing after installation or upgrade, restart DSH Web and hard-
 - Layout validation uses the official backend's initialized absolute root, so a relative root remains stable across host working-directory changes. If that field is unavailable, only an absolute configured root is accepted. An unverified official JSONL layout emits a warning with the session ID and artifact path before falling back to artifact-only deletion.
 - Directory validation is not a cross-process filesystem lock: do not concurrently move or replace storage directories or change directory links during deletion. Storage paths writable by untrusted processes are not a security isolation boundary.
 - A live session finishes writing before cleanup to prevent data truncation.
-- The plugin replaces DSH’s default workspace and projection services. Install through the DSH profile instead of manually composing the patch.
+- The official `ui-workspace` remains enabled, so the home picker and navigation follow the host. The archive sidebar uses priority `-0.5`, ahead of the official default but behind Codex UI 1.1.2 at `-1`. Codex UI retains its list, styling, and interactions; archive management remains available in settings. Unloading Codex UI restores the archive sidebar; unloading the archive frontend restores the official sidebar. Backend workspace and projection services still use the archive implementations.
+- The sidebar directory entry reuses official leaf components through a separate child slot and follows their registration lifetimes. It does not redeclare official directory slots. Custom directory extensions with additional child slots should use the official home entry; this adapter does not transfer their child-slot permissions.
+- Install through the DSH profile instead of manually composing the patch.
 
 ## Secondary development
 
