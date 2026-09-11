@@ -3917,7 +3917,7 @@ window.__ModuleLoader__.load({
 			});
 			ctx.slots.inject("sidebar.workspaces", () => ctx.slots.register({
 				name: "sidebar.workspaces",
-				// 高于官方默认 0，低于 Codex UI 的 -1，保留专用界面的列表和交互。
+				// 显示顺序：Codex UI（-1）→ 归档（-0.5）→ 官方默认（0）。
 				priority: -0.5,
 				children: { [DIRECTORY_FLOW_SLOT]: {
 					kind: "single",

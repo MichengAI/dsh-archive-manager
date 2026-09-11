@@ -1,4 +1,5 @@
-// 发布前确认受版本控制的 lib 与当前 src 构建结果完全一致。
+// 检查 lib 的 Git 状态；本脚本本身不构建，也不直接比较 src。
+// pnpm verify 先重建再运行此检查，以发现构建产物与已提交版本的差异。
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 

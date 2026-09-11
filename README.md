@@ -76,11 +76,11 @@ Do not run `test/fixtures/*.mjs` directly. Fixtures validate the isolated entry 
 
 | DSH | Cordis | Automated regression |
 | --- | --- | --- |
-| `0.1.0-rc.8` | `4.0.1` | 154 passed |
-| `0.1.1-rc.2` | `4.0.1` | 154 passed, plus legacy cache migration validation |
-| `0.1.2-rc.1` | `4.0.2` | 154 passed |
-| `0.1.5-rc.1` | `4.0.2` | 163 passed |
-| `0.1.5-rc.2` | `4.0.2` | 163 passed |
+| `0.1.0-rc.8` | `4.0.1` | 153 passed |
+| `0.1.1-rc.2` | `4.0.1` | 153 passed, plus legacy cache migration validation |
+| `0.1.2-rc.1` | `4.0.2` | 153 passed |
+| `0.1.5-rc.1` | `4.0.2` | 162 passed |
+| `0.1.5-rc.2` | `4.0.2` | 162 passed |
 
 Coverage includes official workspace composition, sidebar shadowing and restoration on unload, directory-slot lifecycles, sidebar wiring, peer version acceptance, client Remote integration, archive/restore, real JSONL/Zstandard deletion and subagent cascades, and queries/reopened storage after deletion. Tested on Windows / Node.js 24. A real browser acceptance run also passed in an isolated DSH 0.1.5-rc.1 Web Profile: package installation, archive/restore, deletion cancellation and confirmation, subagent cascades, cross-filter batch deletion, workspace selection, returning from global panels, new sessions and forks, content search, and restart persistence. Content search requires an open host query database; it passed after changing the isolated Profile from `openAt: never` to `startup`. This release also passed an isolated rc.2 Web smoke run covering settings loading, seeded archive listing, restore, deletion cancellation and confirmation, and restart persistence with dedicated JSONL data. The full rc.1 browser flow was not repeated item by item. The other three versions have isolated automated coverage only; no external model calls were made. The latest storage fixture isolates only the upstream POSIX `fs-ext` import that cannot load on Windows; file operations and native Windows locking still use the official implementation.
 
@@ -108,6 +108,16 @@ dsh --profile web --dump-config
 To pin a release, replace `@latest` with a specific version such as `@x.y.z`.
 
 The configuration output should contain `workspace-archive-manager` and `ui-workspace-archive-manager`, with the official `ui-workspace` still enabled. Restart DSH Web and hard-refresh the browser. Do not copy client files manually: the Settings page and archive menu need the mounted plugin.
+
+### Upgrade checks for existing installations
+
+Upgrades reload the patch bundled with the plugin; the old bundle needs no manual migration. However, the Profile's own `cordis.patch.yml` is applied after bundles. If it manually sets `ui-workspace` to `disabled: true`, remove that override or change it to `disabled: false`, preserving other configuration.
+
+Run `dsh --profile web --dump-config`, confirm that the official `ui-workspace` is enabled, then restart DSH Web and hard-refresh the browser. On supported DSH versions from 0.1.2 onward, disabling that service leaves the archive client waiting for `uiWorkspace`; neither its sidebar nor its archive settings page mounts, which can look unresponsive.
+
+Sidebar directory creation depends on the official `sidebar.workspaces.directoryFlow` slot. If the source slot is absent or has no directory component, the entry is hidden without logging a synchronization error; use the official home entry instead. Directory extensions declaring additional child slots cannot be mirrored and produce a warning.
+
+A dynamic synchronization failure after mounting logs the source slot, target slot, and component origin when available, attempts to clear existing mirrors, and keeps listening to retry on a subsequent source-slot change. Removing a conflicting entry from the target slot alone does not trigger a retry. An initial synchronization failure instead unsubscribes, attempts cleanup, and rethrows to the mounting caller. After resolving the conflict, remount the archive client, for example by restarting DSH Web and hard-refreshing the browser. If releasing an entry fails during cleanup, that error is logged separately and cleanup continues for the remaining entries.
 
 ## Updates
 

@@ -4,11 +4,11 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
-## Unreleased
+## 0.1.39 - 2026-09-11
 
 - Preserve the Codex UI workspace list, styling, and dedicated interactions when both plugins are installed, while keeping archive management available.
-
 - Delegate the home workspace picker and session navigation to the official DSH plugin while retaining the custom archive sidebar, directory creation, restore, and batch management, reducing navigation API drift across host upgrades.
+- Isolate sidebar directory synchronization failures so they do not interrupt other plugins registering directory components. If your Profile manually disables the official `ui-workspace`, remove that override before upgrading; otherwise the archive sidebar and settings page cannot load.
 
 ## 0.1.38 - 2026-09-11
 
