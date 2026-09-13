@@ -259,3 +259,48 @@ for (const codexFirst of [false, true]) test(`Codex 侧栏保留组件与交互�
 		disposeRoot();
 	}
 });
+
+// 加载完整客户端工厂并执行实际设置页按钮；不切片或复制组件实现。
+for (const restore of [false, true]) {
+  for (const failure of [false, true]) {
+    test(`设置页插槽关闭回调：恢复=${restore}，打开失败=${failure}`, async () => {
+      const writes = [];
+      const hooks = {
+        ...statics.react,
+        useSyncExternalStore: (_subscribe, snapshot) => snapshot(),
+        useState: initial => [typeof initial === "function" ? initial() : initial, value => writes.push(value)],
+        useRef: initial => ({ current: initial }),
+        useMemo: fn => fn(),
+        useEffect: () => {}
+      };
+      const client = factories.get("@michengai/dsh-archive-manager")(name => name === "react" ? hooks : statics[name]);
+      const calls = [];
+      let finish;
+      const opened = new Promise(resolve => { finish = resolve; });
+      const tree = client.__test.ArchivedSessionsSection({
+        sessionStore: source({ byId: { old: { id: "old", title: "历史会话", updatedAt: 1 } } }),
+        workspaceStore: source({ items: [], archivedSessionIds: ["old"] }),
+        archivedSessionMetadata: async () => ({ items: [] }),
+        unarchiveSession: async id => calls.push(["restore", id]),
+        openConversation: async id => { calls.push(["open", id]); await opened; if (failure) throw new Error("open rejected"); },
+        close: () => calls.push(["close"]),
+        t: key => key
+      });
+      function find(node) {
+        if (Array.isArray(node)) return node.map(find).find(Boolean);
+        if (!node?.props) return;
+        if (node.type === "button" && node.props.children === (restore ? "archives.restoreOpen" : "archives.viewConversation")) return node;
+        return find(node.props.children);
+      }
+      const button = find(tree);
+      assert.ok(button, "真实组件应提供打开按钮");
+      const pending = button.props.onClick();
+      await tick();
+      assert.equal(calls.some(([action]) => action === "close"), false, "打开完成前不能关闭设置");
+      finish();
+      await pending;
+      assert.deepEqual(calls, [...(restore ? [["restore", "old"]] : []), ["open", "old"], ...(failure ? [] : [["close"]])]);
+      if (failure) assert.ok(writes.includes("open rejected"), "打开失败应显示错误");
+    });
+  }
+}

@@ -354,7 +354,7 @@ window.__ModuleLoader__.load({
 		/**
 		* 归档管理设置页：集中处理筛选、多选、恢复、删除和原生会话导航。
 		*/
-		function ArchivedSessionsSection({ sessionStore, workspaceStore, unarchiveSession, deleteSession, unarchiveSessions, deleteArchivedSessions, archivedSessionMetadata, openConversation, viewState, t }) {
+		function ArchivedSessionsSection({ sessionStore, workspaceStore, unarchiveSession, deleteSession, unarchiveSessions, deleteArchivedSessions, archivedSessionMetadata, openConversation, viewState, close, t }) {
 			const sessions = (0, react.useSyncExternalStore)(sessionStore.subscribe, sessionStore.getSnapshot);
 			const workspaceState = (0, react.useSyncExternalStore)(workspaceStore.subscribe, workspaceStore.getSnapshot);
 			const [deleteTarget, setDeleteTarget] = (0, react.useState)(null);
@@ -375,7 +375,8 @@ window.__ModuleLoader__.load({
 				if (busy || navigationPending.current) return;
 				navigationPending.current = true; setBusy(true); setError(null);
 				try {
-					await openArchivedConversation({ restore: unarchiveSession, open: openConversation }, session.id, restore, () => navigationActive.current);
+					// close 由 settings.section 的壳通过 renderSlot 传入，不属于 inject；主面板切换不会关闭设置遮罩。
+					await openArchivedConversation({ restore: unarchiveSession, open: async (id) => { await openConversation(id); if (navigationActive.current) close?.(); } }, session.id, restore, () => navigationActive.current);
 				} catch (reason) { if (navigationActive.current) setError(formatArchiveNavigationError(reason, t)); }
 				finally { navigationPending.current = false; if (navigationActive.current) setBusy(false); }
 			};

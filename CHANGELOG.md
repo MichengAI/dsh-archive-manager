@@ -7,7 +7,7 @@ Published release notes are retained below; new versions are added without remov
 ## Unreleased
 
 - Open archived sessions in the native DSH conversation view and continue chatting while keeping them archived, or restore and open them.
-- Keep settings open when opening an archive fails, and provide an error with a restore-and-open alternative when host navigation adaptation is unavailable.
+- Close the settings overlay after an archived conversation opens successfully; keep settings open and show an error on failure, with a restore-and-open alternative when host navigation adaptation is unavailable.
 - Localize archive navigation errors and avoid unnecessary warnings when older hosts load or open archives successfully.
 
 ## 0.1.39 - 2026-09-11
