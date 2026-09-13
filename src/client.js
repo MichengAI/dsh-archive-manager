@@ -1,4 +1,4 @@
-import { allowArchivedNavigation, openArchivedConversation } from "./archive-experience.js";
+import { allowArchivedNavigation, openArchivedConversation, formatArchiveNavigationError } from "./archive-experience.js";
 import { mirrorDirectoryFlow } from "./directory-flow-slot.js";
 import { observePluginUpdate } from "./plugin-update-ui.js";
 
@@ -354,7 +354,7 @@ window.__ModuleLoader__.load({
 		/**
 		* 归档管理设置页：集中处理筛选、多选、恢复、删除和原生会话导航。
 		*/
-		function ArchivedSessionsSection({ sessionStore, workspaceStore, unarchiveSession, deleteSession, unarchiveSessions, deleteArchivedSessions, archivedSessionMetadata, openConversation, viewState, close, t }) {
+		function ArchivedSessionsSection({ sessionStore, workspaceStore, unarchiveSession, deleteSession, unarchiveSessions, deleteArchivedSessions, archivedSessionMetadata, openConversation, viewState, t }) {
 			const sessions = (0, react.useSyncExternalStore)(sessionStore.subscribe, sessionStore.getSnapshot);
 			const workspaceState = (0, react.useSyncExternalStore)(workspaceStore.subscribe, workspaceStore.getSnapshot);
 			const [deleteTarget, setDeleteTarget] = (0, react.useState)(null);
@@ -375,8 +375,8 @@ window.__ModuleLoader__.load({
 				if (busy || navigationPending.current) return;
 				navigationPending.current = true; setBusy(true); setError(null);
 				try {
-					await openArchivedConversation({ restore: unarchiveSession, open: async (id) => { await openConversation(id); close?.(); } }, session.id, restore, () => navigationActive.current);
-				} catch (reason) { if (navigationActive.current) setError(String(reason.message ?? reason)); }
+					await openArchivedConversation({ restore: unarchiveSession, open: openConversation }, session.id, restore, () => navigationActive.current);
+				} catch (reason) { if (navigationActive.current) setError(formatArchiveNavigationError(reason, t)); }
 				finally { navigationPending.current = false; if (navigationActive.current) setBusy(false); }
 			};
 			(0, react.useEffect)(() => { if (viewState) Object.assign(viewState, { query, project, sortBy }); }, [query, project, sortBy, viewState]);
@@ -3309,6 +3309,8 @@ window.__ModuleLoader__.load({
 
 		const zh = {
 			"archives.viewConversation": "查看对话",
+			"archives.navigationUnavailable": "当前宿主无法保持归档对话，请使用“恢复并打开”。",
+			"archives.sessionNotRetained": "宿主未保留目标会话，请重新打开或恢复后再试。",
 			"archives.restoreOpen": "恢复并打开",
 			"archives.selectedScope": "已选 {n} 条，其中 {hidden} 条不在当前结果",
 			"archives.clearSelection": "清空选择",
@@ -3327,7 +3329,6 @@ window.__ModuleLoader__.load({
 			"sessions.expand": "展开其余 {n} 个会话",
 			"sessions.collapse": "收起",
 			"empty.none": "暂无会话",
-			"empty.noMatches": "无匹配结果",
 			"workspace.add": "添加工作区",
 			"search.sessions.aria": "搜索会话",
 			"search.placeholder": "搜索会话…",
@@ -3358,7 +3359,6 @@ window.__ModuleLoader__.load({
 			"archives.sessionCount": "{n} 个聊天",
 			"archives.selectAllFiltered": "全选当前筛选结果",
 			"archives.selectSession": "选择会话“{name}”",
-			"archives.selectedCount": "已选 {n} 个",
 			"archives.restoreSelected": "恢复所选",
 			"archives.deleteSelected": "删除所选",
 			"archives.timestamp": "{date}，{time}",
@@ -3377,7 +3377,6 @@ window.__ModuleLoader__.load({
 			"archives.deleteSelectedTitle": "删除所选已归档聊天",
 			"archives.deleteSelectedDesc": "将永久删除所选的 {n} 个已归档聊天及其子代理（含正在运行的）和记录。其他聊天不会受影响，此操作不可恢复。",
 			"archives.deleteSelectedConfirm": "删除所选聊天",
-			"archives.deleteAllPending": "正在删除已归档聊天…",
 			"archives.deleteProjectTitle": "删除“{name}”中的已归档聊天",
 			"archives.deleteProjectDesc": "将永久删除“{name}”中的 {n} 个已归档聊天及其子代理和记录。项目目录和未归档聊天不会受影响，此操作不可恢复。",
 			"archives.deleteProjectConfirm": "删除该项目的全部聊天",
@@ -3418,8 +3417,6 @@ window.__ModuleLoader__.load({
 			"archiveWorkspace.desc": "这会将“{name}”中的聊天归档。之后你可以在已归档的聊天中找到它们。",
 			"archiveWorkspace.confirm": "全部归档",
 			"archiveWorkspace.pending": "正在归档聊天…",
-			"sessions.count.one": "{n} 个会话",
-			"sessions.count.other": "{n} 个会话",
 			"actions.workspace.aria": "工作区“{name}”的操作",
 			"actions.session.aria": "会话“{name}”的操作",
 			"actions.newSession.aria": "在“{name}”中新建会话",
@@ -3445,6 +3442,8 @@ window.__ModuleLoader__.load({
 		/** English dictionary, checked complete against the zh key set. */
 		const en = {
 			"archives.viewConversation": "View conversation",
+			"archives.navigationUnavailable": "This host cannot keep the conversation archived while opening it. Use “Restore and open” instead.",
+			"archives.sessionNotRetained": "The host did not keep the requested conversation open. Try again, or restore it before opening.",
 			"archives.restoreOpen": "Restore and open",
 			"archives.selectedScope": "{n} selected, {hidden} outside current results",
 			"archives.clearSelection": "Clear selection",
@@ -3463,7 +3462,6 @@ window.__ModuleLoader__.load({
 			"sessions.expand": "Show {n} more sessions",
 			"sessions.collapse": "Show less",
 			"empty.none": "No sessions yet",
-			"empty.noMatches": "No matches",
 			"workspace.add": "Add workspace",
 			"search.sessions.aria": "Search sessions",
 			"search.placeholder": "Search sessions...",
@@ -3494,7 +3492,6 @@ window.__ModuleLoader__.load({
 			"archives.sessionCount": "{n} chats",
 			"archives.selectAllFiltered": "Select all results",
 			"archives.selectSession": "Select chat {name}",
-			"archives.selectedCount": "{n} selected",
 			"archives.restoreSelected": "Restore selected",
 			"archives.deleteSelected": "Delete selected",
 			"archives.timestamp": "{date}, {time}",
@@ -3513,7 +3510,6 @@ window.__ModuleLoader__.load({
 			"archives.deleteSelectedTitle": "Delete selected archived chats",
 			"archives.deleteSelectedDesc": "This permanently deletes the selected {n} archived chats, their child agents (including any that are still running), and their records. Other chats are not affected. This cannot be undone.",
 			"archives.deleteSelectedConfirm": "Delete selected chats",
-			"archives.deleteAllPending": "Deleting archived chats…",
 			"archives.deleteProjectTitle": "Delete archived chats in {name}",
 			"archives.deleteProjectDesc": "This permanently deletes the {n} archived chats in {name}, their child agents, and their records. The project directory and unarchived chats are not affected. This cannot be undone.",
 			"archives.deleteProjectConfirm": "Delete all project chats",
@@ -3554,8 +3550,6 @@ window.__ModuleLoader__.load({
 			"archiveWorkspace.desc": "This archives the chats in “{name}”. You can find them later in Archived chats.",
 			"archiveWorkspace.confirm": "Archive all",
 			"archiveWorkspace.pending": "Archiving chats…",
-			"sessions.count.one": "{n} session",
-			"sessions.count.other": "{n} sessions",
 			"actions.workspace.aria": "Workspace actions for {name}",
 			"actions.session.aria": "Session actions for {name}",
 			"actions.newSession.aria": "New session in {name}",

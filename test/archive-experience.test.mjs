@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { openArchivedConversation, allowArchivedNavigation } from "../src/archive-experience.js";
+import { openArchivedConversation, allowArchivedNavigation, ArchiveNavigationError, formatArchiveNavigationError } from "../src/archive-experience.js";
 
 test("继续对话不恢复；恢复并打开必须等持久化成功，失败不导航", async () => {
   const calls = [];
@@ -60,7 +60,7 @@ test("不可写导航方法不使插件挂载失败，归档打开报错且记�
   const env = navigationFixture();
   Object.freeze(env.navigation);
   const guard = allowArchivedNavigation(env.navigation, env.sessions, env.workspaces, env.options);
-  assert.throws(() => guard.open("old"), /恢复|restore/i);
+  assert.throws(() => guard.open("old"), { code: "navigationUnavailable" });
   assert.equal(env.panel, "settings");
   assert.ok(env.warnings.length > 0);
   guard.dispose();
@@ -71,7 +71,7 @@ test("他人覆盖导航后拒绝不可靠的归档打开，卸载不覆盖他�
   const guard = allowArchivedNavigation(env.navigation, env.sessions, env.workspaces, env.options);
   const replacement = () => {};
   env.navigation.clearArchivedCurrent = replacement;
-  assert.throws(() => guard.open("old"), /恢复|restore/i);
+  assert.throws(() => guard.open("old"), { code: "navigationUnavailable" });
   guard.dispose();
   assert.equal(env.navigation.clearArchivedCurrent, replacement);
   assert.equal(env.panel, "settings");
@@ -81,7 +81,8 @@ test("旧宿主无清理方法时诊断并使用会话接口，未保留目标�
   const env = navigationFixture();
   const sessions = { ...env.sessions, open() {} };
   const guard = allowArchivedNavigation(undefined, sessions, env.workspaces, env.options);
-  assert.throws(() => guard.open("old"), /宿主未保留/);
+  assert.equal(env.warnings.length, 0, "挂载不警告");
+  assert.throws(() => guard.open("old"), { code: "sessionNotRetained" });
   assert.equal(env.panel, "settings");
   assert.ok(env.warnings.length > 0);
   guard.dispose();
@@ -91,7 +92,37 @@ test("目标会话未保留时不调用会提前关闭设置的官方 openSessio
   const env = navigationFixture();
   env.sessions.open = () => {};
   const guard = allowArchivedNavigation(env.navigation, env.sessions, env.workspaces, env.options);
-  assert.throws(() => guard.open("old"), /宿主未保留/);
+  assert.equal(env.warnings.length, 0, "挂载不警告");
+  assert.throws(() => guard.open("old"), { code: "sessionNotRetained" });
   assert.equal(env.panel, "settings");
   guard.dispose();
+});
+
+test("旧宿主正常打开归档不警告", () => {
+  let current;
+  const warnings = [];
+  const sessions = { list: { getSnapshot: () => ({ current }) }, open(id) { current = id; } };
+  const workspaces = { list: { getSnapshot: () => ({ archivedSessionIds: ["old"] }) } };
+  const guard = allowArchivedNavigation(undefined, sessions, workspaces, { warn: (...args) => warnings.push(args) });
+  assert.equal(warnings.length, 0);
+  guard.open("old");
+  assert.equal(current, "old");
+  assert.equal(warnings.length, 0);
+  guard.dispose();
+});
+
+test("导航错误按界面语言翻译，宿主错误保留原始消息", () => {
+  const dictionaries = {
+    zh: { "archives.navigationUnavailable": "请恢复后打开", "archives.sessionNotRetained": "会话未保留" },
+    en: { "archives.navigationUnavailable": "Restore and open", "archives.sessionNotRetained": "Session was not retained" }
+  };
+  for (const dictionary of Object.values(dictionaries)) {
+    const t = key => { assert.ok(Object.hasOwn(dictionary, key)); return dictionary[key]; };
+    for (const code of ["navigationUnavailable", "sessionNotRetained"]) {
+      assert.equal(formatArchiveNavigationError(new ArchiveNavigationError(code), t), dictionary[`archives.${code}`]);
+    }
+    assert.equal(formatArchiveNavigationError(new Error("remote disconnected"), t), "remote disconnected");
+    assert.equal(formatArchiveNavigationError("connection lost", t), "connection lost");
+    assert.equal(formatArchiveNavigationError(null, t), "null");
+  }
 });

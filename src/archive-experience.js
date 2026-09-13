@@ -1,3 +1,19 @@
+/** 导航业务错误使用稳定标识，由界面按当前语言展示。 */
+export class ArchiveNavigationError extends Error {
+  constructor(code) {
+    super(code);
+    this.name = "ArchiveNavigationError";
+    this.code = code;
+  }
+}
+
+/** 仅翻译插件自身的导航错误，保留宿主异常的原始消息。 */
+export function formatArchiveNavigationError(error, t) {
+  return error instanceof ArchiveNavigationError
+    ? t(`archives.${error.code}`)
+    : String(error?.message ?? error);
+}
+
 /** 恢复失败不导航；页面卸载后不让迟到响应抢占当前会话。 */
 export async function openArchivedConversation(actions, sessionId, restore, isActive = () => true) {
   if (restore) await actions.restore(sessionId);
@@ -23,8 +39,6 @@ export function allowArchivedNavigation(navigation, sessions, workspaces, { onOp
     } catch (error) {
       warn("archive-manager: 无法适配归档导航，请恢复会话后打开。", error);
     }
-  } else {
-    warn("archive-manager: 宿主无 clearArchivedCurrent，使用会话接口并检查打开结果。");
   }
   return {
     open(id) {
@@ -32,11 +46,14 @@ export function allowArchivedNavigation(navigation, sessions, workspaces, { onOp
       try {
         if (typeof original === "function" && !ownsWrapper() && workspaces.list.getSnapshot().archivedSessionIds.includes(id)) {
           warn("archive-manager: 归档导航适配不可用或已被替换。");
-          throw new Error("当前宿主无法保持归档对话，请使用“恢复并打开”。");
+          throw new ArchiveNavigationError("navigationUnavailable");
         }
         // 官方 openSession 会立即关闭全局面板；先验证会话选择，再退出设置。
         sessions.open(id);
-        if (sessions.list.getSnapshot().current !== id) throw new Error("宿主未保留目标会话，请重新打开或恢复后再试。");
+        if (sessions.list.getSnapshot().current !== id) {
+          warn("archive-manager: 宿主未保留目标会话。", { cleanupAvailable: typeof original === "function" });
+          throw new ArchiveNavigationError("sessionNotRetained");
+        }
         onOpened();
       } catch (error) { allowed = undefined; throw error; }
     },
