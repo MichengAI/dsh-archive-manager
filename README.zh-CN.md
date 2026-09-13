@@ -134,6 +134,18 @@ dsh --profile web --dump-config
 
 安装或升级后找不到入口时，重启 DSH Web 并硬刷新浏览器；入口位于「设置」中，连接器之后。
 
+### 查看与继续归档对话
+
+点击每条归档会话右侧的“查看对话”，直接打开 DSH 原生会话页，展示完整消息、附件和工具详情；可在原生输入框继续对话，归档状态保持不变。
+
+“恢复并打开”在恢复成功后进入原会话。打开失败会在管理页显示错误，不把退出设置当作打开成功。跨筛选选择显示隐藏的已选数量，支持清空选择。
+
+插件仅为显式打开的归档会话适配官方导航的自动清空策略；切换其他会话或卸载后恢复默认行为。发送仍遵循宿主原生模型、权限和生命周期要求。
+
+### 只读预览接口
+
+通过现有 DSH Remote 鉴权访问 `workspaceRegistry.archivedSessionPreview(sessionId)`，对应 `POST /api/workspaceRegistry/archivedSessionPreview`，使用宿主 RPC 请求封装 `{ "args": { "sessionId": "…" } }`，`Content-Type: application/json`。成功返回 Remote 结果 `{ ok: true, value: { messages: [{ role: "user" | "assistant", text: string }], truncated: boolean } }`。参数非法由宿主协议校验拒绝；非归档会话、读取失败返回宿主 Remote 错误（业务异常为 `gateway/internal`），不改变归档状态。响应大小限制见上文；当前冷存储实现仍需读取完整日志。
+
 ## 数据处理边界
 
 - 删除操作始终需要确认。

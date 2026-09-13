@@ -134,6 +134,18 @@ The settings title shows the installed version and a **Check for updates** butto
 
 If the entry is missing after installation or upgrade, restart DSH Web and hard-refresh the browser. It is located directly after **Connectors** in Settings.
 
+### View and continue archived conversations
+
+Click “View conversation” beside an archived session to open the native DSH conversation, including messages, attachments and tools. Continue using the native composer while keeping the session archived.
+
+“Restore and open” navigates after restoration succeeds. Navigation failures remain visible in settings. Selection counts include hidden items and offer a clear-selection action.
+
+The plugin adapts the official navigation cleanup policy only for explicitly opened archived sessions. Switching sessions or unloading restores the default behavior. Native model, permission and lifecycle requirements still apply.
+
+### Read-only preview API
+
+Use the existing authenticated DSH Remote `workspaceRegistry.archivedSessionPreview(sessionId)`, exposed as `POST /api/workspaceRegistry/archivedSessionPreview` with `Content-Type: application/json` and the host RPC envelope `{ "args": { "sessionId": "…" } }`. Success returns `{ ok: true, value: { messages: [{ role: "user" | "assistant", text: string }], truncated: boolean } }`. Invalid parameters are rejected by the host protocol. Non-archived sessions and read failures return a host Remote error (`gateway/internal` for business exceptions) without changing archive state. Response limits are described above; cold previews currently read the complete log before extracting the window.
+
 ## Data handling limits
 
 - Deletion always requires confirmation.

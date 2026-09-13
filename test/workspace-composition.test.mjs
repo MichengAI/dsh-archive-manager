@@ -8,6 +8,7 @@ import { dirname, join } from "node:path";
 import { Context } from "@deepseek-ai/cordis";
 import { loadClientStore } from "./helpers/client-store.mjs";
 import { mirrorDirectoryFlow } from "../src/directory-flow-slot.js";
+import { allowArchivedNavigation } from "../src/archive-experience.js";
 
 const require = createRequire(import.meta.url);
 const statics = {};
@@ -32,6 +33,41 @@ const official = await load("@deepseek-ai/dsh-client-ui-workspace");
 const archive = await load("@michengai/dsh-archive-manager", fileURLToPath(new URL("../lib/client.js", import.meta.url)));
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 const source = (state) => ({ getSnapshot: () => state, subscribe: () => () => {} });
+
+test("真实官方导航监听器：显式查看归档不再被清空，切换和卸载恢复默认策略", async (t) => {
+  const observable = (state) => {
+    const listeners = new Set();
+    return { getSnapshot: () => state, subscribe: fn => { listeners.add(fn); return () => listeners.delete(fn); }, update(next) { state = next; for (const fn of listeners) fn(); } };
+  };
+  const root = new Context();
+  const slots = new SlotRegistry(root);
+  root.provide("locale", { register: () => () => {}, bind: () => key => key });
+  const list = observable({ phase: "ready", ids: ["old", "normal"], byId: {}, current: "normal" });
+  const sessions = { list, open(id) { list.update({ ...list.getSnapshot(), current: id }); }, clear() { list.update({ ...list.getSnapshot(), current: undefined }); } };
+  const workspaces = { list: observable({ phase: "ready", items: [], archivedSessionIds: ["old"] }) };
+  root.provide("sessions", sessions); root.provide("workspaces", workspaces);
+  root.provide("remote", {});
+  root.provide("remote.directoryPicker", {}); root.provide("connection", {}); root.provide("typert", {});
+  root.provide("layout", { beginNavigation: () => new AbortController().signal, selectPanel() {} });
+  const stock = root.plugin(official);
+  await stock;
+  const navigation = root.get("uiWorkspace");
+  if (typeof navigation?.clearArchivedCurrent !== "function") { await stock.dispose(); t.skip("此旧宿主无新版导航监听器"); return; }
+  let guard;
+  try {
+    sessions.open("old");
+    assert.equal(list.getSnapshot().current, undefined, "复现：官方监听器清空归档选择");
+    guard = allowArchivedNavigation(navigation, sessions, workspaces);
+    guard.open("old");
+    assert.equal(list.getSnapshot().current, "old");
+    list.update({ ...list.getSnapshot() });
+    assert.equal(list.getSnapshot().current, "old", "后续列表刷新不清空");
+    sessions.open("normal"); sessions.open("old");
+    assert.equal(list.getSnapshot().current, undefined, "离开后取消本次放行");
+    guard.open("old"); guard.dispose(); guard = undefined;
+    assert.equal(list.getSnapshot().current, undefined, "卸载恢复官方策略");
+  } finally { guard?.dispose(); await stock.dispose(); }
+});
 
 test("目录镜像失败不影响源组件注册，清理部分镜像并在后续变化时恢复", () => {
 	const root = new Context();

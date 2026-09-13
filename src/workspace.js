@@ -4,6 +4,7 @@ import { WorkspaceRegistry } from "@deepseek-ai/dsh-workspace";
 import { bindTypertRemote, Remote } from "@deepseek-ai/dsh-typert-protocol";
 import { sessionDir } from "@deepseek-ai/dsh-spill-local";
 import { trackTombstone } from "./tombstone.js";
+import { archiveTextPreview, archivePreviewInvocation } from "./archive-experience.js";
 //#region lib/types/index.js
 /**
  * dsh-archive-manager 宿主侧归档会话管理。
@@ -271,6 +272,7 @@ const archivedSessionMetadataSchema = {
  * 或协议包双份导致 /api/workspaceRegistry/deleteSession 在生产环境 404。
  */
 const ARCHIVE_MANAGER_INVOCATIONS = [
+	archivePreviewInvocation,
 	{
 		id: "@michengai/dsh-archive-manager#workspaceRegistry/unarchiveSession",
 		service: "workspaceRegistry",
@@ -476,7 +478,20 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		markRemoteMethod(this, "archiveWorkspaceSessions");
 		markRemoteMethod(this, "deleteArchivedSessions");
 		markRemoteMethod(this, "archivedSessionMetadata");
+		markRemoteMethod(this, "archivedSessionPreview");
 		registerHostRemote(this.ctx);
+	}
+	/** 读取已归档会话的文本窗口；不 flush、不恢复 Agent、不写入投影。 */
+	async archivedSessionPreview(sessionId) {
+		if (!this.requireState().archivedSessionIds.includes(sessionId))
+			throw new Error("session is no longer archived");
+		// 与官方工作区一致：sessions 为可选服务，直接属性访问需要额外 inject。
+		const live = this.ctx.get("sessions")?.get(sessionId);
+		const events = live?.events ?? (await this.readStoredProjectionSource(this.ctx.get("sessionPersistence"), sessionId)).events;
+		const result = archiveTextPreview(events);
+		if (!this.requireState().archivedSessionIds.includes(sessionId))
+			throw new Error("session is no longer archived");
+		return result;
 	}
 	/**
 	 * 归档设置页创建时间排序所需的最小元数据。老用户可能仍有会话原文和

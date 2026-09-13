@@ -97,6 +97,43 @@ class FakeDomain {
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+test("预览通过可选服务访问 sessions，未声明注入或服务缺失时仍能冷读", async () => {
+  const event = { type: "user/message", data: { content: [{ type: "text", text: "预览内容" }] } };
+  for (const live of [undefined, { events: [event] }]) {
+    let reads = 0;
+    const receiver = {
+      ctx: {
+        get sessions() { throw new Error('cannot get property "sessions" without inject'); },
+        get(name) { return name === "sessions" && live ? { get: () => live } : undefined; },
+      },
+      requireState: () => ({ archivedSessionIds: [s1] }),
+      readStoredProjectionSource: async () => { reads++; return { events: [event] }; },
+    };
+    const result = await ArchiveWorkspaceRegistry.prototype.archivedSessionPreview.call(receiver, s1);
+    assert.equal(result.messages[0].text, "预览内容");
+    assert.equal(reads, live ? 0 : 1);
+  }
+});
+
+test("归档预览读取冷存储并关闭句柄，不恢复会话或清除归档", async () => {
+  const env = buildRoot({ headers: [header(s1, cwdA)], archived: [s1] });
+  const registry = await mountWorkspaceRegistry(env);
+  let closed = false;
+  env.persistence.readFrom = undefined;
+  env.persistence.open = async (id, mode) => {
+    assert.equal(id, s1); assert.equal(mode, "read");
+    return { header: header(s1, cwdA), read: async () => ({ events: [{ type: "user/message", data: { content: [{ type: "text", text: "旧对话" }] } }] }), close: async () => { closed = true; } };
+  };
+  assert.deepEqual(await registry.archivedSessionPreview(s1), { messages: [{ role: "user", text: "旧对话" }], truncated: false });
+  assert.equal(closed, true);
+  assert.deepEqual(env.global.archivedSessionIds, [s1]);
+  await assert.rejects(registry.archivedSessionPreview(s2), /no longer archived/);
+  env.persistence.open = async () => ({ read: async () => { throw new Error("读取失败"); }, close: async () => { closed = true; } });
+  closed = false;
+  await assert.rejects(registry.archivedSessionPreview(s1), /读取失败/);
+  assert.equal(closed, true);
+});
+
 /**
  * Build a test root context with the fakes the workspace registry needs.
  * Header cwds and workspace paths are translated to REAL canonical
@@ -2288,6 +2325,14 @@ test("typert gateway SRC: claims + dispatch single and batch archive methods end
 		archivedSessionIdsAdded: [s1, s2],
 	});
 	await registry.archiveSession(s2);
+	env.persistence.readFrom = async () => ({ events: [] });
+	const preview = await captured.handler(
+		"workspaceRegistry/archivedSessionPreview",
+		{ args: { sessionId: s2 } },
+		void 0,
+	);
+	assert.equal(preview.ok, true, JSON.stringify(preview));
+	assert.deepEqual(preview.value, { messages: [], truncated: false });
 	const deleteBatch = await captured.handler(
 		"workspaceRegistry/deleteArchivedSessions",
 		{ args: { target: { scope: "workspace", workspaceId: A } } },
