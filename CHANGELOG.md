@@ -4,6 +4,11 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## Unreleased
+
+- Open archived sessions in the native DSH conversation view and continue chatting while keeping them archived, or restore and open them.
+- Keep settings open when opening an archive fails, and provide an error with a restore-and-open alternative when host navigation adaptation is unavailable.
+
 ## 0.1.39 - 2026-09-11
 
 - Preserve the Codex UI workspace list, styling, and dedicated interactions when both plugins are installed, while keeping archive management available.

@@ -1,23 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { archiveTextPreview, openArchivedConversation } from "../src/archive-experience.js";
-
-test("预览只返回用户与助手文本，限制响应大小并标记截断", () => {
-  const events = [
-    { type: "user/message", data: { content: [{ type: "text", text: "问题" }] } },
-    { type: "tool/result", data: { message: { content: "秘密工具结果" } } },
-    { type: "user/message", data: { source: { kind: "inject" }, content: [{ type: "text", text: "内部上下文" }] } },
-    { type: "assistant/message", data: { message: { content: [{ type: "text", text: "答复" }] } } },
-  ];
-  assert.deepEqual(archiveTextPreview(events), { messages: [{ role: "user", text: "问题" }, { role: "assistant", text: "答复" }], truncated: false });
-  const result = archiveTextPreview(Array.from({ length: 102 }, () => events[0]));
-  assert.equal(result.messages.length, 100);
-  assert.equal(result.truncated, true);
-  const large = archiveTextPreview(Array.from({ length: 15 }, () => ({ type: "user/message", data: { content: "字".repeat(20000) } })));
-  assert.equal(large.truncated, true);
-  assert.ok(large.messages.every(message => message.text.length <= 12000));
-  assert.ok(large.messages.reduce((total, message) => total + message.text.length, 0) <= 120000);
-});
+import { openArchivedConversation, allowArchivedNavigation } from "../src/archive-experience.js";
 
 test("继续对话不恢复；恢复并打开必须等持久化成功，失败不导航", async () => {
   const calls = [];
@@ -37,4 +20,78 @@ test("离开页面后恢复完成不产生迟到导航", async () => {
   let opened = false;
   await openArchivedConversation({ restore: async () => { active = false; }, open: () => { opened = true; } }, "a", true, () => active);
   assert.equal(opened, false);
+});
+
+function navigationFixture() {
+  let current;
+  let panel = "settings";
+  let fail = false;
+  const sessions = {
+    list: { getSnapshot: () => ({ current }) },
+    open(id) { current = id; navigation.clearArchivedCurrent(); if (fail) throw new Error("open failed"); }
+  };
+  const workspaces = { list: { getSnapshot: () => ({ archivedSessionIds: ["old"] }) } };
+  const navigation = {
+    clearArchivedCurrent() { if (current === "old") current = undefined; },
+    openSession(id) { sessions.open(id); panel = null; }
+  };
+  const warnings = [];
+  const options = { onOpened() { panel = null; }, warn: (...args) => warnings.push(args) };
+  return { sessions, workspaces, navigation, options, warnings,
+    get panel() { return panel; }, set fail(value) { fail = value; } };
+}
+
+test("归档打开验证成功后才退出设置；失败清除放行状态并保留设置", () => {
+  const env = navigationFixture();
+  const guard = allowArchivedNavigation(env.navigation, env.sessions, env.workspaces, env.options);
+  env.fail = true;
+  assert.throws(() => guard.open("old"), /open failed/);
+  assert.equal(env.panel, "settings");
+  env.navigation.clearArchivedCurrent();
+  assert.equal(env.sessions.list.getSnapshot().current, undefined);
+  env.fail = false;
+  guard.open("old");
+  assert.equal(env.panel, null);
+  assert.equal(env.sessions.list.getSnapshot().current, "old");
+  guard.dispose();
+});
+
+test("不可写导航方法不使插件挂载失败，归档打开报错且记录诊断", () => {
+  const env = navigationFixture();
+  Object.freeze(env.navigation);
+  const guard = allowArchivedNavigation(env.navigation, env.sessions, env.workspaces, env.options);
+  assert.throws(() => guard.open("old"), /恢复|restore/i);
+  assert.equal(env.panel, "settings");
+  assert.ok(env.warnings.length > 0);
+  guard.dispose();
+});
+
+test("他人覆盖导航后拒绝不可靠的归档打开，卸载不覆盖他人方法", () => {
+  const env = navigationFixture();
+  const guard = allowArchivedNavigation(env.navigation, env.sessions, env.workspaces, env.options);
+  const replacement = () => {};
+  env.navigation.clearArchivedCurrent = replacement;
+  assert.throws(() => guard.open("old"), /恢复|restore/i);
+  guard.dispose();
+  assert.equal(env.navigation.clearArchivedCurrent, replacement);
+  assert.equal(env.panel, "settings");
+});
+
+test("旧宿主无清理方法时诊断并使用会话接口，未保留目标时不退出设置", () => {
+  const env = navigationFixture();
+  const sessions = { ...env.sessions, open() {} };
+  const guard = allowArchivedNavigation(undefined, sessions, env.workspaces, env.options);
+  assert.throws(() => guard.open("old"), /宿主未保留/);
+  assert.equal(env.panel, "settings");
+  assert.ok(env.warnings.length > 0);
+  guard.dispose();
+});
+
+test("目标会话未保留时不调用会提前关闭设置的官方 openSession", () => {
+  const env = navigationFixture();
+  env.sessions.open = () => {};
+  const guard = allowArchivedNavigation(env.navigation, env.sessions, env.workspaces, env.options);
+  assert.throws(() => guard.open("old"), /宿主未保留/);
+  assert.equal(env.panel, "settings");
+  guard.dispose();
 });

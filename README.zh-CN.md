@@ -14,208 +14,135 @@
   [![npm package](https://img.shields.io/npm/v/%40michengai%2Fdsh-archive-manager.svg?label=npm%20package)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
   [![npm 下载量](https://img.shields.io/npm/dt/%40michengai%2Fdsh-archive-manager.svg?label=npm%20%E4%B8%8B%E8%BD%BD%E9%87%8F)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
   [![DSH Web Plugin](https://img.shields.io/badge/DSH%20Web-Plugin-0f766e.svg)](https://github.com/MichengAI/dsh-archive-manager)
-  [![Node.js 22 or later](https://img.shields.io/badge/Node.js-22%20or%20later-339933.svg?logo=node.js&logoColor=white)](https://nodejs.org/)
 </div>
 
 > DSH Archive Manager 是社区维护的 DeepSeek Harness（DSH）插件，并非 DeepSeek AI 官方产品。
 
-## 功能概览
+## 你可以用它做什么
 
-把暂时不用的会话收起来，需要时再找回。集中搜索、恢复和清理归档记录，让日常任务列表更清爽。
+把暂时不用的会话收起来，需要时再找回，让日常任务列表更清爽。
 
-- **收起已完成的任务**：归档单条聊天，也可归档整个工作区的未归档聊天。
-- **快速找回历史**：在「设置 → 归档会话」搜索标题、按项目筛选，或按时间和标题排序。
-- **恢复继续工作**：恢复单条会话、整个项目或全部归档会话。
-- **按需清理记录**：支持单条或批量永久删除，执行前会要求确认。**永久删除无法撤销。**
+- **归档会话**：收起单条聊天，或整个工作区的未归档聊天。
+- **找回历史**：搜索会话标题，按项目筛选，按时间或标题排序。
+- **恢复任务**：恢复单条、选中的会话、整个项目或全部归档会话。
+- **清理记录**：确认后永久删除不再需要的归档会话。
 
 ## 界面预览
 
-在侧栏会话菜单中选择「归档会话」：
+从侧栏会话菜单归档聊天：
 
 ![从会话菜单归档会话](assets/screenshots/archive-session-menu.png)
 
-在「设置 → 归档会话」中搜索、排序、按项目筛选、取消归档或永久删除：
+在「设置 → 归档会话」集中查找、恢复和清理：
 
-![已归档聊天设置页面](assets/screenshots/archived-sessions.png)
-
-## DSH 产品生态
-
-想直接使用完整工作台，可下载 [DSH Codex Desktop](https://github.com/MichengAI/dsh-codex-desktop/releases)；已有 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 环境，可按需独立安装以下 8 个自研插件。桌面端已随附这些插件。
-
-| 插件 | 你可以用它做什么 |
-| --- | --- |
-| [Codex UI](https://github.com/MichengAI/dsh-codex-ui) | 整理项目与会话、搜索任务、跳转对话轮次 |
-| [IM Connect](https://github.com/MichengAI/dsh-im-connect) | 从微信、飞书、钉钉等消息平台下任务、收回复 |
-| [Automation](https://github.com/MichengAI/dsh-automation) | 按计划执行任务，查看每次运行的结果 |
-| [Skills Manager](https://github.com/MichengAI/dsh-skills-manager) | 统一查找、启停、创建和导入本机技能 |
-| [Archive Manager](https://github.com/MichengAI/dsh-archive-manager) | 搜索、恢复或清理已归档会话 |
-| [Agency Agents](https://github.com/MichengAI/dsh-agency-agents) | 按任务选择并召唤专业角色 |
-| [BTW](https://github.com/MichengAI/dsh-btw) | 在当前上下文中临时旁问，不打断主任务 |
-| [Simplify](https://github.com/MichengAI/dsh-simplify) | 用 /simplify 整理 Git 改动范围内的代码 |
+![归档会话管理页](assets/screenshots/archived-sessions.png)
 
 ## 前置条件
 
-- 插件 `0.1.38` 支持 DeepSeek Harness `0.1.5-rc.2`，并保留下表中此前四个宿主版本的兼容路径。后续版本需另行验证。
-
-- 已可正常运行 DeepSeek Harness Web，且可在 PowerShell 中使用 `dsh`。
-- 以下示例使用 `web` profile；请替换为实际目标 profile。
-- 从源码安装或二次开发需要 Node.js 22+ 与 pnpm；仅从 npm 安装无需另外执行 `pnpm install`。
-
-DSH peer 依赖仅接受 `0.1.0-rc.8 || 0.1.1-rc.2 || 0.1.2-rc.1 || 0.1.5-rc.1 || 0.1.5-rc.2`；不自动接纳其他 RC 或正式版。开发依赖固定为 `0.1.5-rc.2`。
+- 已能正常使用 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web，并可在终端运行 `dsh`。
+- 当前支持 DSH `0.1.0-rc.8`、`0.1.1-rc.2`、`0.1.2-rc.1`、`0.1.5-rc.1`、`0.1.5-rc.2`；其他版本暂未纳入支持范围。
+- Node.js 版本需满足 `^22.19.0 || >=24.0.0`；从源码安装还需要 pnpm。
 
 ## 安装
 
-源码回归使用 `pnpm test:compat`，在隔离依赖环境中运行同一份插件产物，已验证以下组合（不代表覆盖所有中间版本）：
+以下示例使用 `web` profile，请替换为你实际使用的 profile。
 
-- `pnpm test`：构建并执行本地常规测试，不包含 `test/fixtures`；实际依赖可能受本机宿主链接影响。
-- `pnpm test:matrix`：先构建，再隔离安装五个宿主版本，执行完整矩阵。
-- `pnpm test:latest`：先构建，再隔离运行最新版的 真实存储回归。
-- `pnpm test:compat`：旧缓存迁移验证加完整矩阵。
+### 让 Agent 帮你安装
 
-不要直接执行 `test/fixtures/*.mjs`；夹具会在加载宿主前检查隔离入口、依赖版本及实际路径。若本机依赖脱节，可先执行 `pnpm install --frozen-lockfile` 恢复声明的开发依赖；它不保证清理未声明包或 `test/node_modules` 的宿主链接，兼容性验收以隔离命令为准。
-
-| DSH | Cordis | 自动回归 |
-| --- | --- | --- |
-| `0.1.0-rc.8` | `4.0.1` | 153 项通过 |
-| `0.1.1-rc.2` | `4.0.1` | 153 项通过，另含旧缓存迁移验证 |
-| `0.1.2-rc.1` | `4.0.2` | 153 项通过 |
-| `0.1.5-rc.1` | `4.0.2` | 162 项通过 |
-| `0.1.5-rc.2` | `4.0.2` | 162 项通过 |
-
-覆盖官方工作区插件组合、侧栏覆盖及卸载恢复、目录插槽生命周期、侧栏接线、peer 版本接纳、客户端 Remote、归档/恢复、真实 JSONL/Zstandard 删除与子会话级联、删除后重新查询及重新打开存储。验证环境为 Windows / Node.js 24。另已在隔离 DSH 0.1.5-rc.1 Web Profile 中完成真实浏览器验收：包安装、归档恢复、取消与确认删除、子会话级联、跨筛选批量删除、工作区选择、全局面板返回会话、新建与分叉、正文搜索和重启持久性均通过。正文搜索需开启宿主查询数据库；本次将隔离 Profile 的 `openAt: never` 改为 `startup` 后验证通过。本轮另在隔离 rc.2 Web Profile 完成设置页加载、预置归档记录展示、恢复、取消与确认删除及重启持久性冒烟验收；使用独立 JSONL 测试数据，未逐项重跑 rc.1 的完整浏览器流程。其余三个版本仅完成隔离自动测试；未调用外部模型。新版存储夹具仅隔离上游无法在 Windows 加载的 POSIX `fs-ext` 导入，实际文件操作与 Windows 原生锁仍使用官方实现。
-
-以下安装命令使用官方 npm 源。
-
-### 让 Agent 帮你安装（推荐）
-
-把下面这段话发给任意能够执行本机终端命令的 Agent。将 `web` 替换为实际使用的 profile；安装完成后，在 DSH 中使用本插件。
+把下面这段话发给能执行本机终端命令的 Agent：
 
 ```text
-请将 DSH 插件 @michengai/dsh-archive-manager 安装到本机 web profile，执行：dsh plugin --profile web add @michengai/dsh-archive-manager@latest --registry=https://registry.npmjs.org/。安装后执行 dsh --profile web --dump-config，确认配置包含 workspace-archive-manager, ui-workspace-archive-manager，并告诉我如何重新加载 DSH 和开始使用。
+请将 @michengai/dsh-archive-manager 最新版安装到本机 DSH 的 web profile，使用官方 npm 源。安装后检查插件配置，并告诉我如何重新加载 DSH、进入归档会话管理页。
 ```
 
-### 从官方 npm 安装最新版
+### 手动安装
 
-在任意 PowerShell 目录执行：
+在 PowerShell 中执行：
 
 ```powershell
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
+
 dsh plugin --profile web add @michengai/dsh-archive-manager@latest --registry=https://registry.npmjs.org/
-dsh --profile web --dump-config
 ```
 
-需要钉死某一版时，把 `@latest` 换成具体版本，例如 `@x.y.z`。
-
-配置输出中应包含 `workspace-archive-manager` 与 `ui-workspace-archive-manager`，同时官方 `ui-workspace` 保持启用。安装后重启 DSH Web 并在浏览器硬刷新；请勿手工复制客户端文件，否则设置页和归档菜单不会被挂载。
-
-### 已安装环境升级检查
-
-升级会重新读取插件包内的补丁，无需手工迁移旧 bundle。但 Profile 自己的 `cordis.patch.yml` 在 bundle 之后应用：若曾手工将 `ui-workspace` 设为 `disabled: true`，请移除该覆盖或改为 `disabled: false`，保留其余配置。
-
-运行 `dsh --profile web --dump-config`，确认官方 `ui-workspace` 已启用，再重启 DSH Web 并硬刷新浏览器。在 DSH 0.1.2 及以上受支持版本中，禁用官方服务会让归档客户端等待 `uiWorkspace`，侧栏与归档设置页都不会挂载，可能表现为没有响应。
-
-侧栏添加目录依赖官方 `sidebar.workspaces.directoryFlow` 插槽。源槽不存在或没有目录组件时，该入口会隐藏，不会因此记录同步错误；可使用官方首页入口。带额外子插槽的目录扩展暂不支持镜像，会输出警告。
-
-挂载后的动态同步异常会记录源槽、目标槽及可用的组件来源，并尝试清理已有镜像，保留监听以在后续源槽变化时重试。仅移除目标槽的冲突条目不会触发重试。首次挂载时同步失败则会取消监听、尝试清理并向挂载调用方抛出错误；排除冲突后需重新挂载归档客户端，例如重启 DSH Web 并硬刷新浏览器。清理过程中若有条目释放失败，会另行记录错误并继续清理其余条目。
-
-## 在线更新
-
-设置标题会显示当前版本和“检查更新”按钮。发现新版后，只有检测到 DSH CLI 或 Desktop 更新服务时才可使用“自动更新”；其他环境会在弹窗中提供可复制、与当前 Profile 对应的手工更新命令。
+安装后重启 DSH Web，并按 `Ctrl+Shift+R` 硬刷新浏览器。打开「设置 → 归档会话」即可使用。
 
 ## 使用
 
-1. 在侧栏右键或打开会话菜单，选择「归档会话」。
-2. 打开「设置 → 归档会话」，按工作区查看归档会话。
-3. 按标题搜索，按更新时间、创建时间或标题排序，或按项目筛选列表。
-4. 点击「取消归档」恢复单个会话，或在顶部点击「全部恢复」。
-5. 打开项目标题右侧菜单，可恢复或删除该项目的全部已归档聊天。
-6. 点击删除图标永久移除单个会话；删除前确认提示。**删除无法撤销。**
+| 你想做什么 | 操作 |
+| --- | --- |
+| 归档一条会话 | 打开侧栏会话菜单，选择「归档会话」 |
+| 归档整个工作区 | 打开工作区菜单，选择归档该工作区的会话 |
+| 查找归档 | 打开「设置 → 归档会话」，搜索标题或按项目筛选 |
+| 调整排列顺序 | 按更新时间、创建时间或标题排序 |
+| 恢复一条会话 | 点击会话右侧的「取消归档」 |
+| 批量恢复或删除 | 勾选会话后使用批量操作；也可使用项目菜单或页面顶部的全部操作 |
 
-安装或升级后找不到入口时，重启 DSH Web 并硬刷新浏览器；入口位于「设置」中，连接器之后。
+切换筛选条件会保留已选会话。批量操作前留意隐藏的已选数量，或先清空选择。
 
-### 查看与继续归档对话
+### 查看并继续归档对话（尚未发布）
 
-点击每条归档会话右侧的“查看对话”，直接打开 DSH 原生会话页，展示完整消息、附件和工具详情；可在原生输入框继续对话，归档状态保持不变。
+当前源码新增以下操作，npm 发布版暂不包含：
 
-“恢复并打开”在恢复成功后进入原会话。打开失败会在管理页显示错误，不把退出设置当作打开成功。跨筛选选择显示隐藏的已选数量，支持清空选择。
+- **查看对话**：打开 DSH 原生会话页，查看消息、附件和工具详情；可直接继续聊天，保持归档状态。
+- **恢复并打开**：取消归档后进入原会话，继续工作。
 
-插件仅为显式打开的归档会话适配官方导航的自动清空策略；切换其他会话或卸载后恢复默认行为。发送仍遵循宿主原生模型、权限和生命周期要求。
+## 更新
 
-### 只读预览接口
+在归档管理页标题处点击「检查更新」。支持自动更新的 DSH CLI 或 Desktop 环境可直接更新；其他环境会提供适用于当前 profile 的手动命令。也可重新执行上面的安装命令。
 
-通过现有 DSH Remote 鉴权访问 `workspaceRegistry.archivedSessionPreview(sessionId)`，对应 `POST /api/workspaceRegistry/archivedSessionPreview`，使用宿主 RPC 请求封装 `{ "args": { "sessionId": "…" } }`，`Content-Type: application/json`。成功返回 Remote 结果 `{ ok: true, value: { messages: [{ role: "user" | "assistant", text: string }], truncated: boolean } }`。参数非法由宿主协议校验拒绝；非归档会话、读取失败返回宿主 Remote 错误（业务异常为 `gateway/internal`），不改变归档状态。响应大小限制见上文；当前冷存储实现仍需读取完整日志。
+## 常见问题
 
-## 数据处理边界
+### 安装后找不到入口？
 
-- 删除操作始终需要确认。
-- 删除会移除工作区记录、归档标记和投影缓存。官方 JSONL 后端在目录布局校验通过后，会一并删除会话专属目录及其中的附件等内容；其他后端或未知布局仅删除定位到的转录工件，不删除其父目录。
-- 不清理项目分组目录或存储根目录。官方布局的项目/会话目录若为符号链接或 Windows junction，会拒绝删除并保留可重试状态。
-- 布局校验优先使用官方后端初始化时确定的绝对根路径，相对路径配置不再受宿主工作目录变化影响；若无法取得该字段，则只接受绝对路径配置。官方 JSONL 布局校验失败时，会记录包含会话 ID 和工件路径的警告，再降级为仅删除工件。
-- 目录校验不是跨进程文件锁：删除期间不要由其他进程迁移、替换存储目录或改写目录链接。插件不将可被不可信进程改写的存储路径视为安全隔离边界。
-- 正在写入的会话会在完成写入后清理，避免截断数据。
-- 本插件保留官方 `ui-workspace`，首页工作区选择器与导航服务跟随宿主；以优先级 `-0.5` 覆盖官方默认侧栏；与 Codex UI 1.1.2 共存时保留其优先级 `-1` 的列表、样式与交互，归档管理仍在设置页提供。卸载 Codex UI 后恢复归档侧栏；卸载归档前端后恢复官方侧栏。后端工作区和会话投影服务仍由归档实现提供。
-- 侧栏目录入口复用官方目录叶组件，使用独立子插槽，随官方条目加载、卸载同步；不重复声明官方目录插槽。自定义目录扩展若声明额外子插槽，应使用官方首页入口；当前适配不转移其子插槽权限。
-- 请仅通过 DSH profile 安装，避免手工拼接补丁配置。
-
-## 二次开发
-
-### 从源码安装
-
-适用于调试或使用未发布改动。克隆后的目录会直接作为插件安装路径：
+先重启 DSH Web 并硬刷新浏览器，确认安装到了当前使用的 profile。仍未显示时，执行：
 
 ```powershell
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
-Set-Location D:\Repository\deepseek-harness-plugin
+
+dsh --profile web --dump-config
+```
+
+配置中应包含 `workspace-archive-manager` 和 `ui-workspace-archive-manager`。若曾在 profile 的 `cordis.patch.yml` 中手动将官方 `ui-workspace` 设为 `disabled: true`，请移除该禁用覆盖，再重启。
+
+### 归档和删除有什么区别？
+
+归档只是收起会话，可以恢复。**永久删除无法撤销**，并可能一并清理该会话的附件；不会删除你的项目工作目录。删除前会要求确认。
+
+### 可以和 Codex UI 一起使用吗？
+
+可以。保留 [Codex UI](https://github.com/MichengAI/dsh-codex-ui) 的侧栏样式和交互，归档管理仍在「设置 → 归档会话」中。
+
+遇到其他问题，请提交 [Issue](https://github.com/MichengAI/dsh-archive-manager/issues)，附上 DSH 与插件版本、复现步骤和错误信息。
+
+## 从源码安装
+
+<details>
+<summary>开发或测试未发布改动时展开</summary>
+
+在你选择的源码目录中执行以下命令。未推送的本地改动需使用已有工作副本。
+
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+
 git clone https://github.com/MichengAI/dsh-archive-manager.git
 Set-Location .\dsh-archive-manager
 pnpm install --frozen-lockfile
 pnpm build
 dsh plugin --profile web add .
-dsh --profile web --dump-config
 ```
 
-完成后重启 DSH Web 并硬刷新浏览器。`dsh plugin ... add .` 会读取当前目录的包信息和 `cordis.patch.yml`；不要改为直接复制 `lib` 目录。
+完成后重启 DSH Web 并硬刷新浏览器。修改 [src](src) 中的源码，不直接编辑生成目录 `lib`；使用 `pnpm test` 验证修改，使用 `pnpm verify` 执行完整检查。
 
-`src` 是唯一可维护源码目录，`pnpm build` 使用 esbuild 将其编译为可发布的 `lib`。请勿直接修改 `lib`，否则下次构建会覆盖改动：
+</details>
 
-- [src\index.js](src/index.js)：客户端插件 Host 服务入口。
-- [src\workspace.js](src/workspace.js)：归档会话和工作区服务实现。
-- [src\projcache.js](src/projcache.js)：会话投影缓存实现。
-- [src\client.js](src/client.js)：设置页和归档会话界面。
-- `test\*.test.mjs`：Host、客户端、Remote 和样式边界测试。
+## 相关项目
 
-修改 `src` 后，执行测试并确认生成的 `lib` 与 `src` 一同提交，再用本地目录重新安装：
-
-```powershell
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$OutputEncoding = [System.Text.Encoding]::UTF8
-pnpm test
-pnpm pack:check
-dsh plugin --profile web add .
-```
-
-`pnpm test` 会先执行 `pnpm build`。构建在临时目录中从 `src` 生成全部 `lib` 产物；仅在生成成功后才原子替换旧产物，构建失败时会保留旧的 `lib`。
-
-## 验证
-
-```powershell
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$OutputEncoding = [System.Text.Encoding]::UTF8
-pnpm verify
-```
-
-`prepublishOnly` 会在发布前执行完整验证，并确认提交的 `lib` 与当前 `src` 构建结果一致。
+[DSH Codex UI](https://github.com/MichengAI/dsh-codex-ui) 提供项目与会话管理界面；想使用桌面工作台，可查看 [DSH Codex Desktop](https://github.com/MichengAI/dsh-codex-desktop)。
 
 ## 许可证
 
 本项目采用 [Apache License 2.0](LICENSE)。
-
-发布前在 PowerShell 7 (`pwsh`) 执行 `pnpm release:preflight`，通过后再创建、推送版本标签。该入口使用官方 npm registry、冻结锁文件及与 CI 一致的 1440 分钟依赖冷却策略，然后运行完整 `verify`。刚发布的依赖仅通过已提交的精确版本豁免接纳；手动重试不会动态修改豁免配置。
-
-标签发布与手动重试统一经过 npm 精确版本和 `gitHead` 校验，确认 npm 可查询后才创建或更新双语 GitHub Release。网络、权限或元数据异常会停止流程；旧标签重试不会抢占 npm 最新版本对应的 GitHub Latest。仅新增了发布控制，不改变四个宿主版本的兼容范围。
-
-恢复已发布版本时，流程先校验 npm 包名、版本和标签提交：一致则跳过依赖安装、完整构建和再次发布，仅补同步 Release；未发布的旧标签仍需满足原标签的冷却策略，不能通过重试绕过。精确版本及 latest 传播分别最多等待两分钟，latest 落后时不提前创建非 Latest Release。
-
-已推送的旧标签不会因 main 更新而重新触发。推送工作流更新后，可手动运行 `publish.yml`，选择 main 并填写原标签（例如 `v0.1.35`）；无需移动或重新创建标签。

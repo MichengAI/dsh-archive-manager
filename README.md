@@ -14,208 +14,135 @@
   [![npm package](https://img.shields.io/npm/v/%40michengai%2Fdsh-archive-manager.svg?label=npm%20package)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
   [![npm downloads](https://img.shields.io/npm/dt/%40michengai%2Fdsh-archive-manager.svg?label=npm%20downloads)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
   [![DSH Web Plugin](https://img.shields.io/badge/DSH%20Web-Plugin-0f766e.svg)](https://github.com/MichengAI/dsh-archive-manager)
-  [![Node.js 22 or later](https://img.shields.io/badge/Node.js-22%20or%20later-339933.svg?logo=node.js&logoColor=white)](https://nodejs.org/)
 </div>
 
 > DSH Archive Manager is a community-maintained DeepSeek Harness (DSH) plugin, not an official DeepSeek AI product.
 
-## Features
+## What you can do
 
-Put inactive conversations away and find them again when needed. Search, restore, and clean up archives in one place while keeping everyday task lists tidy.
+Put inactive conversations away and find them again when needed, keeping everyday task lists tidy.
 
-- **Put finished tasks away**: archive one conversation or all active chats in a workspace.
-- **Find past work**: search titles, filter by project, and sort by time or title in **Settings → Archived sessions**.
-- **Resume your work**: restore one conversation, a project group, or all archived chats.
-- **Clean up records**: permanently delete individual chats or batches after confirmation. **Permanent deletion cannot be undone.**
+- **Archive conversations**: put away one chat or all unarchived chats in a workspace.
+- **Find past work**: search titles, filter by project, and sort by time or title.
+- **Restore tasks**: restore one chat, selected chats, a project group, or all archives.
+- **Clean up records**: permanently delete unwanted archived conversations after confirmation.
 
 ## Screenshots
 
-Open the sidebar session menu and choose **Archive session**:
+Archive a chat from the sidebar session menu:
 
 ![Archive a session from the session menu](assets/screenshots/archive-session-menu.png)
 
-Search, sort, filter by project, unarchive, or permanently delete chats in **Settings → Archived sessions**:
+Find, restore, and clean up chats in **Settings → Archived sessions**:
 
 ![Archived sessions settings page](assets/screenshots/archived-sessions.png)
 
-## DSH product ecosystem
-
-For a ready-to-use workbench, download [DSH Codex Desktop](https://github.com/MichengAI/dsh-codex-desktop/releases). If you already use [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), install any of these eight plugins individually. The desktop app includes all eight.
-
-| Plugin | What you can do |
-| --- | --- |
-| [Codex UI](https://github.com/MichengAI/dsh-codex-ui) | Organize projects and conversations, search tasks, and navigate chat turns |
-| [IM Connect](https://github.com/MichengAI/dsh-im-connect) | Send tasks and receive replies through your usual messenger |
-| [Automation](https://github.com/MichengAI/dsh-automation) | Schedule tasks and review each run |
-| [Skills Manager](https://github.com/MichengAI/dsh-skills-manager) | Find, enable, create, and import local skills |
-| [Archive Manager](https://github.com/MichengAI/dsh-archive-manager) | Search, restore, or clean up archived conversations |
-| [Agency Agents](https://github.com/MichengAI/dsh-agency-agents) | Choose and summon specialists for your task |
-| [BTW](https://github.com/MichengAI/dsh-btw) | Ask side questions without interrupting the main task |
-| [Simplify](https://github.com/MichengAI/dsh-simplify) | Use /simplify to improve code within your Git changes |
-
 ## Prerequisites
 
-- Plugin `0.1.38` supports DeepSeek Harness `0.1.5-rc.2` and retains the four previously supported hosts below. Later versions require separate validation.
-
-- A working DeepSeek Harness Web installation with `dsh` available in PowerShell.
-- Examples use the `web` profile; replace it with the target profile.
-- Source installation and development require Node.js 22+ and pnpm. npm installation does not require running `pnpm install` separately.
-
-DSH peer dependencies accept only `0.1.0-rc.8 || 0.1.1-rc.2 || 0.1.2-rc.1 || 0.1.5-rc.1 || 0.1.5-rc.2`; other RCs and stable versions are not automatically accepted. Development dependencies are pinned to `0.1.5-rc.2`.
+- A working [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web installation with `dsh` available in your terminal.
+- Supported DSH versions: `0.1.0-rc.8`, `0.1.1-rc.2`, `0.1.2-rc.1`, `0.1.5-rc.1`, and `0.1.5-rc.2`. Other versions are not currently supported.
+- Node.js matching `^22.19.0 || >=24.0.0`. Source installation also requires pnpm.
 
 ## Installation
 
-Run `pnpm test:compat` to test the same plugin artifacts with isolated host dependencies. The following combinations have passed; this does not claim coverage of every intermediate release:
+Examples use the `web` profile. Replace it with the profile you actually use.
 
-- `pnpm test`: build and run local tests, excluding `test/fixtures`; local host links may affect dependency resolution.
-- `pnpm test:matrix`: build, then install five isolated host versions and run the full matrix.
-- `pnpm test:latest`: build, then run the real storage regressions against the isolated latest baseline.
-- `pnpm test:compat`: validate legacy cache migration and run the full matrix.
+### Ask an agent to install it
 
-Do not run `test/fixtures/*.mjs` directly. Fixtures validate the isolated entry point, dependency versions, and resolved paths before loading the host. If local dependencies have drifted, run `pnpm install --frozen-lockfile` to restore declared development dependencies. This does not guarantee removal of undeclared packages or host links under `test/node_modules`; use the isolated commands for compatibility acceptance.
-
-| DSH | Cordis | Automated regression |
-| --- | --- | --- |
-| `0.1.0-rc.8` | `4.0.1` | 153 passed |
-| `0.1.1-rc.2` | `4.0.1` | 153 passed, plus legacy cache migration validation |
-| `0.1.2-rc.1` | `4.0.2` | 153 passed |
-| `0.1.5-rc.1` | `4.0.2` | 162 passed |
-| `0.1.5-rc.2` | `4.0.2` | 162 passed |
-
-Coverage includes official workspace composition, sidebar shadowing and restoration on unload, directory-slot lifecycles, sidebar wiring, peer version acceptance, client Remote integration, archive/restore, real JSONL/Zstandard deletion and subagent cascades, and queries/reopened storage after deletion. Tested on Windows / Node.js 24. A real browser acceptance run also passed in an isolated DSH 0.1.5-rc.1 Web Profile: package installation, archive/restore, deletion cancellation and confirmation, subagent cascades, cross-filter batch deletion, workspace selection, returning from global panels, new sessions and forks, content search, and restart persistence. Content search requires an open host query database; it passed after changing the isolated Profile from `openAt: never` to `startup`. This release also passed an isolated rc.2 Web smoke run covering settings loading, seeded archive listing, restore, deletion cancellation and confirmation, and restart persistence with dedicated JSONL data. The full rc.1 browser flow was not repeated item by item. The other three versions have isolated automated coverage only; no external model calls were made. The latest storage fixture isolates only the upstream POSIX `fs-ext` import that cannot load on Windows; file operations and native Windows locking still use the official implementation.
-
-The installation commands below use the official npm registry.
-
-### Ask an agent to install it (recommended)
-
-Send the prompt below to any agent that can run terminal commands on your computer. Replace `web` with your actual profile. Once installed, use the plugin in DSH.
+Send this prompt to an agent that can run terminal commands on your computer:
 
 ```text
-Install the DSH plugin @michengai/dsh-archive-manager into my local web profile by running: dsh plugin --profile web add @michengai/dsh-archive-manager@latest --registry=https://registry.npmjs.org/. Then run dsh --profile web --dump-config, confirm the configuration includes workspace-archive-manager, ui-workspace-archive-manager, and explain how to reload DSH and start using the plugin.
+Install the latest @michengai/dsh-archive-manager into my local DSH web profile using the official npm registry. Check the plugin configuration afterward, then explain how to reload DSH and open archived session management.
 ```
 
-### Install the latest package from the official npm registry
+### Install manually
 
-Run this from any PowerShell directory:
+Run in PowerShell:
 
 ```powershell
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
+
 dsh plugin --profile web add @michengai/dsh-archive-manager@latest --registry=https://registry.npmjs.org/
-dsh --profile web --dump-config
 ```
 
-To pin a release, replace `@latest` with a specific version such as `@x.y.z`.
-
-The configuration output should contain `workspace-archive-manager` and `ui-workspace-archive-manager`, with the official `ui-workspace` still enabled. Restart DSH Web and hard-refresh the browser. Do not copy client files manually: the Settings page and archive menu need the mounted plugin.
-
-### Upgrade checks for existing installations
-
-Upgrades reload the patch bundled with the plugin; the old bundle needs no manual migration. However, the Profile's own `cordis.patch.yml` is applied after bundles. If it manually sets `ui-workspace` to `disabled: true`, remove that override or change it to `disabled: false`, preserving other configuration.
-
-Run `dsh --profile web --dump-config`, confirm that the official `ui-workspace` is enabled, then restart DSH Web and hard-refresh the browser. On supported DSH versions from 0.1.2 onward, disabling that service leaves the archive client waiting for `uiWorkspace`; neither its sidebar nor its archive settings page mounts, which can look unresponsive.
-
-Sidebar directory creation depends on the official `sidebar.workspaces.directoryFlow` slot. If the source slot is absent or has no directory component, the entry is hidden without logging a synchronization error; use the official home entry instead. Directory extensions declaring additional child slots cannot be mirrored and produce a warning.
-
-A dynamic synchronization failure after mounting logs the source slot, target slot, and component origin when available, attempts to clear existing mirrors, and keeps listening to retry on a subsequent source-slot change. Removing a conflicting entry from the target slot alone does not trigger a retry. An initial synchronization failure instead unsubscribes, attempts cleanup, and rethrows to the mounting caller. After resolving the conflict, remount the archive client, for example by restarting DSH Web and hard-refreshing the browser. If releasing an entry fails during cleanup, that error is logged separately and cleanup continues for the remaining entries.
-
-## Updates
-
-The settings title shows the installed version and a **Check for updates** button. When a newer release is available, **Update automatically** runs only when the DSH CLI or Desktop update service is available; otherwise, the dialog provides a profile-specific manual command to copy and run.
+Restart DSH Web, then hard-refresh your browser with `Ctrl+Shift+R`. Open **Settings → Archived sessions** to get started.
 
 ## Usage
 
-1. Open the sidebar session menu and choose **Archive session**.
-2. Open **Settings → Archived sessions** to inspect sessions by workspace.
-3. Search by title, sort by update time, creation time, or title, or filter the list by project.
-4. Select **Unarchive** to restore one session, or select **Restore all** in the page header.
-5. Open a project heading's action menu to restore or delete all of that project's archived chats.
-6. Use the delete icon to remove one session permanently, then confirm the deletion. **It cannot be undone.**
+| Goal | Action |
+| --- | --- |
+| Archive one chat | Open its sidebar menu and choose **Archive session** |
+| Archive a workspace | Open the workspace menu and choose the option to archive its chats |
+| Find an archive | Open **Settings → Archived sessions**, then search titles or filter by project |
+| Change the order | Sort by update time, creation time, or title |
+| Restore one chat | Click **Unarchive** beside the session |
+| Restore or delete in bulk | Select chats and use the bulk actions, or use the project menu or page-wide actions |
 
-If the entry is missing after installation or upgrade, restart DSH Web and hard-refresh the browser. It is located directly after **Connectors** in Settings.
+Selections persist when filters change. Check the hidden selection count before applying bulk actions, or clear your selection first.
 
-### View and continue archived conversations
+### View and continue archived conversations (unreleased)
 
-Click “View conversation” beside an archived session to open the native DSH conversation, including messages, attachments and tools. Continue using the native composer while keeping the session archived.
+The current source adds these actions; they are not yet included in the npm release:
 
-“Restore and open” navigates after restoration succeeds. Navigation failures remain visible in settings. Selection counts include hidden items and offer a clear-selection action.
+- **View conversation**: open the native DSH session to view messages, attachments, and tool details. Continue chatting while keeping the session archived.
+- **Restore and open**: unarchive the session and open it to resume work.
 
-The plugin adapts the official navigation cleanup policy only for explicitly opened archived sessions. Switching sessions or unloading restores the default behavior. Native model, permission and lifecycle requirements still apply.
+## Updates
 
-### Read-only preview API
+Click **Check for updates** in the archive management page header. DSH CLI or Desktop environments with automatic update support can update directly; other environments provide a manual command for the current profile. You can also rerun the installation command above.
 
-Use the existing authenticated DSH Remote `workspaceRegistry.archivedSessionPreview(sessionId)`, exposed as `POST /api/workspaceRegistry/archivedSessionPreview` with `Content-Type: application/json` and the host RPC envelope `{ "args": { "sessionId": "…" } }`. Success returns `{ ok: true, value: { messages: [{ role: "user" | "assistant", text: string }], truncated: boolean } }`. Invalid parameters are rejected by the host protocol. Non-archived sessions and read failures return a host Remote error (`gateway/internal` for business exceptions) without changing archive state. Response limits are described above; cold previews currently read the complete log before extracting the window.
+## FAQ
 
-## Data handling limits
+### Why is the entry missing after installation?
 
-- Deletion always requires confirmation.
-- It removes workspace records, archive markers, and the projection cache. For the official JSONL backend, a validated layout also allows removal of the session-owned directory and its contents, including attachments. Other backends or unknown layouts only lose the located transcript artifact, never its parent directory.
-- Project containers and storage roots are retained. Deletion refuses symbolic links or Windows junctions at the official layout's project/session directory levels and keeps the operation retryable.
-- Layout validation uses the official backend's initialized absolute root, so a relative root remains stable across host working-directory changes. If that field is unavailable, only an absolute configured root is accepted. An unverified official JSONL layout emits a warning with the session ID and artifact path before falling back to artifact-only deletion.
-- Directory validation is not a cross-process filesystem lock: do not concurrently move or replace storage directories or change directory links during deletion. Storage paths writable by untrusted processes are not a security isolation boundary.
-- A live session finishes writing before cleanup to prevent data truncation.
-- The official `ui-workspace` remains enabled, so the home picker and navigation follow the host. The archive sidebar uses priority `-0.5`, ahead of the official default but behind Codex UI 1.1.2 at `-1`. Codex UI retains its list, styling, and interactions; archive management remains available in settings. Unloading Codex UI restores the archive sidebar; unloading the archive frontend restores the official sidebar. Backend workspace and projection services still use the archive implementations.
-- The sidebar directory entry reuses official leaf components through a separate child slot and follows their registration lifetimes. It does not redeclare official directory slots. Custom directory extensions with additional child slots should use the official home entry; this adapter does not transfer their child-slot permissions.
-- Install through the DSH profile instead of manually composing the patch.
-
-## Secondary development
-
-### Install from source
-
-Use this for debugging or unpublished changes. The cloned directory becomes the plugin source path:
+Restart DSH Web and hard-refresh your browser. Make sure you installed into the profile you are using. If the entry is still missing, run:
 
 ```powershell
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
-Set-Location D:\Repository\deepseek-harness-plugin
+
+dsh --profile web --dump-config
+```
+
+The configuration should include `workspace-archive-manager` and `ui-workspace-archive-manager`. If you previously set the official `ui-workspace` to `disabled: true` in your profile's `cordis.patch.yml`, remove that disabling override and restart.
+
+### How is archiving different from deletion?
+
+Archiving puts a conversation away so you can restore it later. **Permanent deletion cannot be undone** and may also remove that session's attachments. It does not delete your project working directory. Deletion requires confirmation.
+
+### Can I use it with Codex UI?
+
+Yes. [Codex UI](https://github.com/MichengAI/dsh-codex-ui) keeps its sidebar appearance and interactions. Archive management remains available in **Settings → Archived sessions**.
+
+For other problems, open an [issue](https://github.com/MichengAI/dsh-archive-manager/issues) with your DSH and plugin versions, reproduction steps, and error details.
+
+## Install from source
+
+<details>
+<summary>Expand for development or testing unreleased changes</summary>
+
+Run these commands in a directory of your choice. For local changes that have not been pushed, use the existing working copy.
+
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+
 git clone https://github.com/MichengAI/dsh-archive-manager.git
 Set-Location .\dsh-archive-manager
 pnpm install --frozen-lockfile
 pnpm build
 dsh plugin --profile web add .
-dsh --profile web --dump-config
 ```
 
-Restart DSH Web and hard-refresh the browser. `dsh plugin ... add .` reads the package metadata and `cordis.patch.yml`; do not install by copying `lib` directly.
+Restart DSH Web and hard-refresh your browser afterward. Edit [src](src), not the generated `lib` directory. Run `pnpm test` to validate changes or `pnpm verify` for the full checks.
 
-`src` is the sole maintained source directory. `pnpm build` uses esbuild to compile it into publishable `lib` output. Do not edit `lib` directly because the next build overwrites it.
+</details>
 
-- [src\index.js](src/index.js): host service entry point.
-- [src\workspace.js](src/workspace.js): archived-session and workspace service.
-- [src\projcache.js](src/projcache.js): session projection cache.
-- [src\client.js](src/client.js): Settings page and archive UI.
-- `test\*.test.mjs`: host, client, Remote, and styling coverage.
+## Related projects
 
-After changing `src`, run the tests, confirm that generated `lib` output is committed with the source, then install from the local directory:
-
-```powershell
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$OutputEncoding = [System.Text.Encoding]::UTF8
-pnpm test
-pnpm pack:check
-dsh plugin --profile web add .
-```
-
-`pnpm test` runs `pnpm build` first. The build generates all `lib` output from `src` in a temporary directory, then atomically replaces the previous output only after a successful build. A failed build preserves the existing `lib`.
-
-## Validation
-
-```powershell
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$OutputEncoding = [System.Text.Encoding]::UTF8
-pnpm verify
-```
-
-`prepublishOnly` runs the full verification suite before publishing and verifies that committed `lib` output matches the current `src` build.
+[DSH Codex UI](https://github.com/MichengAI/dsh-codex-ui) provides project and conversation management. For a desktop workbench, see [DSH Codex Desktop](https://github.com/MichengAI/dsh-codex-desktop).
 
 ## License
 
 Licensed under [Apache License 2.0](LICENSE).
-
-Before creating or pushing a release tag, run `pnpm release:preflight` in PowerShell 7 (`pwsh`). It installs from the official npm registry with a frozen lockfile and the same 1440-minute release-age policy as CI, then runs the full `verify` suite. Recent dependencies require committed, exact-version exclusions; manual retries never add exclusions dynamically.
-
-Tag releases and manual retries verify the exact npm version and `gitHead` before creating or updating the bilingual GitHub Release. Network, authorization, or metadata errors stop the flow. Retrying an older tag does not take GitHub Latest away from the npm latest version. These release controls do not change the four supported host versions.
-
-Recovery checks the npm package name, version, and tag commit first. An exact match skips dependency installation, full builds, and republishing, and only synchronizes the Release. Unpublished old tags must still satisfy their original cooling policy. Exact-version and latest propagation each have a two-minute deadline; a lagging latest tag does not create a non-Latest Release prematurely.
-
-Updating main does not retrigger an existing tag. After pushing workflow changes, manually run `publish.yml` on main with the original tag (for example, `v0.1.35`); do not move or recreate the tag.

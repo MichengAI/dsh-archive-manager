@@ -57,15 +57,15 @@ test("归档设置页在标题区提供项目与反馈入口，不混入批量�
   assert.equal((client.match(/"archives\.viewProject": "GitHub"/g) ?? []).length, 2);
   assert.match(client, /"archives\.feedback": "问题反馈"/);
   assert.match(client, /"archives\.feedback": "Issues"/);
-  assert.equal((client.match(/className: "dsham_settingsTitleRow"/g) ?? []).length, 2);
-  assert.equal((client.match(/href: "https:\/\/github\.com\/MichengAI\/dsh-archive-manager\/issues"/g) ?? []).length, 2);
+  assert.equal((client.match(/className: "dsham_settingsTitleRow"/g) ?? []).length, 1);
+  assert.equal((client.match(/href: "https:\/\/github\.com\/MichengAI\/dsh-archive-manager\/issues"/g) ?? []).length, 1);
   assert.doesNotMatch(client, /dsham_settingsHeaderActions[\s\S]{0,700}archives\.viewProject/);
 });
 
 test("归档设置页原型支持筛选内全选、跨项目选择与确认批量操作", async () => {
 	const client = await readFile(clientPath, "utf8");
 
-	assert.match(client, /ArchivedSessionsSectionPrototype/);
+	assert.match(client, /ArchivedSessionsSection/);
 	assert.match(client, /className: "dsham_settingsSelection"/);
 	assert.match(client, /archives\.selectAllFiltered/);
 	assert.match(client, /toggleVisibleSelection\(event\.target\.checked\)/);
@@ -74,7 +74,7 @@ test("归档设置页原型支持筛选内全选、跨项目选择与确认批�
 	assert.match(client, /archives\.deleteSelectedTitle/);
 	assert.match(client, /function pruneArchivedSelection/);
 	assert.match(client, /function toggleArchivedSelection/);
-	assert.match(client, /}, ArchivedSessionsSectionPrototype\)\);/);
+	assert.match(client, /}, ArchivedSessionsSection\)\);/);
 });
 
 test("恢复和删除后刷新会话投影，使侧栏与宿主状态重新一致", async () => {
