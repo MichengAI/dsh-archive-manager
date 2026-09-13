@@ -81,9 +81,9 @@ Restart DSH Web, then hard-refresh your browser with `Ctrl+Shift+R`. Open **Sett
 
 Selections persist when filters change. Check the hidden selection count before applying bulk actions, or clear your selection first.
 
-### View and continue archived conversations (unreleased)
+### View and continue archived conversations
 
-The current source adds these actions; they are not yet included in the npm release:
+Available starting with `0.1.40`:
 
 - **View conversation**: open the native DSH session to view messages, attachments, and tool details. Continue chatting while keeping the session archived.
 - **Restore and open**: unarchive the session and open it to resume work.

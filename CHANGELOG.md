@@ -4,7 +4,7 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
-## Unreleased
+## 0.1.40 - 2026-09-13
 
 - Open archived sessions in the native DSH conversation view and continue chatting while keeping them archived, or restore and open them.
 - Close the settings overlay after an archived conversation opens successfully; keep settings open and show an error on failure, with a restore-and-open alternative when host navigation adaptation is unavailable.
