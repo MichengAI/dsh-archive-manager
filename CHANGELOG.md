@@ -4,6 +4,12 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 0.1.42 - 2026-09-14
+
+- Add Archived / Unarchived tabs with Archived selected by default. Select sessions across projects for batch archiving, or archive all chats in a project or ungrouped section from its menu.
+- Unify session action labels and make batch archive buttons and menu actions easier to identify. Keep the confirmation dialog open with an error on archive failure for direct retries, and clear stale feedback.
+- Add the Typert `workspaceRegistry/archiveSessions` endpoint accepting `{ sessionIds: string[] }` to archive sessions across projects, with deduplication, idempotency, and whole-batch rejection for invalid sessions.
+
 ## 0.1.41 - 2026-09-14
 
 - Improve the archived-session bulk action bar with grouped selection details and actions, fixing wrapped button labels in narrow content areas.
