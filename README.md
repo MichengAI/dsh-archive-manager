@@ -77,9 +77,15 @@ Restart DSH Web, then hard-refresh your browser with `Ctrl+Shift+R`. Open **Sett
 | Find an archive | Open **Settings → Archived sessions**, then search titles or filter by project |
 | Change the order | Sort by update time, creation time, or title |
 | Restore one chat | Click **Unarchive** beside the session |
+| Archive a project or ungrouped chats | On **Unarchived**, open the group’s **…** menu and confirm archiving all chats in that group, regardless of search filters |
+| Archive across projects | Switch to **Unarchived**, select sessions across projects, then click **Archive** and confirm |
 | Restore or delete in bulk | Select chats and use the bulk actions, or use the project menu or page-wide actions |
 
-Selections persist when filters change. Check the hidden selection count before applying bulk actions, or clear your selection first.
+The page opens on **Archived**, with **Unarchived** on the right. Switching tabs clears selections; changing search or project filters preserves them. Check the hidden selection count before applying bulk actions, or clear your selection first.
+
+**Restore all / Delete all** remain on the Archived tab and apply to archived sessions across all projects, regardless of filters. Unarchived excludes subagents and blank placeholders and supports sorting by update time or title.
+
+Developer API: Typert `workspaceRegistry/archiveSessions` accepts `{ sessionIds: string[] }` and returns `{ archivedSessionIds, archivedSessionIdsAdded }`. Call `registry.archiveSessions(ids)` and check the Typert `ok` result; the method uses the existing host authentication and RPC channel. The host validates and deduplicates the batch before one state write. Already archived IDs are idempotent; unknown sessions return `UNKNOWN_SESSION` without a partial archive.
 
 ### View and continue archived conversations
 

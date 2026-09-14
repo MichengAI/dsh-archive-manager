@@ -2277,6 +2277,11 @@ test("typert gateway SRC: claims + dispatch single and batch archive methods end
 		archivedSessionIds: [],
 		unarchivedSessionIds: [s1],
 	});
+	assert.equal(captured.matches("workspaceRegistry/archiveSessions"), true);
+ const selectedArchive = await captured.handler("workspaceRegistry/archiveSessions", { args: { sessionIds: [s1, s2, s1] } }, void 0);
+ assert.equal(selectedArchive.ok, true);
+ assert.deepEqual(selectedArchive.value.archivedSessionIdsAdded, [s1, s2]);
+ await registry.unarchiveSessions({ scope: "all" });
 	const archiveWorkspace = await captured.handler(
 		"workspaceRegistry/archiveWorkspaceSessions",
 		{ args: { workspaceId: A } },
@@ -2392,4 +2397,18 @@ test("legacy workspaceRegistry API surface is intact", async () => {
 	);
 	await registry.archiveSession(s3);
 	assert.deepEqual(env.global.archivedSessionIds, [s3]);
+});
+
+test("跨工作区批量归档去重且幂等，无效批次不部分写入", async () => {
+ const env = buildRoot({ headers: [header(s1, cwdA), header(s2, cwdB)], workspaces: { [A]: workspace(cwdA, [s1]), [B]: workspace(cwdB, [s2]) } });
+ const registry = await mountWorkspaceRegistry(env);
+ await assert.rejects(() => registry.archiveSessions([s1, sUnknown]), /UNKNOWN_SESSION/);
+ assert.deepEqual(env.global.archivedSessionIds, []);
+ await assert.rejects(() => registry.archiveSessions([s1, ""]), /sessionId/);
+ assert.deepEqual(env.global.archivedSessionIds, []);
+ const result = await registry.archiveSessions([s2, s1, s2]);
+ assert.deepEqual(result.archivedSessionIdsAdded, [s2, s1]);
+ assert.deepEqual(env.global.archivedSessionIds, [s2, s1]);
+ assert.deepEqual((await registry.archiveSessions([s1])).archivedSessionIdsAdded, []);
+ assert.deepEqual((await registry.archiveSessions([])).archivedSessionIdsAdded, []);
 });

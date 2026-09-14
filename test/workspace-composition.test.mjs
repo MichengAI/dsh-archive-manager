@@ -304,3 +304,73 @@ for (const restore of [false, true]) {
     });
   }
 }
+
+test("归档 TAB 默认与切换、多项目选择、确认提交和状态刷新", async () => {
+ const values = []; let cursor = 0;
+ const hooks = { ...statics.react,
+  useSyncExternalStore: (_subscribe, snapshot) => snapshot(),
+  useState: initial => { const i=cursor++; if (!(i in values)) values[i]=typeof initial === "function" ? initial() : initial; return [values[i], value => {values[i]=typeof value === "function" ? value(values[i]) : value;}]; },
+  useRef: initial => { const i=cursor++; return values[i] ??= {current:initial}; },
+  useMemo: fn => fn(), useEffect: () => {}
+ };
+ const client = factories.get("@michengai/dsh-archive-manager")(name => name === "react" ? hooks : statics[name]);
+ const state = {items:[{workspaceId:"a",title:"项目 A",sessionIds:["one"]},{workspaceId:"b",title:"项目 B",sessionIds:["two"]}],archivedSessionIds:["old"]};
+ const calls=[]; let failNext=true;
+ const props = {sessionStore:source({byId:Object.fromEntries(["one","two","old"].map(id => [id,{id,title:id,updatedAt:1}]))}),workspaceStore:source(state),archivedSessionMetadata:async()=>({items:[]}),archiveSessions:async ids=>{calls.push(ids);if(failNext){failNext=false;throw new Error("写入失败");}state.archivedSessionIds=[...state.archivedSessionIds,...ids];return {archivedSessionIds:state.archivedSessionIds,archivedSessionIdsAdded:ids};},t:key=>key};
+ const render=()=>{cursor=0;return client.__test.ArchivedSessionsSection(props);};
+ const nodes=(node)=>Array.isArray(node)?node.flatMap(nodes):node?.props?[node,...nodes(node.props.children)]:[];
+ let tree=render();
+ const tab=(name)=>nodes(tree).find(n=>n.props.role==="tab" && n.props.children===`archives.tab.${name}`);
+ assert.equal(tab("archived").props["aria-selected"],true);
+ assert.equal(nodes(tree).some(n=>n.type==="header" && nodes(n.props.children).some(child=>child.props.role==="tablist")),false,"归档页签不得被 Codex UI 的 header [role=tablist] 会话顶栏适配器命中");
+ assert.ok(nodes(tree).some(n=>n.props.children==="archives.restoreAll"));
+ tab("unarchived").props.onClick();tree=render();
+ assert.equal(tab("unarchived").props["aria-selected"],true);
+ assert.equal(nodes(tree).some(n=>n.props.children==="archives.restoreAll"),false);
+ for(const row of nodes(tree).filter(n=>n.type==="article")) row.props.children[0].props.onChange({target:{checked:true}});
+ tree=render();
+ let toolbar=nodes(tree).find(n=>n.props.onToggle);
+ assert.equal(toolbar.props.selectedCount,2);
+ const search=nodes(tree).find(n=>n.type==="input" && n.props.type==="search");
+ search.props.onChange({target:{value:"one"}});tree=render();
+ toolbar=nodes(tree).find(n=>n.props.onToggle);
+ assert.equal(toolbar.props.hiddenCount,1);
+ toolbar.props.onArchive();tree=render();
+ const dialog=nodes(tree).find(n=>n.props.open===true && n.props.description==="archives.archiveSelectedDesc");
+ assert.ok(dialog);
+ const confirmButton=nodes(dialog.props.footer).find(n=>n.props.children==="archives.archiveSelected");
+ assert.equal(confirmButton.props.variant,"outline","归档确认按钮与取消按钮使用一致的描边样式");
+ const submit=confirmButton.props.onClick;
+ await Promise.all([submit(),submit()]);
+ tree=render(); assert.equal(calls.length,1,"重复提交只发送一次请求");
+ toolbar=nodes(tree).find(n=>n.props.onToggle);
+ assert.equal(toolbar.props.selectedCount,2,"失败后保留跨筛选选择");
+ assert.ok(nodes(tree).some(n=>n.props.role==="alert"));
+ toolbar.props.onArchive(); tree=render();
+ const retry=nodes(tree).find(n=>n.props.open===true && n.props.description==="archives.archiveSelectedDesc");
+ await nodes(retry.props.footer).find(n=>n.props.children==="archives.archiveSelected").props.onClick();
+ tree=render();assert.deepEqual(calls,[["one","two"],["one","two"]]);
+ assert.equal(nodes(tree).filter(n=>n.type==="article").length,0);
+ tab("archived").props.onClick();tree=render();
+ assert.equal(nodes(tree).find(n=>n.props.onToggle).props.selectedCount,0);
+ assert.equal(nodes(tree).filter(n=>n.type==="article").length,3);
+ // 项目菜单作用于整个项目，不被标题搜索缩小；未分组采用相同规则。
+ for (const ungrouped of [false,true]) {
+  state.archivedSessionIds=["old"];
+  state.items=ungrouped?[]:[{workspaceId:"a",title:"项目 A",sessionIds:["one","two"]}];
+  tab("unarchived").props.onClick();tree=render();
+  nodes(tree).find(n=>n.type==="input" && n.props.type==="search").props.onChange({target:{value:"one"}});tree=render();
+  const actions=nodes(tree).find(n=>n.props.group && n.props.onArchive);
+  assert.ok(actions,"未归档项目与未分组均提供更多菜单");
+  const menu=actions.type(actions.props);
+  assert.deepEqual(menu.props.items.map(item=>item.id),["archive"]);
+  assert.equal(menu.props.items[0].danger,undefined);
+  menu.props.onSelect("archive");tree=render();
+  const groupDialog=nodes(tree).find(n=>n.props.open===true && n.props.description===(ungrouped?"archives.archiveUngroupedDesc":"archives.archiveProjectDesc"));
+  assert.ok(groupDialog,"确认框说明整个分组的范围");
+  await nodes(groupDialog.props.footer).find(n=>n.props.children==="archives.archiveSelected").props.onClick();
+  assert.deepEqual(calls.at(-1),["one","two"],"搜索隐藏的项目会话也应归档");
+  tree=render();tab("archived").props.onClick();tree=render();
+ }
+
+});

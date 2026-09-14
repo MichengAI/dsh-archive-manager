@@ -71,7 +71,7 @@ root.provide("connection", {
 			calls.push({ channel, endpoint, payload, signal });
 			const value = endpoint === "workspaceRegistry/deleteSession" ? { deleted: true }
 				: endpoint === "workspaceRegistry/unarchiveSessions" ? { archivedSessionIds: ["s2"], unarchivedSessionIds: ["s1"] }
-				: endpoint === "workspaceRegistry/archiveWorkspaceSessions" ? { archivedSessionIds: ["s1", "s2"], archivedSessionIdsAdded: ["s1"] }
+				: (endpoint === "workspaceRegistry/archiveWorkspaceSessions" || endpoint === "workspaceRegistry/archiveSessions") ? { archivedSessionIds: ["s1", "s2"], archivedSessionIdsAdded: ["s1"] }
 				: endpoint === "workspaceRegistry/deleteArchivedSessions" ? { requestedSessionIds: ["s1"], deletedSessionIds: ["s1"], skippedSessionIds: [], failures: [] }
 				: endpoint === "workspaceRegistry/archivedSessionMetadata" ? { items: [{ sessionId: "s1", createdAt: 1700000000000 }], repairedSessionIds: ["s1"] }
 				: { archivedSessionIds: ["s2"] };
@@ -120,6 +120,10 @@ test("$mount registers the namespace; ctx.get resolves it and dispatches through
 		assert.deepEqual(result6, { ok: true, value: { archivedSessionIds: ["s1", "s2"], archivedSessionIdsAdded: ["s1"] } });
 		assert.equal(calls[5].endpoint, "workspaceRegistry/archiveWorkspaceSessions");
 		assert.deepEqual(JSON.parse(JSON.stringify(calls[5].payload)), { args: { workspaceId: "w1" } });
+		const selected = await registry.archiveSessions(["s1", "s2", "s1"]);
+  assert.equal(selected.ok, true);
+  assert.equal(calls[6].endpoint, "workspaceRegistry/archiveSessions");
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[6].payload)), { args: { sessionIds: ["s1", "s2"] } });
 	} finally {
 		await fiber.dispose();
 	}

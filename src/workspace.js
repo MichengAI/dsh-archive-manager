@@ -191,6 +191,12 @@ const unarchivedBatchSchema = {
 		return value;
 	},
 };
+const archiveSessionIdsSchema = {
+	parse(value) {
+		if (!Array.isArray(value)) throw new TypeError("sessionIds must be an array");
+		return [...new Set(value.map((id) => sessionIdSchema.parse(id)))];
+	}
+};
 const archivedWorkspaceBatchSchema = {
 	parse(value) {
 		if (typeof value !== "object" || value === null || Array.isArray(value))
@@ -359,6 +365,35 @@ const ARCHIVE_MANAGER_INVOCATIONS = [
 		},
 	},
 	{
+		id: "@michengai/dsh-archive-manager#workspaceRegistry/archiveSessions",
+		service: "workspaceRegistry",
+		namespace: "workspaceRegistry",
+		method: "archiveSessions",
+		invocation: { kind: "direct" },
+		parameters: [
+			{
+				name: "sessionIds",
+				wire: "sessionIds",
+				source: "json",
+				codec: {
+					mode: "strict",
+					typeSymbol: "@michengai/dsh-archive-manager/types#ArchiveSessionIds",
+					schema: archiveSessionIdsSchema,
+				},
+			},
+		],
+		result: {
+			mode: "strict",
+			typeSymbol: "@michengai/dsh-archive-manager/types#ArchivedWorkspaceBatch",
+			schema: archivedWorkspaceBatchSchema,
+		},
+		sourceLocation: {
+			file: "@michengai/dsh-archive-manager/lib/workspace.js",
+			line: 1,
+			column: 1,
+		},
+	},
+	{
 		id: "@michengai/dsh-archive-manager#workspaceRegistry/archiveWorkspaceSessions",
 		service: "workspaceRegistry",
 		namespace: "workspaceRegistry",
@@ -474,6 +509,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		markRemoteMethod(this, "deleteSession");
 		markRemoteMethod(this, "unarchiveSessions");
 		markRemoteMethod(this, "archiveWorkspaceSessions");
+		markRemoteMethod(this, "archiveSessions");
 		markRemoteMethod(this, "deleteArchivedSessions");
 		markRemoteMethod(this, "archivedSessionMetadata");
 		registerHostRemote(this.ctx);
@@ -619,6 +655,21 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 			};
 			await this.setState(next);
 			return { archivedSessionIds: [...next.archivedSessionIds] };
+		});
+	}
+	/** 按明确 ID 跨工作区归档；先校验整批，单次写入，重复归档不新增标记。 */
+	async archiveSessions(sessionIds) {
+		return this.enqueueOperation(async () => {
+			const ids = archiveSessionIdsSchema.parse(sessionIds);
+			const state = this.requireState();
+			const archived = new Set(state.archivedSessionIds);
+			const archivedSessionIdsAdded = ids.filter((id) => !archived.has(id));
+			for (const id of archivedSessionIdsAdded) {
+				if (!(await this.sessionKnown(id))) throw new ArchiveUnknownSessionError(id);
+			}
+			const next = { ...state, archivedSessionIds: [...state.archivedSessionIds, ...archivedSessionIdsAdded] };
+			if (archivedSessionIdsAdded.length > 0) await this.setState(next);
+			return { archivedSessionIds: [...next.archivedSessionIds], archivedSessionIdsAdded };
 		});
 	}
 	/**

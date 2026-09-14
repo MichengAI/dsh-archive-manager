@@ -29,7 +29,7 @@ test("归档设置页提供搜索、排序、筛选、全部恢复和全部删�
   const client = await readFile(clientPath, "utf8");
 
   assert.match(client, /dsham_settingsToolbar/);
-  assert.match(client, /placeholder: t\("archives\.searchPlaceholder"\)/);
+  assert.match(client, /placeholder: t\(isArchived \? "archives\.searchPlaceholder"/);
   assert.match(client, /className: "dsham_settingsFilter"/);
   assert.match(client, /id: "dsham-sort-filter"/);
   assert.match(client, /value: "updated", label: t\("archives\.sortUpdated"\)/);
