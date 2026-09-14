@@ -516,12 +516,14 @@ window.__ModuleLoader__.load({
 						className: "dsham_settingsSearch",
 						children: [(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconSearchOutline16, {}), (0, react_jsx_runtime.jsx)("input", { type: "search", value: query, onChange: (event) => setQuery(event.target.value), placeholder: t("archives.searchPlaceholder"), "aria-label": t("archives.searchPlaceholder") })]
 					}), (0, react_jsx_runtime.jsx)(ArchiveProjectSelect, { id: "dsham-sort-filter", value: sortBy, options: [{ value: "updated", label: t("archives.sortUpdated") }, { value: "created", label: t("archives.sortCreated") }, { value: "alphabetical", label: t("archives.sortAlphabetical") }], onChange: setSortBy, "aria-label": t("archives.sortBy") }), (0, react_jsx_runtime.jsx)(ArchiveProjectSelect, { id: "dsham-project-filter", value: project, options: [{ value: "all", label: t("archives.allProjects") }, ...sortedGroups.map((group) => ({ value: group.key, label: group.title }))], onChange: setProject, "aria-label": t("archives.projectFilter") })]
-				}), groups.length > 0 && (0, react_jsx_runtime.jsxs)("div", {
-					className: "dsham_settingsSelection",
-					children: [(0, react_jsx_runtime.jsxs)("label", {
-						className: "dsham_settingsSelectionToggle",
-						children: [(0, react_jsx_runtime.jsx)(ArchiveSelectionCheckbox, { checked: allVisibleSelected, indeterminate: selectedVisibleCount > 0 && !allVisibleSelected, disabled: busy || visibleSessionIds.length === 0, label: t("archives.selectAllFiltered"), onChange: (event) => toggleVisibleSelection(event.target.checked) }), t("archives.selectAllFiltered")]
-					}), (0, react_jsx_runtime.jsx)("span", { className: "dsham_settingsSelectionCount", children: t("archives.selectedScope", { n: selectedSessionIds.length, hidden: selectedSessionIds.length - selectedVisibleCount }) }), (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsSelectionAction", disabled: busy || selectedSessionIds.length === 0, onClick: () => setSelectedSessionIds([]), children: t("archives.clearSelection") }), (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsSelectionAction", disabled: busy || selectedSessionIds.length === 0, onClick: onSelectedUnarchive, children: t("archives.restoreSelected") }), (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsSelectionAction dsham_settingsSelectionDelete", disabled: busy || selectedSessionIds.length === 0, onClick: () => setDeleteTarget({ kind: "batch", target: { scope: "sessions", sessionIds: selectedSessionIds }, count: selectedSessionIds.length }), children: t("archives.deleteSelected") })]
+				}), groups.length > 0 && (0, react_jsx_runtime.jsx)(ArchiveSelectionToolbar, {
+					selectedCount: selectedSessionIds.length,
+					hiddenCount: selectedSessionIds.length - selectedVisibleCount,
+					allVisibleSelected, selectedVisibleCount, visibleCount: visibleSessionIds.length, busy, t,
+					onToggle: toggleVisibleSelection,
+					onClear: () => setSelectedSessionIds([]),
+					onRestore: onSelectedUnarchive,
+					onDelete: () => setDeleteTarget({ kind: "batch", target: { scope: "sessions", sessionIds: selectedSessionIds }, count: selectedSessionIds.length })
 				}), groups.length === 0 ? (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsEmpty", children: t("archives.empty") }) : filteredGroups.length === 0 ? (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsEmpty", children: t("archives.emptyFiltered") }) : filteredGroups.map((group) => {
 					const target = archivedBatchTargetForGroup(group.key);
 					const count = deriveArchivedBatchIds(workspaceState.archivedSessionIds, workspaceState.items, target).length;
@@ -3006,7 +3008,7 @@ window.__ModuleLoader__.load({
 		const ARCHIVE_SETTINGS_EXTERNAL_LINK_CSS = ".dsham_settingsTitleRow{display:flex;align-items:center;gap:8px 12px;min-width:0;flex-wrap:wrap}.dsham_settingsLinks{display:flex;align-items:center;gap:4px;flex-wrap:wrap}.dsham_settingsExternalLink{display:inline-flex;align-items:center;gap:5px;min-height:28px;padding:0 8px;color:var(--dsw-alias-label-secondary);background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:7px;font-size:12px;font-weight:500;line-height:18px;text-decoration:none;white-space:nowrap}.dsham_settingsExternalLink:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsExternalLink:focus-visible{outline:2px solid var(--dsw-alias-state-success-primary);outline-offset:2px}.dsham_settingsExternalLink svg{flex:none}@media(max-width:720px){.dsham_settingsTitleRow{flex-wrap:wrap}}";
 		const ARCHIVE_SETTINGS_DELETE_CONFIRM_CSS = ".dsham_settingsDeleteConfirm{color:var(--dsw-alias-state-error-primary)!important;background:transparent!important;border-color:var(--dsw-alias-state-error-primary)!important}.dsham_settingsDeleteConfirm:hover:not(:disabled){background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 20%,transparent)!important}.dsham_settingsDeleteConfirm:focus-visible{outline:2px solid var(--dsw-alias-state-error-secondary);outline-offset:2px}.dsham_settingsDeleteConfirm:disabled{cursor:not-allowed;opacity:.5}";
 		const ARCHIVE_WORKSPACE_CONFIRM_CSS = ".dsham_archiveWorkspaceConfirm{color:var(--dsw-alias-state-error-primary)!important;background:transparent!important;border-color:var(--dsw-alias-state-error-primary)!important}.dsham_archiveWorkspaceConfirm:hover:not(:disabled){background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 20%,transparent)!important}.dsham_archiveWorkspaceConfirm:focus-visible{outline:2px solid var(--dsw-alias-state-error-secondary);outline-offset:2px}.dsham_archiveWorkspaceConfirm:disabled{cursor:not-allowed;opacity:.5}";
-		const ARCHIVE_SETTINGS_SELECTION_CSS = ".dsham_settingsSelection{display:flex;align-items:center;gap:10px;min-height:40px;margin:-8px 0 16px;padding:4px 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-2,var(--dsw-alias-button-elevated-fill))}.dsham_settingsSelectionToggle{display:inline-flex;align-items:center;gap:8px;min-width:0;color:var(--dsw-alias-label-primary);font-size:13px;cursor:pointer}.dsham_settingsCheckbox{width:16px;height:16px;margin:0;accent-color:#3b82f6}.dsham_settingsSelectionCount{margin-right:auto;color:var(--dsw-alias-label-tertiary);font-size:12px}.dsham_settingsSelectionAction{min-height:28px;padding:0 10px;color:var(--dsw-alias-label-primary);background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:7px;cursor:pointer;font:inherit;font-size:12px;font-weight:500}.dsham_settingsSelectionAction:hover{background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsSelectionDelete{color:var(--dsw-alias-state-error-primary);border-color:var(--dsw-alias-state-error-primary)}.dsham_settingsSelectionAction:disabled{cursor:not-allowed;opacity:.5}@media(max-width:720px){.dsham_settingsSelection{flex-wrap:wrap}.dsham_settingsSelectionCount{margin-right:0}.dsham_settingsSelectionAction{margin-left:auto}.dsham_settingsSelectionAction+.dsham_settingsSelectionAction{margin-left:-2px}}";
+		const ARCHIVE_SETTINGS_SELECTION_CSS = ".dsham_settingsSelection{margin:-8px 0 16px;padding:4px 0 12px;border-bottom:1px solid var(--dsw-alias-border-l2)}.dsham_settingsSelectionMain{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;min-height:36px}.dsham_settingsSelectionSummary{display:flex;flex-wrap:wrap;align-items:center;gap:12px;min-width:0;max-width:100%}.dsham_settingsSelectionToggle{display:inline-flex;flex:none;white-space:nowrap;align-items:center;gap:12px;color:var(--dsw-alias-label-primary);font-size:13px;line-height:20px;cursor:pointer}.dsham_settingsCheckbox{flex:none;width:16px;height:16px;margin:0;accent-color:var(--dsw-alias-state-business-primary,#3b82f6)}.dsham_settingsSelectionClear{flex:none;min-height:28px;padding:0 0 0 12px;border:0;border-left:1px solid var(--dsw-alias-border-l2);background:transparent;color:var(--dsw-alias-state-business-primary,#3b82f6);font:inherit;font-size:13px;white-space:nowrap;cursor:pointer}.dsham_settingsSelectionClear:hover:not(:disabled){text-decoration:underline}.dsham_settingsSelectionActions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;max-width:100%;margin-left:auto}.dsham_settingsSelectionAction{flex:none;white-space:nowrap;min-height:32px;padding:0 14px;color:var(--dsw-alias-label-primary);background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:7px;cursor:pointer;font:inherit;font-size:13px;font-weight:500}.dsham_settingsSelectionAction:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsSelectionDelete{color:var(--dsw-alias-state-error-primary);border-color:var(--dsw-alias-state-error-primary)}.dsham_settingsSelectionScope{margin:8px 0 0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:20px;overflow-wrap:anywhere}.dsham_settingsSelectionAction:disabled,.dsham_settingsSelectionClear:disabled{cursor:not-allowed;opacity:.5}.dsham_settingsSelectionAction:focus-visible,.dsham_settingsSelectionClear:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary,#3b82f6);outline-offset:3px}";
 		const ARCHIVE_SETTINGS_LAYOUT_OVERRIDE = ".dsham_settings{margin:0 auto!important}@media(max-width:720px){.dsham_settings{margin:0 auto!important}}";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify("dsh-archive-manager/ArchiveSettings.layout.css") + "]") === null) {
 			const tag = document.createElement("style");
@@ -3145,6 +3147,31 @@ window.__ModuleLoader__.load({
 						children: option.label
 					}, option.value === "all" ? "all" : option.value))
 				}) : null]
+			});
+		}
+		/** 选择摘要与动作分组显示；跨筛选范围单独提示，避免被紧凑布局隐藏。 */
+		function ArchiveSelectionToolbar({ selectedCount, hiddenCount, allVisibleSelected, selectedVisibleCount, visibleCount, busy, t, onToggle, onClear, onRestore, onDelete }) {
+			const hasSelection = selectedCount > 0;
+			return (0, react_jsx_runtime.jsxs)("div", {
+				className: "dsham_settingsSelection",
+				children: [(0, react_jsx_runtime.jsxs)("div", {
+					className: "dsham_settingsSelectionMain",
+					children: [(0, react_jsx_runtime.jsxs)("div", {
+						className: "dsham_settingsSelectionSummary",
+						children: [(0, react_jsx_runtime.jsxs)("label", {
+							className: "dsham_settingsSelectionToggle",
+							title: t("archives.selectAllFiltered"),
+							children: [(0, react_jsx_runtime.jsx)(ArchiveSelectionCheckbox, {
+								checked: allVisibleSelected, indeterminate: selectedVisibleCount > 0 && !allVisibleSelected,
+								disabled: busy || visibleCount === 0, label: t("archives.selectAllFiltered"),
+								onChange: (event) => onToggle(event.target.checked)
+							}), (0, react_jsx_runtime.jsx)("span", { "aria-live": "polite", children: hasSelection ? t("archives.selectedCount", { n: selectedCount }) : t("archives.selectAllFiltered") })]
+						}), hasSelection && (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsSelectionClear", disabled: busy, "aria-label": t("archives.clearSelection"), onClick: onClear, children: t("archives.clearSelectionShort") })]
+					}), hasSelection && (0, react_jsx_runtime.jsxs)("div", {
+						className: "dsham_settingsSelectionActions",
+						children: [(0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsSelectionAction", disabled: busy, "aria-label": t("archives.restoreSelected"), onClick: onRestore, children: t("archives.restoreSelectionShort") }), (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsSelectionAction dsham_settingsSelectionDelete", disabled: busy, "aria-label": t("archives.deleteSelected"), onClick: onDelete, children: t("archives.deleteSelectionShort") })]
+					})]
+				}), hiddenCount > 0 && (0, react_jsx_runtime.jsx)("p", { className: "dsham_settingsSelectionScope", role: "status", children: t("archives.selectionHiddenHint", { hidden: hiddenCount }) })]
 			});
 		}
 		/** 原生 checkbox 保留浏览器的正确键盘语义，并显式同步三态显示。 */
@@ -3313,7 +3340,11 @@ window.__ModuleLoader__.load({
 			"archives.navigationUnavailable": "当前宿主无法保持归档对话，请使用“恢复并打开”。",
 			"archives.sessionNotRetained": "宿主未保留目标会话，请重新打开或恢复后再试。",
 			"archives.restoreOpen": "恢复并打开",
-			"archives.selectedScope": "已选 {n} 条，其中 {hidden} 条不在当前结果",
+			"archives.selectedCount": "已选 {n} 条",
+			"archives.selectionHiddenHint": "含当前未显示的 {hidden} 条，也将参与操作",
+			"archives.clearSelectionShort": "清空",
+			"archives.restoreSelectionShort": "恢复",
+			"archives.deleteSelectionShort": "删除",
 			"archives.clearSelection": "清空选择",
 
 			"group.ungrouped": "未分组",
@@ -3446,7 +3477,11 @@ window.__ModuleLoader__.load({
 			"archives.navigationUnavailable": "This host cannot keep the conversation archived while opening it. Use “Restore and open” instead.",
 			"archives.sessionNotRetained": "The host did not keep the requested conversation open. Try again, or restore it before opening.",
 			"archives.restoreOpen": "Restore and open",
-			"archives.selectedScope": "{n} selected, {hidden} outside current results",
+			"archives.selectedCount": "{n} selected",
+			"archives.selectionHiddenHint": "Includes {hidden} hidden by the current filter; actions apply to them too.",
+			"archives.clearSelectionShort": "Clear",
+			"archives.restoreSelectionShort": "Restore",
+			"archives.deleteSelectionShort": "Delete",
 			"archives.clearSelection": "Clear selection",
 
 			"group.ungrouped": "Ungrouped",
@@ -3802,6 +3837,7 @@ window.__ModuleLoader__.load({
 		//#endregion
 		/** Pure derivation surface for dsh-archive-manager self-tests (no-op for the runtime). */
 		exports.__test = {
+			ArchiveSelectionToolbar,
 			ArchivedSessionsSection,
 			zh,
 			displayTitle,

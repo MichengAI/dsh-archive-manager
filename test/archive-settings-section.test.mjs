@@ -68,7 +68,7 @@ test("归档设置页原型支持筛选内全选、跨项目选择与确认批�
 	assert.match(client, /ArchivedSessionsSection/);
 	assert.match(client, /className: "dsham_settingsSelection"/);
 	assert.match(client, /archives\.selectAllFiltered/);
-	assert.match(client, /toggleVisibleSelection\(event\.target\.checked\)/);
+	assert.match(client, /onToggle: toggleVisibleSelection/);
 	assert.match(client, /scope: "sessions", sessionIds: selectedSessionIds/);
 	assert.match(client, /archives\.restoreSelected/);
 	assert.match(client, /archives\.deleteSelectedTitle/);

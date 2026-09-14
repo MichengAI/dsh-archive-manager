@@ -4,6 +4,11 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 0.1.41 - 2026-09-14
+
+- Improve the archived-session bulk action bar with grouped selection details and actions, fixing wrapped button labels in narrow content areas.
+- Simplify the bar when nothing is selected and show cross-filter selection counts and scope separately so hidden selections remain clear.
+
 ## 0.1.40 - 2026-09-13
 
 - Open archived sessions in the native DSH conversation view and continue chatting while keeping them archived, or restore and open them.

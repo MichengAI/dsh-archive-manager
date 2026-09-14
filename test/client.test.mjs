@@ -6,6 +6,7 @@
 // test 目录的 `node_modules` junction。覆盖客户端自身的派生
 // functions and store through its `__test` export.
 import { test } from "node:test";
+import { renderToStaticMarkup } from "react-dom/server";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
@@ -480,4 +481,41 @@ test("archivedDeleteFeedback: skipped 会话不会计入删除成功数", () => 
 			params: { deleted: 1, skipped: 1, failed: 1, detail: "boom" }
 		}
 	});
+});
+
+function selectionToolbarProps(overrides = {}) {
+	return { selectedCount: 5, hiddenCount: 3, allVisibleSelected: false, selectedVisibleCount: 2, visibleCount: 3, busy: false,
+		t: (key, params = {}) => Object.entries(params).reduce((text, [name, value]) => text.replaceAll("{" + name + "}", String(value)), t.zh[key]),
+		onToggle() {}, onClear() {}, onRestore() {}, onDelete() {}, ...overrides };
+}
+
+function toolbarElements(element) {
+	if (!element || typeof element !== "object") return [];
+	return [element, ...[element.props?.children].flat().flatMap(toolbarElements)];
+}
+
+test("选择栏仅在有选择时显示操作，跨筛选范围始终完整提示", () => {
+	const empty = renderToStaticMarkup(t.ArchiveSelectionToolbar(selectionToolbarProps({ selectedCount: 0, hiddenCount: 0, selectedVisibleCount: 0 })));
+	assert.match(empty, /全选当前筛选结果/);
+	assert.doesNotMatch(empty, /<button|也将参与操作/);
+	const selected = renderToStaticMarkup(t.ArchiveSelectionToolbar(selectionToolbarProps()));
+	assert.match(selected, /已选 5 条/);
+	assert.match(selected, /含当前未显示的 3 条，也将参与操作/);
+	assert.doesNotMatch(selected, /恢复所选<|删除所选</);
+	const visibleOnly = renderToStaticMarkup(t.ArchiveSelectionToolbar(selectionToolbarProps({ hiddenCount: 0 })));
+	assert.doesNotMatch(visibleOnly, /也将参与操作/);
+});
+
+test("选择栏保留全选语义和操作回调，忙碌时禁用所有操作", () => {
+	const calls = [];
+	const props = selectionToolbarProps({ onToggle: value => calls.push(value), onClear: () => calls.push("clear"), onRestore: () => calls.push("restore"), onDelete: () => calls.push("delete") });
+	const elements = toolbarElements(t.ArchiveSelectionToolbar(props));
+	const checkbox = elements.find(el => typeof el.type === "function");
+	assert.equal(checkbox.props.label, "全选当前筛选结果");
+	assert.equal(checkbox.props.indeterminate, true);
+	checkbox.props.onChange({ target: { checked: true } });
+	for (const button of elements.filter(el => el.type === "button")) button.props.onClick();
+	assert.deepEqual(calls, [true, "clear", "restore", "delete"]);
+	const busy = toolbarElements(t.ArchiveSelectionToolbar({ ...props, busy: true }));
+	assert.ok(busy.filter(el => el.type === "button" || typeof el.type === "function").every(el => el.props.disabled));
 });
