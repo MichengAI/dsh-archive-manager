@@ -601,7 +601,7 @@ window.__ModuleLoader__.load({
 								className: "dsham_settingsRow",
 								children: [(0, react_jsx_runtime.jsx)(ArchiveSelectionCheckbox, { checked: selectedSessionIdSet.has(session.id), disabled: busy, label: t("archives.selectSession", { name: displayTitle(session, t) }), onChange: (event) => toggleSessionSelection(session.id, event.target.checked) }), (0, react_jsx_runtime.jsxs)("div", { className: "dsham_settingsContent", children: [(0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsTitle", children: displayTitle(session, t) }), (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsMeta", children: archiveTimeLabel(session.updatedAt, t) })] }), (0, react_jsx_runtime.jsxs)("div", {
 									className: "dsham_settingsActions",
-									children: !isArchived ? [(0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsAction", disabled: busy, onClick: () => viewConversation(session), children: t("archives.openSession") }), (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsAction", disabled: busy, onClick: () => requestArchive([session.id]), children: t("archives.archiveSelected") })] : [(0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsAction", disabled: busy || unarchivingSessionIds.has(session.id), onClick: () => viewConversation(session), children: t("archives.viewConversation") }), (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsAction", disabled: busy || unarchivingSessionIds.has(session.id), onClick: () => viewConversation(session, true), children: t("archives.restoreOpen") }), (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsAction", disabled: busy || unarchivingSessionIds.has(session.id), onClick: () => onUnarchive(session.id), children: t("menu.unarchive") }), (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsDelete", disabled: busy || unarchivingSessionIds.has(session.id), "aria-label": t("menu.deleteSession"), onClick: () => setDeleteTarget({ kind: "session", session }), children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconTrashOutline16, {}) })]
+									children: !isArchived ? [(0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsAction", disabled: busy, onClick: () => viewConversation(session), children: t("archives.openSession") }), (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsAction", disabled: busy, onClick: () => requestArchive([session.id]), children: t("archives.archiveSelected") })] : [(0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsAction", disabled: busy || unarchivingSessionIds.has(session.id), onClick: () => viewConversation(session), children: t("archives.openSession") }), (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsAction", disabled: busy || unarchivingSessionIds.has(session.id), onClick: () => viewConversation(session, true), children: t("archives.restoreOpen") }), (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsAction", disabled: busy || unarchivingSessionIds.has(session.id), onClick: () => onUnarchive(session.id), children: t("archives.restoreSelectionShort") }), (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsDelete", disabled: busy || unarchivingSessionIds.has(session.id), "aria-label": t("menu.deleteSession"), onClick: () => setDeleteTarget({ kind: "session", session }), children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconTrashOutline16, {}) })]
 								})]
 							}, session.id))
 						})]
@@ -3269,7 +3269,8 @@ window.__ModuleLoader__.load({
 			const items = onArchive ? [{
 				id: "archive",
 				label: t(ungrouped ? "archives.archiveUngrouped" : "archives.archiveProject"),
-				icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconArchiveOutline20, { size: 16 })
+				icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconArchiveOutline20, { size: 16 }),
+				danger: true
 			}] : [{
 				id: "restore",
 				label: t(ungrouped ? "archives.restoreUngrouped" : "archives.restoreProject"),
@@ -3434,7 +3435,6 @@ window.__ModuleLoader__.load({
 			"archives.archiveSuccess": "已归档 {n} 条会话。",
 			"archives.archiveBatchFailed": "批量归档失败：{detail}",
 
-			"archives.viewConversation": "查看对话",
 			"archives.navigationUnavailable": "当前宿主无法保持归档对话，请使用“恢复并打开”。",
 			"archives.sessionNotRetained": "宿主未保留目标会话，请重新打开或恢复后再试。",
 			"archives.restoreOpen": "恢复并打开",
@@ -3586,7 +3586,6 @@ window.__ModuleLoader__.load({
 			"archives.archiveSuccess": "Archived {n} sessions.",
 			"archives.archiveBatchFailed": "Batch archive failed: {detail}",
 
-			"archives.viewConversation": "View conversation",
 			"archives.navigationUnavailable": "This host cannot keep the conversation archived while opening it. Use “Restore and open” instead.",
 			"archives.sessionNotRetained": "The host did not keep the requested conversation open. Try again, or restore it before opening.",
 			"archives.restoreOpen": "Restore and open",

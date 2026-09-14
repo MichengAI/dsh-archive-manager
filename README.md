@@ -76,7 +76,7 @@ Restart DSH Web, then hard-refresh your browser with `Ctrl+Shift+R`. Open **Sett
 | Archive a workspace | Open the workspace menu and choose the option to archive its chats |
 | Find an archive | Open **Settings → Archived sessions**, then search titles or filter by project |
 | Change the order | Sort by update time, creation time, or title |
-| Restore one chat | Click **Unarchive** beside the session |
+| Restore one chat | Click **Restore** beside the session |
 | Archive a project or ungrouped chats | On **Unarchived**, open the group’s **…** menu and confirm archiving all chats in that group, regardless of search filters |
 | Archive across projects | Switch to **Unarchived**, select sessions across projects, then click **Archive** and confirm |
 | Restore or delete in bulk | Select chats and use the bulk actions, or use the project menu or page-wide actions |
@@ -91,7 +91,7 @@ Developer API: Typert `workspaceRegistry/archiveSessions` accepts `{ sessionIds:
 
 Available starting with `0.1.40`:
 
-- **View conversation**: open the native DSH session to view messages, attachments, and tool details. Continue chatting while keeping the session archived.
+- **Open session**: open the native DSH session to view messages, attachments, and tool details. Continue chatting while keeping the session archived.
 - **Restore and open**: unarchive the session and open it to resume work.
 
 ## Updates

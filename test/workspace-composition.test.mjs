@@ -289,7 +289,7 @@ for (const restore of [false, true]) {
       function find(node) {
         if (Array.isArray(node)) return node.map(find).find(Boolean);
         if (!node?.props) return;
-        if (node.type === "button" && node.props.children === (restore ? "archives.restoreOpen" : "archives.viewConversation")) return node;
+        if (node.type === "button" && node.props.children === (restore ? "archives.restoreOpen" : "archives.openSession")) return node;
         return find(node.props.children);
       }
       const button = find(tree);
@@ -364,7 +364,7 @@ test("归档 TAB 默认与切换、多项目选择、确认提交和状态刷新
   assert.ok(actions,"未归档项目与未分组均提供更多菜单");
   const menu=actions.type(actions.props);
   assert.deepEqual(menu.props.items.map(item=>item.id),["archive"]);
-  assert.equal(menu.props.items[0].danger,undefined);
+  assert.equal(menu.props.items[0].danger,true);
   menu.props.onSelect("archive");tree=render();
   const groupDialog=nodes(tree).find(n=>n.props.open===true && n.props.description===(ungrouped?"archives.archiveUngroupedDesc":"archives.archiveProjectDesc"));
   assert.ok(groupDialog,"确认框说明整个分组的范围");
