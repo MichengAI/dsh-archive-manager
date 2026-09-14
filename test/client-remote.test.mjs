@@ -121,9 +121,9 @@ test("$mount registers the namespace; ctx.get resolves it and dispatches through
 		assert.equal(calls[5].endpoint, "workspaceRegistry/archiveWorkspaceSessions");
 		assert.deepEqual(JSON.parse(JSON.stringify(calls[5].payload)), { args: { workspaceId: "w1" } });
 		const selected = await registry.archiveSessions(["s1", "s2", "s1"]);
-  assert.equal(selected.ok, true);
-  assert.equal(calls[6].endpoint, "workspaceRegistry/archiveSessions");
-  assert.deepEqual(JSON.parse(JSON.stringify(calls[6].payload)), { args: { sessionIds: ["s1", "s2"] } });
+	assert.equal(selected.ok, true);
+	assert.equal(calls[6].endpoint, "workspaceRegistry/archiveSessions");
+	assert.deepEqual(JSON.parse(JSON.stringify(calls[6].payload)), { args: { sessionIds: ["s1", "s2"] } });
 	} finally {
 		await fiber.dispose();
 	}

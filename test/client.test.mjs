@@ -521,8 +521,8 @@ test("选择栏保留全选语义和操作回调，忙碌时禁用所有操作",
 });
 
 test("未归档列表排除已归档、子代理和空白占位，保留跨项目与未分组会话", () => {
- const byId = Object.fromEntries([
-  summary("a"), summary("b"), summary("loose"), summary("old"), summary("child", {origin:"subagent"}), summary("blank", {blank:true})
- ].map(item => [item.id, item]));
- assert.deepEqual(t.unarchivedSessionIds(byId, ["old"]), ["a", "b", "loose"]);
+	const byId = Object.fromEntries([
+		summary("a"), summary("b"), summary("loose"), summary("old"), summary("child", {origin:"subagent"}), summary("blank", {blank:true})
+	].map(item => [item.id, item]));
+	assert.deepEqual(t.unarchivedSessionIds(byId, ["old"]), ["a", "b", "loose"]);
 });
