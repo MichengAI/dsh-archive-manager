@@ -40,7 +40,7 @@ Find, restore, and clean up chats in **Settings → Archived sessions**:
 ## Prerequisites
 
 - A working [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web installation with `dsh` available in your terminal.
-- Supported DSH versions: `0.1.0-rc.8`, `0.1.1-rc.2`, `0.1.2-rc.1`, `0.1.5-rc.1`, and `0.1.5-rc.2`. Other versions are not currently supported.
+- Supported DSH versions: `0.1.0-rc.8`, `0.1.1-rc.2`, `0.1.2-rc.1`, `0.1.5-rc.1`, `0.1.5-rc.2`, and `0.1.6-alpha.1`. Other versions are not currently supported.
 - Node.js matching `^22.19.0 || >=24.0.0`. Source installation also requires pnpm.
 
 ## Installation
@@ -85,7 +85,7 @@ The page opens on **Archived**, with **Unarchived** on the right. Switching tabs
 
 **Restore all / Delete all** remain on the Archived tab and apply to archived sessions across all projects, regardless of filters. Unarchived excludes subagents and blank placeholders and supports sorting by update time or title.
 
-Developer API: Typert `workspaceRegistry/archiveSessions` accepts `{ sessionIds: string[] }` and returns `{ archivedSessionIds, archivedSessionIdsAdded }`. Call `registry.archiveSessions(ids)` and check the Typert `ok` result; the method uses the existing host authentication and RPC channel. The host validates and deduplicates the batch before one state write. Already archived IDs are idempotent; unknown sessions return `UNKNOWN_SESSION` without a partial archive.
+Settings and sidebar batch archive/restore call official `ctx.workspaces.archiveSession` / `unarchiveSession` serially, using the same client projection as single-session sidebar actions.
 
 ### View and continue archived conversations
 
@@ -111,7 +111,7 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 dsh --profile web --dump-config
 ```
 
-The configuration should include `workspace-archive-manager` and `ui-workspace-archive-manager`. If you previously set the official `ui-workspace` to `disabled: true` in your profile's `cordis.patch.yml`, remove that disabling override and restart.
+The configuration should include `workspace-archive-manager` and `ui-workspace-archive-manager`. On DSH 0.1.6+, official `ui-settings-unarchive-sessions` should be `disabled: true` so Settings keeps only this plugin's Archived sessions page. If you previously set the official `ui-workspace` to `disabled: true` in your profile's `cordis.patch.yml`, remove that disabling override and restart.
 
 ### How is archiving different from deletion?
 

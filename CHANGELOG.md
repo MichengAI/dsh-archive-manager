@@ -4,6 +4,17 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## Unreleased
+
+- Disable the official DSH 0.1.6+ Archived sessions settings plugin (`ui-settings-unarchive-sessions`) on install, so only this plugin's archive manager remains in Settings.
+- Declare DeepSeek Harness `0.1.6-alpha.1` in the DSH peer range and pin development dependencies to `0.1.6-alpha.1`. Host `workspace` and `session-projection-cache` remain replaced so batch archive and permanent delete keep working.
+- Treat unknown session ids as a no-op on archive and unarchive: skip them instead of throwing `UNKNOWN_SESSION`, and drop orphan archive markers on restore.
+- Opening the archived-sessions page prunes missing ids from the durable archive set so Restore all matches the visible list.
+- Treat missing sessions the same on delete as on archive: clean leftover traces without throwing `UNKNOWN_SESSION`.
+- Register the archive sidebar without waiting for official `uiWorkspace`, so the session menu is not stuck on the official three-item archive menu on DSH 0.1.6.
+- Settings and sidebar batch archive now call official `archiveSession` serially instead of the plugin `archiveSessions` channel.
+- Batch restore now calls official `unarchiveSession` serially; unused plugin `archiveSessions` / `archiveWorkspaceSessions` / `unarchiveSessions` endpoints and client sync helpers are removed.
+
 ## 0.1.42 - 2026-09-14
 
 - Add Archived / Unarchived tabs with Archived selected by default. Select sessions across projects for batch archiving, or archive all chats in a project or ungrouped section from its menu.

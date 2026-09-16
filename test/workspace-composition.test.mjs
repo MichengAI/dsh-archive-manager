@@ -136,6 +136,12 @@ test("安装补丁保持官方 ui-workspace 启用", async () => {
 	assert.doesNotMatch(patch, /id: ui-workspace\s+disabled: true/);
 });
 
+test("安装补丁关闭官方已归档设置页，仍替换宿主 workspace", async () => {
+	const patch = await readFile(new URL("../cordis.patch.yml", import.meta.url), "utf8");
+	assert.match(patch, /id: ui-settings-unarchive-sessions\s+disabled: true/);
+	assert.match(patch, /id: workspace\s+disabled: true/);
+});
+
 for (const archiveFirst of [false, true]) test(`官方选择器和导航保持唯一，侧栏覆盖可恢复（归档先加载=${archiveFirst}）`, async () => {
 	const root = new Context();
 	const slots = new SlotRegistry(root);
@@ -351,9 +357,12 @@ test("归档 TAB 默认与切换、多项目选择、确认提交和状态刷新
  assert.ok(nodes(retry.props.children).some(n=>n.props.role==="alert"),"错误在弹窗内显示");
  await nodes(retry.props.footer).find(n=>n.props.children==="archives.archiveSelected").props.onClick();
  tree=render();assert.deepEqual(calls,[["one","two"],["one","two"]]);
- assert.equal(nodes(tree).filter(n=>n.type==="article").length,0);
+ assert.equal(tab("archived").props["aria-selected"],true,"批量归档成功后切到已归档页");
+ assert.equal(nodes(tree).filter(n=>n.type==="article").length,3);
  assert.ok(nodes(tree).some(n=>n.props.role==="status" && n.props.children==="archives.archiveSuccess"));
- state.archivedSessionIds=["old"];tree=render();
+ state.archivedSessionIds=["old"];
+ tab("unarchived").props.onClick();tree=render();
+ assert.equal(nodes(tree).some(n=>n.props.role==="status" && n.props.children==="archives.archiveSuccess"),false,"切换页签清除上次成功提示");
  nodes(tree).find(n=>n.type==="button" && n.props.children==="archives.archiveSelected").props.onClick();tree=render();
  assert.equal(nodes(tree).some(n=>n.props.role==="status" && n.props.children==="archives.archiveSuccess"),false,"新归档清除上次成功提示");
  const freshDialog=nodes(tree).find(n=>n.props.open===true && n.props.description==="archives.archiveSelectedDesc");

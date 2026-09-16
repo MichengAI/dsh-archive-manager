@@ -1,9 +1,16 @@
 # 保留官方工作区 UI，仅替换归档需要的后端服务。
 # 自定义侧栏通过优先级覆盖插槽；发布后的安装命令：
 #   dsh plugin --profile web add @michengai/dsh-archive-manager
+#
+# workspace / session-projection-cache：宿主注册表与投影缓存，不是设置页。
+# 换成本插件子类，才能加批量归档、永久删除和安全缓存域。
+# ui-settings-unarchive-sessions：DSH 0.1.6+官方「已归档会话」设置页，只能单条恢复；
+# 禁用后只保留本插件的归档管理入口。旧宿主没有该 id 时补丁被忽略。
 - id: workspace
   disabled: true
 - id: session-projection-cache
+  disabled: true
+- id: ui-settings-unarchive-sessions
   disabled: true
 - id: ui-workspace
   disabled: false

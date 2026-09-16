@@ -70,8 +70,6 @@ root.provide("connection", {
 		async call(channel, endpoint, payload, signal) {
 			calls.push({ channel, endpoint, payload, signal });
 			const value = endpoint === "workspaceRegistry/deleteSession" ? { deleted: true }
-				: endpoint === "workspaceRegistry/unarchiveSessions" ? { archivedSessionIds: ["s2"], unarchivedSessionIds: ["s1"] }
-				: (endpoint === "workspaceRegistry/archiveWorkspaceSessions" || endpoint === "workspaceRegistry/archiveSessions") ? { archivedSessionIds: ["s1", "s2"], archivedSessionIdsAdded: ["s1"] }
 				: endpoint === "workspaceRegistry/deleteArchivedSessions" ? { requestedSessionIds: ["s1"], deletedSessionIds: ["s1"], skippedSessionIds: [], failures: [] }
 				: endpoint === "workspaceRegistry/archivedSessionMetadata" ? { items: [{ sessionId: "s1", createdAt: 1700000000000 }], repairedSessionIds: ["s1"] }
 				: { archivedSessionIds: ["s2"] };
@@ -104,26 +102,14 @@ test("$mount registers the namespace; ctx.get resolves it and dispatches through
 		assert.deepEqual(result2, { ok: true, value: { deleted: true } });
 		assert.equal(calls[1].endpoint, "workspaceRegistry/deleteSession");
 		assert.deepEqual(JSON.parse(JSON.stringify(calls[1].payload)), { args: { sessionId: "s1" } });
-		const result3 = await registry.unarchiveSessions({ scope: "workspace", workspaceId: "w1" });
-		assert.deepEqual(result3, { ok: true, value: { archivedSessionIds: ["s2"], unarchivedSessionIds: ["s1"] } });
-		assert.equal(calls[2].endpoint, "workspaceRegistry/unarchiveSessions");
-		assert.deepEqual(JSON.parse(JSON.stringify(calls[2].payload)), { args: { target: { scope: "workspace", workspaceId: "w1" } } });
-		const result4 = await registry.deleteArchivedSessions({ scope: "all" });
-		assert.deepEqual(result4, { ok: true, value: { requestedSessionIds: ["s1"], deletedSessionIds: ["s1"], skippedSessionIds: [], failures: [] } });
-		assert.equal(calls[3].endpoint, "workspaceRegistry/deleteArchivedSessions");
-		assert.deepEqual(JSON.parse(JSON.stringify(calls[3].payload)), { args: { target: { scope: "all" } } });
-		const result5 = await registry.archivedSessionMetadata();
-		assert.deepEqual(result5, { ok: true, value: { items: [{ sessionId: "s1", createdAt: 1700000000000 }], repairedSessionIds: ["s1"] } });
-		assert.equal(calls[4].endpoint, "workspaceRegistry/archivedSessionMetadata");
-		assert.deepEqual(JSON.parse(JSON.stringify(calls[4].payload)), { args: {} });
-		const result6 = await registry.archiveWorkspaceSessions("w1");
-		assert.deepEqual(result6, { ok: true, value: { archivedSessionIds: ["s1", "s2"], archivedSessionIdsAdded: ["s1"] } });
-		assert.equal(calls[5].endpoint, "workspaceRegistry/archiveWorkspaceSessions");
-		assert.deepEqual(JSON.parse(JSON.stringify(calls[5].payload)), { args: { workspaceId: "w1" } });
-		const selected = await registry.archiveSessions(["s1", "s2", "s1"]);
-	assert.equal(selected.ok, true);
-	assert.equal(calls[6].endpoint, "workspaceRegistry/archiveSessions");
-	assert.deepEqual(JSON.parse(JSON.stringify(calls[6].payload)), { args: { sessionIds: ["s1", "s2"] } });
+		const result3 = await registry.deleteArchivedSessions({ scope: "all" });
+		assert.deepEqual(result3, { ok: true, value: { requestedSessionIds: ["s1"], deletedSessionIds: ["s1"], skippedSessionIds: [], failures: [] } });
+		assert.equal(calls[2].endpoint, "workspaceRegistry/deleteArchivedSessions");
+		assert.deepEqual(JSON.parse(JSON.stringify(calls[2].payload)), { args: { target: { scope: "all" } } });
+		const result4 = await registry.archivedSessionMetadata();
+		assert.deepEqual(result4, { ok: true, value: { items: [{ sessionId: "s1", createdAt: 1700000000000 }], repairedSessionIds: ["s1"] } });
+		assert.equal(calls[3].endpoint, "workspaceRegistry/archivedSessionMetadata");
+		assert.deepEqual(JSON.parse(JSON.stringify(calls[3].payload)), { args: {} });
 	} finally {
 		await fiber.dispose();
 	}
@@ -148,8 +134,6 @@ test("proxy property path works when the service name is declared in inject (con
 			// a consumer fiber never mounts the contribution itself; here the
 			// root-mounted namespace (previous tests) satisfies the inject
 			assert.equal(typeof ctx.remote.workspaceRegistry.unarchiveSession, "function");
-			assert.equal(typeof ctx.remote.workspaceRegistry.unarchiveSessions, "function");
-			assert.equal(typeof ctx.remote.workspaceRegistry.archiveWorkspaceSessions, "function");
 			assert.equal(typeof ctx.remote.workspaceRegistry.deleteArchivedSessions, "function");
 			assert.equal(typeof ctx.remote.workspaceRegistry.archivedSessionMetadata, "function");
 		}

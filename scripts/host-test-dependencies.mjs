@@ -1,7 +1,7 @@
 // 同代 RC 的依赖范围允许后续版本；隔离验收固定传递依赖，避免宿主混版。
 // 此清单覆盖 0.1.5 两个 RC 的依赖闭包，不套用到旧版独立发布的包。
 export function hostTestOverrides(version) {
-	if (!["0.1.5-rc.1", "0.1.5-rc.2"].includes(version)) return {};
+	if (!["0.1.5-rc.1", "0.1.5-rc.2", "0.1.6-alpha.1"].includes(version)) return {};
 	const names = [
 		"agent", "api-gateway", "brand", "client-connection", "client-locale", "client-store",
 		"client-ui-conversation", "client-ui-primitives", "client-ui-sidebar", "client-ui-slots", "client-ui-workspace",

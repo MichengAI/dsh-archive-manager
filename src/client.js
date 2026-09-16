@@ -60,12 +60,6 @@ window.__ModuleLoader__.load({
 				return value;
 			}
 		};
-		const workspaceIdSchema = {
-			parse(value) {
-				if (typeof value !== "string" || value.length === 0) throw new TypeError(`workspaceId must be a non-empty string, got ${String(value)}`);
-				return value;
-			}
-		};
 		const archivedSetSchema = {
 			parse(value) {
 				if (typeof value !== "object" || value === null || Array.isArray(value)) throw new TypeError("result must be an object");
@@ -87,28 +81,6 @@ window.__ModuleLoader__.load({
 				if (value.scope === "workspace" && typeof value.workspaceId === "string" && value.workspaceId.length > 0) return value;
 				if (value.scope === "sessions" && Array.isArray(value.sessionIds) && value.sessionIds.length > 0 && value.sessionIds.every((id) => typeof id === "string" && id.length > 0)) return value;
 				throw new TypeError("target.scope must be all, ungrouped, workspace with a non-empty workspaceId, or sessions with non-empty sessionIds");
-			}
-		};
-		const unarchivedBatchSchema = {
-			parse(value) {
-				if (typeof value !== "object" || value === null || Array.isArray(value)) throw new TypeError("result must be an object");
-				if (!Array.isArray(value.archivedSessionIds) || value.archivedSessionIds.some((id) => typeof id !== "string")) throw new TypeError("archivedSessionIds must be a string array");
-				if (!Array.isArray(value.unarchivedSessionIds) || value.unarchivedSessionIds.some((id) => typeof id !== "string")) throw new TypeError("unarchivedSessionIds must be a string array");
-				return value;
-			}
-		};
-		const archiveSessionIdsSchema = {
-			parse(value) {
-				if (!Array.isArray(value)) throw new TypeError("sessionIds must be an array");
-				return [...new Set(value.map((id) => sessionIdSchema.parse(id)))];
-			}
-		};
-		const archivedWorkspaceBatchSchema = {
-			parse(value) {
-				if (typeof value !== "object" || value === null || Array.isArray(value)) throw new TypeError("result must be an object");
-				if (!Array.isArray(value.archivedSessionIds) || value.archivedSessionIds.some((id) => typeof id !== "string")) throw new TypeError("archivedSessionIds must be a string array");
-				if (!Array.isArray(value.archivedSessionIdsAdded) || value.archivedSessionIdsAdded.some((id) => typeof id !== "string")) throw new TypeError("archivedSessionIdsAdded must be a string array");
-				return value;
 			}
 		};
 		const deletedBatchSchema = {
@@ -171,63 +143,6 @@ window.__ModuleLoader__.load({
 						mode: "strict",
 						typeSymbol: "@michengai/dsh-archive-manager/types#Deleted",
 						schema: deletedSchema
-					},
-					sourceLocation: { file: "@michengai/dsh-archive-manager/lib/workspace.js", line: 1, column: 1 }
-				},
-				{
-					id: "@michengai/dsh-archive-manager#workspaceRegistry/unarchiveSessions",
-					service: "workspaceRegistry",
-					namespace: "workspaceRegistry",
-					method: "unarchiveSessions",
-					invocation: { kind: "direct" },
-					parameters: [{
-						name: "target",
-						wire: "target",
-						source: "json",
-						codec: { mode: "strict", typeSymbol: "@michengai/dsh-archive-manager/types#ArchivedBatchTarget", schema: archivedBatchTargetSchema }
-					}],
-					result: {
-						mode: "strict",
-						typeSymbol: "@michengai/dsh-archive-manager/types#UnarchivedBatch",
-						schema: unarchivedBatchSchema
-					},
-					sourceLocation: { file: "@michengai/dsh-archive-manager/lib/workspace.js", line: 1, column: 1 }
-				},
-				{
-					id: "@michengai/dsh-archive-manager#workspaceRegistry/archiveSessions",
-					service: "workspaceRegistry",
-					namespace: "workspaceRegistry",
-					method: "archiveSessions",
-					invocation: { kind: "direct" },
-					parameters: [{
-						name: "sessionIds",
-						wire: "sessionIds",
-						source: "json",
-						codec: { mode: "strict", typeSymbol: "@michengai/dsh-archive-manager/types#ArchiveSessionIds", schema: archiveSessionIdsSchema }
-					}],
-					result: {
-						mode: "strict",
-						typeSymbol: "@michengai/dsh-archive-manager/types#ArchivedWorkspaceBatch",
-						schema: archivedWorkspaceBatchSchema
-					},
-					sourceLocation: { file: "@michengai/dsh-archive-manager/lib/workspace.js", line: 1, column: 1 }
-				},
-				{
-					id: "@michengai/dsh-archive-manager#workspaceRegistry/archiveWorkspaceSessions",
-					service: "workspaceRegistry",
-					namespace: "workspaceRegistry",
-					method: "archiveWorkspaceSessions",
-					invocation: { kind: "direct" },
-					parameters: [{
-						name: "workspaceId",
-						wire: "workspaceId",
-						source: "json",
-						codec: { mode: "strict", typeSymbol: "@deepseek-ai/dsh-workspace/types#WorkspaceId", schema: workspaceIdSchema }
-					}],
-					result: {
-						mode: "strict",
-						typeSymbol: "@michengai/dsh-archive-manager/types#ArchivedWorkspaceBatch",
-						schema: archivedWorkspaceBatchSchema
 					},
 					sourceLocation: { file: "@michengai/dsh-archive-manager/lib/workspace.js", line: 1, column: 1 }
 				},
@@ -342,7 +257,7 @@ window.__ModuleLoader__.load({
 					sessionOrderByAccount: {},
 					sessionUpdatedAtByAccount: {}
 				}),
-				persist: "dsh.workspace.view.v5",
+				persist: "dsh.archive-manager.workspace.view.v1",
 				actions: {
 					setGroupBy: (d, mode) => {
 						d.groupBy = mode;
@@ -425,7 +340,10 @@ window.__ModuleLoader__.load({
 				archiveBusy.current = true; setBusy(true); setError(null); setNotice(null);
 				try {
 					const result = await archiveSessions(archiveTarget);
-					setSelectedSessionIds((ids) => ids.filter((id) => !result.archivedSessionIds.includes(id)));
+					setSelectedSessionIds([]);
+					setArchiveTab("archived");
+					setProject("all");
+					setQuery("");
 					setNotice(t("archives.archiveSuccess", { n: result.archivedSessionIdsAdded.length }));
 					setArchiveTarget(null); setArchiveGroup(null);
 				} catch (reason) { setError(t("archives.archiveBatchFailed", { detail: reason instanceof Error ? reason.message : String(reason) })); }
@@ -1944,7 +1862,7 @@ window.__ModuleLoader__.load({
 						orderBy,
 						sortByRecency: orderBy === "updated" && (previousOrder === void 0 || switchedToUpdated)
 					});
-					if (next.changed) syncSessionOrderAccount(key, next.order.map((id) => id), next.updatedAt);
+					if (next.changed && typeof syncSessionOrderAccount === "function") syncSessionOrderAccount(key, next.order.map((id) => id), next.updatedAt);
 				}
 			}, [
 				list,
@@ -3729,9 +3647,8 @@ window.__ModuleLoader__.load({
 		const NS = "archive-manager-workspace";
 		const DIRECTORY_FLOW_SLOT = "archiveManager.sidebar.directoryFlow";
 		/**
-		* 新宿主通过 Cordis inject 等待官方 uiWorkspace 激活，避免竞争提供服务。
-		* 旧宿主的导航仍由官方 workspaces/sessions 提供。
-		* dsh.client.inject 只声明加载关系；插槽生命周期仍使用 slots.inject。
+		* 不 wait uiWorkspace：等它会让官方先占侧栏，0.1.6 上删除菜单出不来。
+		* 导航仍在运行时 get("uiWorkspace")。插槽生命周期用 slots.inject。
 		*/
 		const inject = [
 			"slots",
@@ -3739,8 +3656,7 @@ window.__ModuleLoader__.load({
 			"workspaces",
 			"locale",
 			"remote",
-			"typert",
-			...(hasSplitClientStore ? ["uiWorkspace"] : [])
+			"typert"
 		];
 		/** Preserve the receiver required by alpha-era observable stores. */
 		function bindObservable(source) {
@@ -3758,17 +3674,44 @@ window.__ModuleLoader__.load({
 		* effect-scoped inside `applyWorkspaceBrowser`).
 		* @param ctx - client root context.
 		*/
-		async function archiveWorkspaceSessionsAndRefresh(registry, workspaceId, refresh) {
-			const result = await registry.archiveWorkspaceSessions(workspaceId);
-			if (!result.ok) throw new Error(result.error.message);
-			await refresh();
-			return result.value;
+		/** 设置页/侧栏批量归档：串行调官方单笔 archiveSession。已归档与未知会话交给官方处理。 */
+		async function archiveSessionsViaOfficial(workspaces, sessionIds, refresh) {
+			const before = new Set(workspaces.list?.getSnapshot?.()?.archivedSessionIds ?? []);
+			const seen = new Set();
+			for (const sessionId of sessionIds) {
+				if (typeof sessionId !== "string" || sessionId.length === 0 || seen.has(sessionId)) continue;
+				seen.add(sessionId);
+				await workspaces.archiveSession(sessionId);
+			}
+			if (typeof refresh === "function") await refresh();
+			const archivedSessionIds = [...(workspaces.list?.getSnapshot?.()?.archivedSessionIds ?? [])];
+			return {
+				archivedSessionIds,
+				archivedSessionIdsAdded: archivedSessionIds.filter((id) => !before.has(id))
+			};
+		}
+		/** 设置页批量恢复：串行调官方单笔 unarchiveSession。 */
+		async function unarchiveSessionsViaOfficial(workspaces, sessionIds, refresh) {
+			const before = new Set(workspaces.list?.getSnapshot?.()?.archivedSessionIds ?? []);
+			const seen = new Set();
+			for (const sessionId of sessionIds) {
+				if (typeof sessionId !== "string" || sessionId.length === 0 || seen.has(sessionId)) continue;
+				seen.add(sessionId);
+				await workspaces.unarchiveSession(sessionId);
+			}
+			if (typeof refresh === "function") await refresh();
+			const archivedSessionIds = [...(workspaces.list?.getSnapshot?.()?.archivedSessionIds ?? [])];
+			return {
+				archivedSessionIds,
+				unarchivedSessionIds: [...before].filter((id) => !archivedSessionIds.includes(id))
+			};
 		}
 		async function apply(ctx) {
+			// 先挂侧栏和设置页，再等 Remote；否则官方侧栏会一直占着，菜单里没有删除。
+			applyWorkspaceBrowser(ctx);
 			const remote = ctx.get("remote");
 			let disposeRemote = () => {};
 			if (remote !== void 0) disposeRemote = await remote.$mount(ARCHIVE_MANAGER_REMOTE);
-			applyWorkspaceBrowser(ctx);
 			return async () => {
 				await disposeRemote();
 			};
@@ -3812,6 +3755,10 @@ window.__ModuleLoader__.load({
 				subscribe: (listener) => ctx.slots.subscribe(hole, listener)
 			});
 			const browserFlowSource = flowSource(DIRECTORY_FLOW_SLOT);
+			const hostInfo = {
+				getSnapshot: () => ctx.remote?.$host ?? {},
+				subscribe: (listener) => ctx.on?.("connection/reset", listener) ?? (() => {})
+			};
 			const refreshSessionList = async () => {
 				if (typeof ctx.sessions.refresh !== "function") return;
 				try {
@@ -3821,16 +3768,14 @@ window.__ModuleLoader__.load({
 				}
 			};
 			const unarchiveSession = async (sessionId) => {
-				const registry = ctx.get("remote.workspaceRegistry");
-				if (registry === void 0) throw new Error("archive-manager remote service is unavailable");
-				const result = await registry.unarchiveSession(sessionId);
-				if (!result.ok) throw new Error(result.error.message);
+				await ctx.workspaces.unarchiveSession(sessionId);
 				await refreshSessionList();
 			};
 			const archiveWorkspaceSessions = async (workspaceId) => {
-				const registry = ctx.get("remote.workspaceRegistry");
-				if (registry === void 0) throw new Error("archive-manager remote service is unavailable");
-				return archiveWorkspaceSessionsAndRefresh(registry, workspaceId, refreshSessionList);
+				const items = ctx.workspaces.list?.getSnapshot?.()?.items ?? [];
+				const workspace = items.find((item) => item.workspaceId === workspaceId);
+				if (workspace === undefined) throw new Error(`unknown workspace "${workspaceId}"`);
+				return archiveSessionsViaOfficial(ctx.workspaces, workspace.sessionIds, refreshSessionList);
 			};
 			const deleteSession = async (sessionId) => {
 				const registry = ctx.get("remote.workspaceRegistry");
@@ -3839,21 +3784,11 @@ window.__ModuleLoader__.load({
 				if (!result.ok) throw new Error(result.error.message);
 				await refreshSessionList();
 			};
-			const archiveSessions = async (sessionIds) => {
-				const registry = ctx.get("remote.workspaceRegistry");
-				if (registry === void 0) throw new Error("archive-manager remote service is unavailable");
-				const result = await registry.archiveSessions(sessionIds);
-				if (!result.ok) throw new Error(result.error.message);
-				await refreshSessionList();
-				return result.value;
-			};
+			const archiveSessions = async (sessionIds) => archiveSessionsViaOfficial(ctx.workspaces, sessionIds, refreshSessionList);
 			const unarchiveSessions = async (target) => {
-				const registry = ctx.get("remote.workspaceRegistry");
-				if (registry === void 0) throw new Error("archive-manager remote service is unavailable");
-				const result = await registry.unarchiveSessions(target);
-				if (!result.ok) throw new Error(result.error.message);
-				await refreshSessionList();
-				return result.value;
+				const snapshot = ctx.workspaces.list?.getSnapshot?.() ?? { archivedSessionIds: [], items: [] };
+				const sessionIds = deriveArchivedBatchIds(snapshot.archivedSessionIds, snapshot.items, target);
+				return unarchiveSessionsViaOfficial(ctx.workspaces, sessionIds, refreshSessionList);
 			};
 			const deleteArchivedSessions = async (target) => {
 				const registry = ctx.get("remote.workspaceRegistry");
@@ -3922,20 +3857,30 @@ window.__ModuleLoader__.load({
 					await ctx.workspaces.insertSessionBefore(workspaceId, sessionId, beforeSessionId);
 				},
 				createWorkspace: (input) => ctx.workspaces.create(input),
-				hooks: { directoryFlow: browserFlowSource }
+				hooks: { directoryFlow: browserFlowSource, hostInfo }
 			});
-			ctx.slots.inject("sidebar.workspaces", () => ctx.slots.register({
-				name: "sidebar.workspaces",
-				// 显示顺序：Codex UI（-1）→ 归档（-0.5）→ 官方默认（0）。
-				priority: -0.5,
-				children: { [DIRECTORY_FLOW_SLOT]: {
-					kind: "single",
-					scope: "root"
-				} },
-				store: createWorkspaceViewStore(),
-				inject: browserInjected,
-				locale: NS
-			}, WorkspaceBrowser));
+			ctx.slots.inject("sidebar.workspaces", () => {
+				const common = {
+					name: "sidebar.workspaces",
+					// 低于官方 0，高于 Codex -1：必须盖住官方三项菜单才能露出删除。
+					priority: -0.5,
+					store: createWorkspaceViewStore(),
+					inject: browserInjected,
+					locale: NS
+				};
+				try {
+					return ctx.slots.register({
+						...common,
+						children: { [DIRECTORY_FLOW_SLOT]: {
+							kind: "single",
+							scope: "root"
+						} }
+					}, WorkspaceBrowser);
+				} catch (error) {
+					console.warn("archive-manager: sidebar registration with directory child failed, retrying without children", error);
+					return ctx.slots.register(common, WorkspaceBrowser);
+				}
+			});
 			mirrorDirectoryFlow(ctx, DIRECTORY_FLOW_SLOT);
 
 			ctx.slots.inject("settings.section", () => ctx.slots.register({
@@ -3982,7 +3927,8 @@ window.__ModuleLoader__.load({
 			archiveableWorkspaceSessionCount,
 			archiveWorkspaceDialogTarget,
 			archiveWorkspaceDialogFailureState,
-			archiveWorkspaceSessionsAndRefresh,
+			archiveSessionsViaOfficial,
+			unarchiveSessionsViaOfficial,
 			createWorkspaceViewStore,
 			bindObservable,
 			hasSplitClientStore,

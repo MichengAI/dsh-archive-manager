@@ -120,15 +120,6 @@ const sessionIdSchema = {
 		return value;
 	},
 };
-const workspaceIdSchema = {
-	parse(value) {
-		if (typeof value !== "string" || value.length === 0)
-			throw new TypeError(
-				`workspaceId must be a non-empty string, got ${String(value)}`,
-			);
-		return value;
-	},
-};
 const archivedSetSchema = {
 	parse(value) {
 		if (typeof value !== "object" || value === null || Array.isArray(value))
@@ -172,46 +163,6 @@ const archivedBatchTargetSchema = {
 		throw new TypeError(
 			"target.scope must be all, ungrouped, workspace with a non-empty workspaceId, or sessions with non-empty sessionIds",
 		);
-	},
-};
-const unarchivedBatchSchema = {
-	parse(value) {
-		if (typeof value !== "object" || value === null || Array.isArray(value))
-			throw new TypeError("result must be an object");
-		if (
-			!Array.isArray(value.archivedSessionIds) ||
-			value.archivedSessionIds.some((id) => typeof id !== "string")
-		)
-			throw new TypeError("archivedSessionIds must be a string array");
-		if (
-			!Array.isArray(value.unarchivedSessionIds) ||
-			value.unarchivedSessionIds.some((id) => typeof id !== "string")
-		)
-			throw new TypeError("unarchivedSessionIds must be a string array");
-		return value;
-	},
-};
-const archiveSessionIdsSchema = {
-	parse(value) {
-		if (!Array.isArray(value)) throw new TypeError("sessionIds must be an array");
-		return [...new Set(value.map((id) => sessionIdSchema.parse(id)))];
-	}
-};
-const archivedWorkspaceBatchSchema = {
-	parse(value) {
-		if (typeof value !== "object" || value === null || Array.isArray(value))
-			throw new TypeError("result must be an object");
-		if (
-			!Array.isArray(value.archivedSessionIds) ||
-			value.archivedSessionIds.some((id) => typeof id !== "string")
-		)
-			throw new TypeError("archivedSessionIds must be a string array");
-		if (
-			!Array.isArray(value.archivedSessionIdsAdded) ||
-			value.archivedSessionIdsAdded.some((id) => typeof id !== "string")
-		)
-			throw new TypeError("archivedSessionIdsAdded must be a string array");
-		return value;
 	},
 };
 const deletedBatchSchema = {
@@ -336,93 +287,6 @@ const ARCHIVE_MANAGER_INVOCATIONS = [
 		},
 	},
 	{
-		id: "@michengai/dsh-archive-manager#workspaceRegistry/unarchiveSessions",
-		service: "workspaceRegistry",
-		namespace: "workspaceRegistry",
-		method: "unarchiveSessions",
-		invocation: { kind: "direct" },
-		parameters: [
-			{
-				name: "target",
-				wire: "target",
-				source: "json",
-				codec: {
-					mode: "strict",
-					typeSymbol: "@michengai/dsh-archive-manager/types#ArchivedBatchTarget",
-					schema: archivedBatchTargetSchema,
-				},
-			},
-		],
-		result: {
-			mode: "strict",
-			typeSymbol: "@michengai/dsh-archive-manager/types#UnarchivedBatch",
-			schema: unarchivedBatchSchema,
-		},
-		sourceLocation: {
-			file: "@michengai/dsh-archive-manager/lib/workspace.js",
-			line: 1,
-			column: 1,
-		},
-	},
-	{
-		id: "@michengai/dsh-archive-manager#workspaceRegistry/archiveSessions",
-		service: "workspaceRegistry",
-		namespace: "workspaceRegistry",
-		method: "archiveSessions",
-		invocation: { kind: "direct" },
-		parameters: [
-			{
-				name: "sessionIds",
-				wire: "sessionIds",
-				source: "json",
-				codec: {
-					mode: "strict",
-					typeSymbol: "@michengai/dsh-archive-manager/types#ArchiveSessionIds",
-					schema: archiveSessionIdsSchema,
-				},
-			},
-		],
-		result: {
-			mode: "strict",
-			typeSymbol: "@michengai/dsh-archive-manager/types#ArchivedWorkspaceBatch",
-			schema: archivedWorkspaceBatchSchema,
-		},
-		sourceLocation: {
-			file: "@michengai/dsh-archive-manager/lib/workspace.js",
-			line: 1,
-			column: 1,
-		},
-	},
-	{
-		id: "@michengai/dsh-archive-manager#workspaceRegistry/archiveWorkspaceSessions",
-		service: "workspaceRegistry",
-		namespace: "workspaceRegistry",
-		method: "archiveWorkspaceSessions",
-		invocation: { kind: "direct" },
-		parameters: [
-			{
-				name: "workspaceId",
-				wire: "workspaceId",
-				source: "json",
-				codec: {
-					mode: "strict",
-					typeSymbol: "@deepseek-ai/dsh-workspace/types#WorkspaceId",
-					schema: workspaceIdSchema,
-				},
-			},
-		],
-		result: {
-			mode: "strict",
-			typeSymbol: "@michengai/dsh-archive-manager/types#ArchivedWorkspaceBatch",
-			schema: archivedWorkspaceBatchSchema,
-		},
-		sourceLocation: {
-			file: "@michengai/dsh-archive-manager/lib/workspace.js",
-			line: 1,
-			column: 1,
-		},
-	},
-	{
 		id: "@michengai/dsh-archive-manager#workspaceRegistry/deleteArchivedSessions",
 		service: "workspaceRegistry",
 		namespace: "workspaceRegistry",
@@ -507,24 +371,45 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		this.typertRemote = bindTypertRemote(this, this.name);
 		markRemoteMethod(this, "unarchiveSession");
 		markRemoteMethod(this, "deleteSession");
-		markRemoteMethod(this, "unarchiveSessions");
-		markRemoteMethod(this, "archiveWorkspaceSessions");
-		markRemoteMethod(this, "archiveSessions");
 		markRemoteMethod(this, "deleteArchivedSessions");
 		markRemoteMethod(this, "archivedSessionMetadata");
 		registerHostRemote(this.ctx);
 	}
 	/**
+	 * 从归档集合摘掉已经不存在的会话。打开归档列表时调用，
+	 * 避免孤儿 id 留在「全部恢复」作用域里却不出现在界面上。
+	 */
+	async pruneUnknownArchivedSessionIds() {
+		return this.enqueueOperation(async () => {
+			const state = this.requireState();
+			const kept = [];
+			const seen = new Set();
+			for (const sessionId of state.archivedSessionIds) {
+				if (seen.has(sessionId)) continue;
+				if (!(await this.sessionKnown(sessionId))) continue;
+				seen.add(sessionId);
+				kept.push(sessionId);
+			}
+			if (
+				kept.length === state.archivedSessionIds.length &&
+				kept.every((id, index) => id === state.archivedSessionIds[index])
+			)
+				return kept;
+			await this.setState({ ...state, archivedSessionIds: kept });
+			return kept;
+		});
+	}
+	/**
 	 * 归档设置页创建时间排序所需的最小元数据。老用户可能仍有会话原文和
 	 * 归档标记、却没有投影缓存；这里按需从完整日志重建一次，再通知客户端
 	 * 刷新会话列表。已有缓存不读原文，新老 DSH 的缓存布局都走同一 put。
+	 * 读取前先清掉不存在的归档标记。
 	 */
 	async archivedSessionMetadata() {
+		await this.pruneUnknownArchivedSessionIds();
 		const items = [];
 		const repairedSessionIds = [];
-		for (const sessionId of [
-			...new Set(this.requireState().archivedSessionIds),
-		]) {
+		for (const sessionId of this.requireState().archivedSessionIds) {
 			try {
 				const header = await this.readSessionHeader(sessionId);
 				if (await this.repairArchivedProjection(header))
@@ -634,16 +519,31 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		}
 	}
 	/**
+	 * 把一个已知会话加入注册表全局归档集合。已归档的 id 不写入；
+	 * 未知 id 直接跳过，不抛 `UNKNOWN_SESSION`，避免把幽灵 id 写进集合。
+	 * @param sessionId - 要归档的会话。
+	 */
+	async archiveSession(sessionId) {
+		return this.enqueueOperation(async () => {
+			if (this.requireState().archivedSessionIds.includes(sessionId)) return;
+			if (!(await this.sessionKnown(sessionId))) return;
+			const state = this.requireState();
+			await this.setState({
+				...state,
+				archivedSessionIds: [...state.archivedSessionIds, sessionId],
+			});
+		});
+	}
+	/**
 	 * 把一个会话移出注册表全局归档集合，恢复其正常可见性（其记账位从未
-	 * 移动，会话在原工作区位置重新出现）。幂等：未归档的已知会话直接返回
-	 * 当前集合不写入；未知会话与 `archiveSession` 一样抛错。
+	 * 移动，会话在原工作区位置重新出现）。与官方一致：不做会话存在性检查，
+	 * 因为从集合摘掉 id 不会引入未知引用。孤儿归档标记也会被清掉；
+	 * 未归档的 id（含不存在的 id）不写入即返回。
 	 * @param sessionId - 要取消归档的会话。
 	 * @returns 更新后的完整归档集合。
 	 */
 	async unarchiveSession(sessionId) {
 		return this.enqueueOperation(async () => {
-			if (!(await this.sessionKnown(sessionId)))
-				throw new ArchiveUnknownSessionError(sessionId);
 			const state = this.requireState();
 			if (!state.archivedSessionIds.includes(sessionId))
 				return { archivedSessionIds: [...state.archivedSessionIds] };
@@ -655,86 +555,6 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 			};
 			await this.setState(next);
 			return { archivedSessionIds: [...next.archivedSessionIds] };
-		});
-	}
-	/** 按明确 ID 跨工作区归档；先校验整批，单次写入，重复归档不新增标记。 */
-	async archiveSessions(sessionIds) {
-		return this.enqueueOperation(async () => {
-			const ids = archiveSessionIdsSchema.parse(sessionIds);
-			const state = this.requireState();
-			const archived = new Set(state.archivedSessionIds);
-			const archivedSessionIdsAdded = ids.filter((id) => !archived.has(id));
-			for (const id of archivedSessionIdsAdded) {
-				if (!(await this.sessionKnown(id))) throw new ArchiveUnknownSessionError(id);
-			}
-			const next = { ...state, archivedSessionIds: [...state.archivedSessionIds, ...archivedSessionIdsAdded] };
-			if (archivedSessionIdsAdded.length > 0) await this.setState(next);
-			return { archivedSessionIds: [...next.archivedSessionIds], archivedSessionIdsAdded };
-		});
-	}
-	/**
-	 * 将一个工作区内所有会话加入归档集合。先确认所有待归档会话仍存在，
-	 * 再执行单次状态写入，因此未知会话不会导致项目只归档一部分。
-	 */
-	async archiveWorkspaceSessions(workspaceId) {
-		return this.enqueueOperation(async () => {
-			workspaceId = workspaceIdSchema.parse(workspaceId);
-			const workspace = this.requireTable().get(workspaceId);
-			if (workspace === void 0)
-				throw new Error(`unknown workspace "${workspaceId}"`);
-			const state = this.requireState();
-			const archived = new Set(state.archivedSessionIds);
-			const archivedSessionIdsAdded = [...new Set(workspace.sessionIds)].filter(
-				(sessionId) => !archived.has(sessionId),
-			);
-			for (const sessionId of archivedSessionIdsAdded) {
-				if (!(await this.sessionKnown(sessionId)))
-					throw new ArchiveUnknownSessionError(sessionId);
-			}
-			if (archivedSessionIdsAdded.length === 0)
-				return {
-					archivedSessionIds: [...state.archivedSessionIds],
-					archivedSessionIdsAdded,
-				};
-			const next = {
-				...state,
-				archivedSessionIds: [
-					...state.archivedSessionIds,
-					...archivedSessionIdsAdded,
-				],
-			};
-			await this.setState(next);
-			return {
-				archivedSessionIds: [...next.archivedSessionIds],
-				archivedSessionIdsAdded,
-			};
-		});
-	}
-	/**
-	 * 按宿主权威归档集合一次恢复全部、一个工作区或未分组的归档会话。
-	 * 目标全部来自已归档集合，因此即使日志已被外部移除，也会清掉陈旧归档标记。
-	 */
-	async unarchiveSessions(target) {
-		return this.enqueueOperation(async () => {
-			const unarchivedSessionIds = this.archivedSessionIdsForTarget(target);
-			if (unarchivedSessionIds.length === 0)
-				return {
-					archivedSessionIds: [...this.requireState().archivedSessionIds],
-					unarchivedSessionIds: [],
-				};
-			const restored = new Set(unarchivedSessionIds);
-			const state = this.requireState();
-			const next = {
-				...state,
-				archivedSessionIds: state.archivedSessionIds.filter(
-					(id) => !restored.has(id),
-				),
-			};
-			await this.setState(next);
-			return {
-				archivedSessionIds: [...next.archivedSessionIds],
-				unarchivedSessionIds,
-			};
 		});
 	}
 	/**
@@ -749,20 +569,10 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 			const failures = [];
 			for (const sessionId of requestedSessionIds) {
 				try {
-					await this.deleteSessionCore(sessionId);
-					deletedSessionIds.push(sessionId);
+					const result = await this.deleteSessionCore(sessionId);
+					if (result?.skipped) skippedSessionIds.push(sessionId);
+					else deletedSessionIds.push(sessionId);
 				} catch (error) {
-					if (error instanceof ArchiveUnknownSessionError) {
-						// 转录已消失时仍需清完可达的持久痕迹；只有全部完成才算
-						// skipped，否则保留归档标记并作为 failure 暴露，允许重试。
-						try {
-							await this.cleanupUnknownArchivedSession(sessionId);
-							skippedSessionIds.push(sessionId);
-						} catch (cleanupError) {
-							failures.push({ sessionId, message: String(cleanupError) });
-						}
-						continue;
-					}
 					failures.push({ sessionId, message: String(error) });
 				}
 			}
@@ -830,16 +640,20 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 	 * 永久删除一个会话及其全部痕迹（转录目录、工作区记账、归档标记、
 	 * 投影缓存行）。
 	 * @param sessionId - 要删除的会话。
-	 * @returns 持久化完成后的 `{ deleted: true }`。
-	 * @throws {@link ArchiveUnknownSessionError} 会话未知时抛出。
+	 * @returns 持久化完成后的 `{ deleted: true }`。未知会话清掉残留痕迹后同样返回成功，不抛错。
 	 */
 	async deleteSession(sessionId) {
-		return this.enqueueOperation(() => this.deleteSessionCore(sessionId));
+		return this.enqueueOperation(async () => {
+			await this.deleteSessionCore(sessionId);
+			return { deleted: true };
+		});
 	}
 	/** 串行化后的删除主体（级联路径复用：它已持有操作链，绝不能再入队）。 */
 	async deleteSessionCore(sessionId) {
-		if (!(await this.sessionKnown(sessionId)))
-			throw new ArchiveUnknownSessionError(sessionId);
+		if (!(await this.sessionKnown(sessionId))) {
+			await this.cleanupUnknownArchivedSession(sessionId);
+			return { deleted: true, skipped: true };
+		}
 		const sessions = this.ctx.get("sessions");
 		const live = sessions?.get(sessionId);
 		// 先记录被删生命周期的日志身份：目录删除后头部不可再读，

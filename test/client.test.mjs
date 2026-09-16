@@ -117,37 +117,49 @@ const noPendingInteractions = new Map();
 
 test("bundle materializes with apply/inject and the __test surface", () => {
 	assert.equal(typeof bundle.apply, "function");
-	assert.deepEqual(bundle.inject, ["slots", "sessions", "workspaces", "locale", "remote", "typert", "uiWorkspace"]);
+	assert.deepEqual(bundle.inject, ["slots", "sessions", "workspaces", "locale", "remote", "typert"]);
 	assert.equal(typeof t.sessionVisible, "function");
 	assert.equal(typeof t.deriveGroups, "function");
 	assert.equal(typeof t.deriveFlat, "function");
 	assert.equal(typeof t.deriveSearchResults, "function");
 	assert.equal(typeof t.displayTitle, "function");
 	assert.equal(typeof t.isUnknownSessionError, "function");
-	assert.equal(typeof t.archiveWorkspaceSessionsAndRefresh, "function");
 	assert.equal(typeof t.archiveableWorkspaceSessionCount, "function");
 	assert.equal(typeof t.archiveWorkspaceDialogTarget, "function");
 	assert.equal(typeof t.archiveWorkspaceDialogFailureState, "function");
 });
 
-test("批量归档成功后刷新会话列表，失败时不刷新", async () => {
+test("设置页批量恢复串行调用官方 unarchiveSession", async () => {
+	const archived = ["s1", "s2", "s3"];
 	const calls = [];
-	const registry = {
-		async archiveWorkspaceSessions(workspaceId) {
-			calls.push(workspaceId);
-			return { ok: true, value: { archivedSessionIds: ["s1"], archivedSessionIdsAdded: ["s1"] } };
+	const workspaces = {
+		list: { getSnapshot: () => ({ archivedSessionIds: [...archived] }) },
+		async unarchiveSession(id) {
+			calls.push(id);
+			const i = archived.indexOf(id);
+			if (i !== -1) archived.splice(i, 1);
 		}
 	};
-	let refreshes = 0;
-	const result = await t.archiveWorkspaceSessionsAndRefresh(registry, "w1", async () => { refreshes += 1; });
-	assert.deepEqual(result, { archivedSessionIds: ["s1"], archivedSessionIdsAdded: ["s1"] });
-	assert.deepEqual(calls, ["w1"]);
-	assert.equal(refreshes, 1);
+	const result = await t.unarchiveSessionsViaOfficial(workspaces, ["s1", "s1", "s3"], async () => {});
+	assert.deepEqual(calls, ["s1", "s3"]);
+	assert.deepEqual(result.unarchivedSessionIds, ["s1", "s3"]);
+	assert.deepEqual(result.archivedSessionIds, ["s2"]);
+});
 
-	await assert.rejects(() => t.archiveWorkspaceSessionsAndRefresh({
-		archiveWorkspaceSessions: async () => ({ ok: false, error: { message: "host rejected" } })
-	}, "w1", async () => { refreshes += 1; }), /host rejected/);
-	assert.equal(refreshes, 1);
+test("设置页与侧栏批量归档串行调用官方 archiveSession", async () => {
+	const archived = [];
+	const calls = [];
+	const workspaces = {
+		list: { getSnapshot: () => ({ archivedSessionIds: [...archived] }) },
+		async archiveSession(id) {
+			calls.push(id);
+			if (!archived.includes(id)) archived.push(id);
+		}
+	};
+	const result = await t.archiveSessionsViaOfficial(workspaces, ["s1", "s1", "s2"], async () => {});
+	assert.deepEqual(calls, ["s1", "s2"]);
+	assert.deepEqual(result.archivedSessionIdsAdded, ["s1", "s2"]);
+	assert.deepEqual(result.archivedSessionIds, ["s1", "s2"]);
 });
 
 test("工作区没有可归档会话时不提供批量归档入口或确认框", () => {
@@ -195,15 +207,15 @@ test("manifest keeps one DSH peer range and both client contracts optional", () 
 		.map(([, version]) => version);
 	assert.ok(dshPeerRanges.length > 0);
 	assert.equal(new Set(dshPeerRanges).size, 1);
-	assert.equal(dshPeerRanges[0], "0.1.0-rc.8 || 0.1.1-rc.2 || 0.1.2-rc.1 || 0.1.5-rc.1 || 0.1.5-rc.2");
-	for (const version of ["0.1.0-rc.8", "0.1.1-rc.2", "0.1.2-rc.1", "0.1.5-rc.1", "0.1.5-rc.2"]) {
+	assert.equal(dshPeerRanges[0], "0.1.0-rc.8 || 0.1.1-rc.2 || 0.1.2-rc.1 || 0.1.5-rc.1 || 0.1.5-rc.2 || 0.1.6-alpha.1");
+	for (const version of ["0.1.0-rc.8", "0.1.1-rc.2", "0.1.2-rc.1", "0.1.5-rc.1", "0.1.5-rc.2", "0.1.6-alpha.1"]) {
 		assert.ok(semver.satisfies(version, dshPeerRanges[0]), `peer 范围必须接纳已验证宿主 ${version}`);
 	}
-	for (const version of ["0.1.0-rc.5", "0.1.0-rc.9", "0.1.3-alpha.2", "0.1.5-rc.3", "0.1.5", "0.2.0"]) {
+	for (const version of ["0.1.0-rc.5", "0.1.0-rc.9", "0.1.3-alpha.2", "0.1.5-rc.3", "0.1.5", "0.1.6-alpha.2", "0.1.6", "0.2.0"]) {
 		assert.equal(semver.satisfies(version, dshPeerRanges[0]), false, `不接纳未声明版本 ${version}`);
 	}
 	assert.ok(dshDevelopmentVersions.length > 0);
-	assert.deepEqual([...new Set(dshDevelopmentVersions)], ["0.1.5-rc.2"]);
+	assert.deepEqual([...new Set(dshDevelopmentVersions)], ["0.1.6-alpha.1"]);
 	assert.equal(PACKAGE_MANIFEST.peerDependenciesMeta?.["@deepseek-ai/dsh-client-store"]?.optional, true);
 	assert.equal(PACKAGE_MANIFEST.peerDependenciesMeta?.["@deepseek-ai/dsh-client-runtime"]?.optional, true);
 	assert.equal(PACKAGE_MANIFEST.dsh.client.inject.includes("@deepseek-ai/dsh-client-runtime"), false);
@@ -360,7 +372,7 @@ test("view store: showArchived default false, persists toggles, same store famil
 	assert.equal(store.getSnapshot().showArchived, false);
 	// same persistence family as the existing view prefs
 	const spec = handle.spec;
-	assert.equal(spec.persist, "dsh.workspace.view.v5");
+	assert.equal(spec.persist, "dsh.archive-manager.workspace.view.v1");
 	assert.equal(typeof spec.actions.setGroupBy, "function");
 	assert.equal(typeof spec.actions.setShowArchived, "function");
 });

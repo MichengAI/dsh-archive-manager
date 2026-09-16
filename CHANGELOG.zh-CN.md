@@ -4,6 +4,17 @@
 
 以下发布说明会持续保留；新增版本时不再删除较早记录。
 
+## Unreleased
+
+- 安装时禁用 DSH 0.1.6+ 官方「已归档会话」设置页（`ui-settings-unarchive-sessions`），设置里只保留本插件的归档管理入口。
+- DSH peer 范围纳入 `0.1.6-alpha.1`，开发依赖固定到同一版本。仍替换官方 `workspace` 与 `session-projection-cache`，以保留批量归档和永久删除。
+- 归档和恢复遇到未知 id 都不再抛 `UNKNOWN_SESSION`：跳过不存在的会话，恢复时清掉孤儿归档标记。
+- 打开归档列表时从持久化集合清掉已经不存在的 id，使「全部恢复」与可见列表一致。
+- 删除与归档对失踪会话同一套逻辑：清掉残留痕迹，不抛 `UNKNOWN_SESSION`。
+- 侧栏不再等待官方 `uiWorkspace` 才注册，避免 0.1.6 上官方三项菜单一直占着、删除进不来。
+- 设置页与侧栏批量归档改为串行调用官方 `archiveSession`，不再走插件 `archiveSessions` 通道。
+- 批量恢复改为串行调用官方 `unarchiveSession`；删除插件 `archiveSessions`、`archiveWorkspaceSessions`、`unarchiveSessions` 以及已无调用方的客户端同步辅助方法。
+
 ## 0.1.42 - 2026-09-14
 
 - 新增「已归档 / 未归档」页签，默认展示已归档；支持跨项目选择会话批量归档，也可通过项目或未分组菜单归档该组全部聊天。

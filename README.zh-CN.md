@@ -40,7 +40,7 @@
 ## 前置条件
 
 - 已能正常使用 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web，并可在终端运行 `dsh`。
-- 当前支持 DSH `0.1.0-rc.8`、`0.1.1-rc.2`、`0.1.2-rc.1`、`0.1.5-rc.1`、`0.1.5-rc.2`；其他版本暂未纳入支持范围。
+- 当前支持 DSH `0.1.0-rc.8`、`0.1.1-rc.2`、`0.1.2-rc.1`、`0.1.5-rc.1`、`0.1.5-rc.2`、`0.1.6-alpha.1`；其他版本暂未纳入支持范围。
 - Node.js 版本需满足 `^22.19.0 || >=24.0.0`；从源码安装还需要 pnpm。
 
 ## 安装
@@ -85,7 +85,7 @@ dsh plugin --profile web add @michengai/dsh-archive-manager@latest --registry=ht
 
 「全部恢复 / 全部删除」仅在已归档页显示，作用于所有项目的归档会话，不受筛选影响。未归档页排除子代理和空白占位会话，支持按更新时间或标题排序。
 
-开发接口：Typert `workspaceRegistry/archiveSessions` 接收 `{ sessionIds: string[] }`，返回 `{ archivedSessionIds, archivedSessionIdsAdded }`。客户端调用 `registry.archiveSessions(ids)` 并检查 Typert 的 `ok` 结果；接口复用宿主连接的认证与调用通道。宿主先校验、去重，再一次写入；已归档项幂等跳过，未知会话返回 `UNKNOWN_SESSION` 且不部分归档。
+设置页与侧栏的批量归档、批量恢复均串行调用官方 `ctx.workspaces.archiveSession` / `unarchiveSession`，与侧栏单笔路径同一套客户端投影。
 
 ### 查看并继续归档对话
 
@@ -111,7 +111,7 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 dsh --profile web --dump-config
 ```
 
-配置中应包含 `workspace-archive-manager` 和 `ui-workspace-archive-manager`。若曾在 profile 的 `cordis.patch.yml` 中手动将官方 `ui-workspace` 设为 `disabled: true`，请移除该禁用覆盖，再重启。
+配置中应包含 `workspace-archive-manager` 和 `ui-workspace-archive-manager`。DSH 0.1.6+ 上官方 `ui-settings-unarchive-sessions` 应为 `disabled: true`，设置里只保留本插件的「归档会话」。若曾在 profile 的 `cordis.patch.yml` 中手动将官方 `ui-workspace` 设为 `disabled: true`，请移除该禁用覆盖，再重启。
 
 ### 归档和删除有什么区别？
 
