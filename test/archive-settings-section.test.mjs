@@ -82,8 +82,14 @@ test("恢复和删除后刷新会话投影，使侧栏与宿主状态重新一�
 
 	assert.match(client, /const refreshSessionList = async \(\) =>/);
 	assert.match(client, /restored archived sessions but session list refresh failed/);
-	assert.match(client, /await ctx\.workspaces\.unarchiveSession\(sessionId\);[\s\S]*await refreshSessionList\(\);/);
-	assert.match(client, /unarchiveSessionsViaOfficial\(ctx\.workspaces, sessionIds, refreshSessionList\)/);
+	assert.match(client, /createUnarchiveSession\(ctx\.workspaces, \(\) => ctx\.get\("remote\.workspaceRegistry"\)\)/);
+	assert.doesNotMatch(client, /hostInfo/);
+	assert.match(client, /migrateWorkspaceViewPersist\(\)/);
+	assert.match(client, /dsh\.workspace\.view\.v5/);
+	assert.match(client, /typeof workspaces\?\.unarchiveSession === "function"/);
+	assert.match(client, /await unarchiveOne\(sessionId\);[\s\S]*await refreshSessionList\(\);/);
+	assert.match(client, /unarchiveSessionsViaOfficial\(ctx\.workspaces, sessionIds, refreshSessionList, unarchiveOne\)/);
+	assert.match(client, /registry\.unarchiveSession\(sessionId\)/);
 	assert.match(client, /await registry\.deleteSession\(sessionId\);[\s\S]*await refreshSessionList\(\);/);
 	assert.match(client, /await registry\.deleteArchivedSessions\(target\);[\s\S]*await refreshSessionList\(\);/);
 });

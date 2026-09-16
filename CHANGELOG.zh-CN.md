@@ -9,14 +9,16 @@
 - 安装时禁用 DSH 0.1.6+ 官方「已归档会话」设置页（`ui-settings-unarchive-sessions`），设置里只保留本插件的归档管理入口。
 - DSH peer 范围纳入 `0.1.6-alpha.1`，开发依赖固定到同一版本。仍替换官方 `workspace` 与 `session-projection-cache`，以保留批量归档和永久删除。
 - 归档和恢复遇到未知 id 都不再抛 `UNKNOWN_SESSION`：跳过不存在的会话，恢复时清掉孤儿归档标记。
-- 打开归档列表时从持久化集合清掉已经不存在的 id，使「全部恢复」与可见列表一致。
+- 打开归档列表时，只有 `persistence.stat` 确认转录已不在才从持久集合摘掉 id。头部读不出的归档仍保留，只是不出现在本次元数据里。没有 `stat` 的宿主不落盘删除。
+- 批量归档和批量恢复都是串行执行，可以为部分成功：中途失败会留下已经改掉的部分，并显示错误。
 - 删除与归档对失踪会话同一套逻辑：清掉残留痕迹，不抛 `UNKNOWN_SESSION`。
 - 侧栏不再等待官方 `uiWorkspace` 才注册，避免 0.1.6 上官方三项菜单一直占着、删除进不来。
 - 打开归档会话改为在官方 `uiWorkspace` 就绪后再适配 `clearArchivedCurrent`，避免点「打开会话」被官方立刻清掉。
-- 「恢复并打开」先中止其他工作区正在进行的导航并展开原分组，再走官方恢复，最后打开；打开失败则留在未归档列表。选中工作区仍可折叠。
+- 「恢复并打开」先中止其他工作区正在进行的导航并展开原分组，再恢复并打开；打开失败则留在未归档列表。选中工作区仍可折叠。
 - 仍在归档集合中、但路径索引缺失的记账，恢复前不被官方 mutate 写丢；恢复时按 cwd 重新编入索引，必要时挂回原工作区。不改未归档会话的官方成员过滤。
 - 设置页与侧栏批量归档改为串行调用官方 `archiveSession`，不再走插件 `archiveSessions` 通道。
-- 批量恢复改为串行调用官方 `unarchiveSession`；删除插件 `archiveSessions`、`archiveWorkspaceSessions`、`unarchiveSessions` 以及已无调用方的客户端同步辅助方法。
+- 批量恢复仍串行调用单条恢复。DSH 0.1.6+ 走官方 `ctx.workspaces.unarchiveSession`；更早宿主回退到本插件一直提供的 `workspaceRegistry.unarchiveSession`。删除插件批量 `archiveSessions`、`archiveWorkspaceSessions`、`unarchiveSessions` 以及已无调用方的客户端同步辅助方法。
+- 换 persist 键时把已有的分组/展开/排序偏好从 `dsh.workspace.view.v5` 迁到 `dsh.archive-manager.workspace.view.v1`，避免老用户侧栏偏好被静默重置。
 
 ## 0.1.42 - 2026-09-14
 

@@ -146,6 +146,73 @@ test("设置页批量恢复串行调用官方 unarchiveSession", async () => {
 	assert.deepEqual(result.archivedSessionIds, ["s2"]);
 });
 
+test("restore prefers official unarchiveSession when the host provides it", async () => {
+	const official = [];
+	const remote = [];
+	const unarchive = t.createUnarchiveSession({
+		async unarchiveSession(id) {
+			official.push(id);
+		}
+	}, () => ({
+		async unarchiveSession(id) {
+			remote.push(id);
+			return { ok: true, value: { archivedSessionIds: [] } };
+		}
+	}));
+	await unarchive("s1");
+	assert.deepEqual(official, ["s1"]);
+	assert.deepEqual(remote, []);
+});
+
+test("restore falls back to plugin remote unarchiveSession on older hosts", async () => {
+	const archived = ["s1", "s2"];
+	const remote = [];
+	const unarchive = t.createUnarchiveSession({
+		list: { getSnapshot: () => ({ archivedSessionIds: ["s1", "s2"] }) }
+	}, () => ({
+		async unarchiveSession(id) {
+			remote.push(id);
+			const i = archived.indexOf(id);
+			if (i !== -1) archived.splice(i, 1);
+			return { ok: true, value: { archivedSessionIds: [...archived] } };
+		}
+	}));
+	await unarchive("s1");
+	assert.deepEqual(remote, ["s1"]);
+	assert.deepEqual(archived, ["s2"]);
+});
+
+test("legacy batch restore counts from the plugin remote set when the official snapshot lags", async () => {
+	const archived = ["s1", "s2", "s3"];
+	const remote = [];
+	const workspaces = {
+		list: { getSnapshot: () => ({ archivedSessionIds: ["s1", "s2", "s3"] }) }
+	};
+	const unarchive = t.createUnarchiveSession(workspaces, () => ({
+		async unarchiveSession(id) {
+			remote.push(id);
+			const i = archived.indexOf(id);
+			if (i !== -1) archived.splice(i, 1);
+			return { ok: true, value: { archivedSessionIds: [...archived] } };
+		}
+	}));
+	const result = await t.unarchiveSessionsViaOfficial(workspaces, ["s1", "s1", "s3"], async () => {}, unarchive);
+	assert.deepEqual(remote, ["s1", "s3"]);
+	assert.deepEqual(result.unarchivedSessionIds, ["s1", "s3"]);
+	assert.deepEqual(result.archivedSessionIds, ["s2"]);
+});
+
+test("plugin remote restore surfaces host errors and missing registry", async () => {
+	const missing = t.createUnarchiveSession({}, () => undefined);
+	await assert.rejects(() => missing("s1"), /archive-manager remote service is unavailable/);
+	const failed = t.createUnarchiveSession({}, () => ({
+		async unarchiveSession() {
+			return { ok: false, error: { message: "workspace locked" } };
+		}
+	}));
+	await assert.rejects(() => failed("s1"), /workspace locked/);
+});
+
 test("设置页与侧栏批量归档串行调用官方 archiveSession", async () => {
 	const archived = [];
 	const calls = [];
@@ -160,6 +227,48 @@ test("设置页与侧栏批量归档串行调用官方 archiveSession", async ()
 	assert.deepEqual(calls, ["s1", "s2"]);
 	assert.deepEqual(result.archivedSessionIdsAdded, ["s1", "s2"]);
 	assert.deepEqual(result.archivedSessionIds, ["s1", "s2"]);
+});
+
+test("batch archive stops on failure and leaves earlier sessions archived", async () => {
+	const archived = [];
+	const calls = [];
+	const workspaces = {
+		list: { getSnapshot: () => ({ archivedSessionIds: [...archived] }) },
+		async archiveSession(id) {
+			calls.push(id);
+			if (id === "s2") throw new Error("host rejected s2");
+			if (!archived.includes(id)) archived.push(id);
+		}
+	};
+	await assert.rejects(
+		() => t.archiveSessionsViaOfficial(workspaces, ["s1", "s2", "s3"], async () => {}),
+		/host rejected s2/,
+	);
+	assert.deepEqual(calls, ["s1", "s2"]);
+	assert.deepEqual(archived, ["s1"]);
+});
+
+test("legacy workspace view prefs migrate onto the archive-manager persist key", () => {
+	const storage = new Map([
+		["dsh.workspace.view.v5", JSON.stringify({ groupBy: "flat", orderBy: "title", groupExpansion: { w1: false } })],
+	]);
+	const migrated = t.migrateWorkspaceViewPersist({
+		getItem: (key) => storage.get(key) ?? null,
+		setItem: (key, value) => storage.set(key, value),
+	});
+	assert.equal(migrated, true);
+	assert.equal(
+		storage.get("dsh.archive-manager.workspace.view.v1"),
+		JSON.stringify({ groupBy: "flat", orderBy: "title", groupExpansion: { w1: false } }),
+	);
+	assert.equal(
+		t.migrateWorkspaceViewPersist({
+			getItem: (key) => storage.get(key) ?? null,
+			setItem: (key, value) => storage.set(key, value),
+		}),
+		false,
+		"already-migrated prefs must not be overwritten",
+	);
 });
 
 test("工作区没有可归档会话时不提供批量归档入口或确认框", () => {

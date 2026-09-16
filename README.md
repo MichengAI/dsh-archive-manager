@@ -85,7 +85,7 @@ The page opens on **Archived**, with **Unarchived** on the right. Switching tabs
 
 **Restore all / Delete all** remain on the Archived tab and apply to archived sessions across all projects, regardless of filters. Unarchived excludes subagents and blank placeholders and supports sorting by update time or title.
 
-Settings and sidebar batch archive/restore call official `ctx.workspaces.archiveSession` / `unarchiveSession` serially, using the same client projection as single-session sidebar actions.
+Settings and sidebar batch archive/restore call the single-session APIs serially: official `ctx.workspaces.archiveSession` on every supported host, official `ctx.workspaces.unarchiveSession` on DSH 0.1.6+, and this plugin's `workspaceRegistry.unarchiveSession` on older hosts.
 
 ### View and continue archived conversations
 

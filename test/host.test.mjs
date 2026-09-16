@@ -373,6 +373,10 @@ test("archivedSessionMetadata returns host header creation times and skips stale
 		archived: [s2, sUnknown, s1, s2],
 	});
 	const registry = await mountWorkspaceRegistry(env);
+	env.persistence.stat = async (id) => {
+		const path = env.located.get(id);
+		return path === void 0 ? undefined : { path };
+	};
 	assert.deepEqual(await registry.archivedSessionMetadata(), {
 		items: [
 			{ sessionId: s2, createdAt: 200 },
@@ -382,8 +386,54 @@ test("archivedSessionMetadata returns host header creation times and skips stale
 	assert.deepEqual(
 		env.global.archivedSessionIds,
 		[s2, s1],
-		"opening the archive list drops missing sessions from the durable set",
+		"opening the archive list drops only sessions whose artifacts are confirmed missing",
 	);
+});
+
+test("archivedSessionMetadata keeps unreadable archives when the transcript still exists", async () => {
+	const env = buildRoot({
+		headers: [
+			header(s1, cwdA, { createdAt: 100 }),
+			header(s2, cwdA, { createdAt: 200 }),
+		],
+		workspaces: { [A]: workspace("D:\\proj-a", [s1, s2]) },
+		archived: [s1, s2],
+	});
+	const registry = await mountWorkspaceRegistry(env);
+	env.persistence.stat = async (id) => {
+		const path = env.located.get(id);
+		return path === void 0 ? undefined : { path };
+	};
+	registry.headers.delete(s2);
+	env.persistence.headers = env.persistence.headers.filter((item) => item.id !== s2);
+	assert.deepEqual(await registry.archivedSessionMetadata(), {
+		items: [{ sessionId: s1, createdAt: 100 }],
+	});
+	assert.deepEqual(
+		env.global.archivedSessionIds,
+		[s1, s2],
+		"a list/header miss must not persist-drop an archive whose file still exists",
+	);
+});
+
+test("archivedSessionMetadata lists stored headers once while pruning unknowns", async () => {
+	const env = buildRoot({
+		headers: [header(s1, cwdA, { createdAt: 100 })],
+		workspaces: { [A]: workspace("D:\\proj-a", [s1]) },
+		archived: [s1, sUnknown, SID(98), SID(97)],
+	});
+	const registry = await mountWorkspaceRegistry(env);
+	env.persistence.stat = async (id) => {
+		const path = env.located.get(id);
+		return path === void 0 ? undefined : { path };
+	};
+	let lists = 0;
+	env.persistence.list = async () => {
+		lists += 1;
+		return [...env.persistence.headers];
+	};
+	await registry.archivedSessionMetadata();
+	assert.equal(lists, 1, "prune must not rebuild the full header listing once per unknown id");
 });
 
 for (const version of [0, 3])

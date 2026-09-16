@@ -247,7 +247,24 @@ window.__ModuleLoader__.load({
 		* Create the workspace browser viewing store handle.
 		* @returns the store handle (spec + type + identity + factory in one).
 		*/
+		const WORKSPACE_VIEW_PERSIST_KEY = "dsh.archive-manager.workspace.view.v1";
+		const LEGACY_WORKSPACE_VIEW_PERSIST_KEY = "dsh.workspace.view.v5";
+		/** 换键后把官方同构的分组/展开/排序偏好拷到新键；新键已有值时不覆盖。 */
+		function migrateWorkspaceViewPersist(storage) {
+			const target = storage ?? globalThis.localStorage;
+			if (target == null || typeof target.getItem !== "function" || typeof target.setItem !== "function") return false;
+			try {
+				if (target.getItem(WORKSPACE_VIEW_PERSIST_KEY) != null) return false;
+				const legacy = target.getItem(LEGACY_WORKSPACE_VIEW_PERSIST_KEY);
+				if (legacy == null) return false;
+				target.setItem(WORKSPACE_VIEW_PERSIST_KEY, legacy);
+				return true;
+			} catch {
+				return false;
+			}
+		}
 		function createWorkspaceViewStore() {
+			migrateWorkspaceViewPersist();
 			return (0, _deepseek_ai_dsh_client_store.defineStore)({
 				init: () => ({
 					groupBy: "workspace",
@@ -257,7 +274,7 @@ window.__ModuleLoader__.load({
 					sessionOrderByAccount: {},
 					sessionUpdatedAtByAccount: {}
 				}),
-				persist: "dsh.archive-manager.workspace.view.v1",
+				persist: WORKSPACE_VIEW_PERSIST_KEY,
 				actions: {
 					setGroupBy: (d, mode) => {
 						d.groupBy = mode;
@@ -3306,7 +3323,7 @@ window.__ModuleLoader__.load({
 		function archivedBatchTargetForGroup(groupKey) {
 			return groupKey === ARCHIVE_UNGROUPED_KEY ? { scope: "ungrouped" } : { scope: "workspace", workspaceId: groupKey };
 		}
-		/** 客户端只用此派生显示权威批次计数；宿主会用自己的持久状态重新解析。 */
+		/** 客户端按当前快照派生批量目标。删除仍由宿主按持久集合解析；恢复已在客户端串行执行。 */
 		function deriveArchivedBatchIds(archivedSessionIds, items, target) {
 			const ids = [...new Set(archivedSessionIds ?? [])];
 			if (target.scope === "all") return ids;
@@ -3753,6 +3770,23 @@ window.__ModuleLoader__.load({
 		* effect-scoped inside `applyWorkspaceBrowser`).
 		* @param ctx - client root context.
 		*/
+		/**
+		* 单条恢复：0.1.6+ 走官方 `workspaces.unarchiveSession`（会回写客户端归档快照）。
+		* 更早宿主没有该方法，回退到本插件一直注册的 `workspaceRegistry.unarchiveSession`。
+		*/
+		function createUnarchiveSession(workspaces, getRegistry) {
+			return async (sessionId) => {
+				if (typeof workspaces?.unarchiveSession === "function") {
+					await workspaces.unarchiveSession(sessionId);
+					return;
+				}
+				const registry = typeof getRegistry === "function" ? getRegistry() : getRegistry;
+				if (registry === undefined) throw new Error("archive-manager remote service is unavailable");
+				const result = await registry.unarchiveSession(sessionId);
+				if (!result.ok) throw new Error(result.error.message);
+				return result.value;
+			};
+		}
 		/** 设置页/侧栏批量归档：串行调官方单笔 archiveSession。已归档与未知会话交给官方处理。 */
 		async function archiveSessionsViaOfficial(workspaces, sessionIds, refresh) {
 			const before = new Set(workspaces.list?.getSnapshot?.()?.archivedSessionIds ?? []);
@@ -3769,17 +3803,20 @@ window.__ModuleLoader__.load({
 				archivedSessionIdsAdded: archivedSessionIds.filter((id) => !before.has(id))
 			};
 		}
-		/** 设置页批量恢复：串行调官方单笔 unarchiveSession。 */
-		async function unarchiveSessionsViaOfficial(workspaces, sessionIds, refresh) {
+		/** 设置页批量恢复：串行调单笔恢复。官方方法会回写快照；插件 remote 则用返回集合计数。 */
+		async function unarchiveSessionsViaOfficial(workspaces, sessionIds, refresh, unarchive) {
 			const before = new Set(workspaces.list?.getSnapshot?.()?.archivedSessionIds ?? []);
 			const seen = new Set();
+			const run = typeof unarchive === "function" ? unarchive : (id) => workspaces.unarchiveSession(id);
+			let archivedSessionIds;
 			for (const sessionId of sessionIds) {
 				if (typeof sessionId !== "string" || sessionId.length === 0 || seen.has(sessionId)) continue;
 				seen.add(sessionId);
-				await workspaces.unarchiveSession(sessionId);
+				const value = await run(sessionId);
+				if (Array.isArray(value?.archivedSessionIds)) archivedSessionIds = [...value.archivedSessionIds];
 			}
 			if (typeof refresh === "function") await refresh();
-			const archivedSessionIds = [...(workspaces.list?.getSnapshot?.()?.archivedSessionIds ?? [])];
+			archivedSessionIds ??= [...(workspaces.list?.getSnapshot?.()?.archivedSessionIds ?? [])];
 			return {
 				archivedSessionIds,
 				unarchivedSessionIds: [...before].filter((id) => !archivedSessionIds.includes(id))
@@ -3845,10 +3882,6 @@ window.__ModuleLoader__.load({
 				subscribe: (listener) => ctx.slots.subscribe(hole, listener)
 			});
 			const browserFlowSource = flowSource(DIRECTORY_FLOW_SLOT);
-			const hostInfo = {
-				getSnapshot: () => ctx.remote?.$host ?? {},
-				subscribe: (listener) => ctx.on?.("connection/reset", listener) ?? (() => {})
-			};
 			const refreshSessionList = async () => {
 				if (typeof ctx.sessions.refresh !== "function") return;
 				try {
@@ -3857,8 +3890,9 @@ window.__ModuleLoader__.load({
 					console.warn("archive-manager: restored archived sessions but session list refresh failed:", error);
 				}
 			};
+			const unarchiveOne = createUnarchiveSession(ctx.workspaces, () => ctx.get("remote.workspaceRegistry"));
 			const unarchiveSession = async (sessionId) => {
-				await ctx.workspaces.unarchiveSession(sessionId);
+				await unarchiveOne(sessionId);
 				await refreshSessionList();
 			};
 			const archiveWorkspaceSessions = async (workspaceId) => {
@@ -3878,7 +3912,7 @@ window.__ModuleLoader__.load({
 			const unarchiveSessions = async (target) => {
 				const snapshot = ctx.workspaces.list?.getSnapshot?.() ?? { archivedSessionIds: [], items: [] };
 				const sessionIds = deriveArchivedBatchIds(snapshot.archivedSessionIds, snapshot.items, target);
-				return unarchiveSessionsViaOfficial(ctx.workspaces, sessionIds, refreshSessionList);
+				return unarchiveSessionsViaOfficial(ctx.workspaces, sessionIds, refreshSessionList, unarchiveOne);
 			};
 			const deleteArchivedSessions = async (target) => {
 				const registry = ctx.get("remote.workspaceRegistry");
@@ -3947,7 +3981,7 @@ window.__ModuleLoader__.load({
 					await ctx.workspaces.insertSessionBefore(workspaceId, sessionId, beforeSessionId);
 				},
 				createWorkspace: (input) => ctx.workspaces.create(input),
-				hooks: { directoryFlow: browserFlowSource, hostInfo }
+				hooks: { directoryFlow: browserFlowSource }
 			});
 			ctx.slots.inject("sidebar.workspaces", () => {
 				const common = {
@@ -4019,7 +4053,11 @@ window.__ModuleLoader__.load({
 			archiveWorkspaceDialogFailureState,
 			archiveSessionsViaOfficial,
 			unarchiveSessionsViaOfficial,
+			createUnarchiveSession,
 			createWorkspaceViewStore,
+			migrateWorkspaceViewPersist,
+			WORKSPACE_VIEW_PERSIST_KEY,
+			LEGACY_WORKSPACE_VIEW_PERSIST_KEY,
 			bindObservable,
 			hasSplitClientStore,
 			groupByWorkspace,

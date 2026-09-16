@@ -85,7 +85,7 @@ dsh plugin --profile web add @michengai/dsh-archive-manager@latest --registry=ht
 
 「全部恢复 / 全部删除」仅在已归档页显示，作用于所有项目的归档会话，不受筛选影响。未归档页排除子代理和空白占位会话，支持按更新时间或标题排序。
 
-设置页与侧栏的批量归档、批量恢复均串行调用官方 `ctx.workspaces.archiveSession` / `unarchiveSession`，与侧栏单笔路径同一套客户端投影。
+设置页与侧栏的批量归档、批量恢复均串行调用单条接口：归档在所有支持的宿主走官方 `ctx.workspaces.archiveSession`；恢复在 DSH 0.1.6+ 走官方 `ctx.workspaces.unarchiveSession`，更早宿主回退到本插件的 `workspaceRegistry.unarchiveSession`。
 
 ### 查看并继续归档对话
 

@@ -93,17 +93,6 @@ function markRemoteMethod(instance, method) {
 	};
 	Remote(method)(void 0, context);
 }
-function unknownSessionMessage(sessionId) {
-	return `unknown session "${sessionId}" (UNKNOWN_SESSION)`;
-}
-var ArchiveUnknownSessionError = class extends Error {
-	sessionId;
-	constructor(sessionId) {
-		super(unknownSessionMessage(sessionId));
-		this.sessionId = sessionId;
-		this.name = "ArchiveUnknownSessionError";
-	}
-};
 /** 头部投影到“日志身份”字段（与投影缓存的 identity 语义一致）。cwd 缺失统一归一为 null，避免一侧带键一侧不带键时的比较歧义。 */
 function headerIdentity(header) {
 	return {
@@ -366,6 +355,8 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 	deletedSessionTombstoneLimit = 4096;
 	/** 被删生命周期的日志身份（createdAt/cwd）：冷复用探针区分“同 id 新会话”与 stale list() 的依据。 */
 	deletedIdentities = /* @__PURE__ */ new Map();
+	archivedSessionPathIndex = new Map();
+	archivedSessionPathIndexKey;
 	constructor(ctx) {
 		super(ctx);
 		const indexedPath = this.host.sessionPath;
@@ -376,12 +367,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 			// 未归档会话仍走官方过滤，不改工作区成员语义。
 			if (this.invalidSessionPaths.has(id)) return undefined;
 			try {
-				if (!this.requireState().archivedSessionIds.includes(id)) return undefined;
-				const table = this.requireTable();
-				for (const workspaceId of this.requireState().workspaceIds) {
-					const record = table.get(workspaceId);
-					if (record?.sessionIds.includes(id)) return record.path;
-				}
+				return this.archivedWorkspacePath(id);
 			} catch {
 				return undefined;
 			}
@@ -393,20 +379,73 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		markRemoteMethod(this, "archivedSessionMetadata");
 		registerHostRemote(this.ctx);
 	}
+	/** 归档集合未变时复用反查表，避免每次 sessionPath 都扫全部工作区记账。 */
+	archivedWorkspacePath(sessionId) {
+		const state = this.requireState();
+		if (!state.archivedSessionIds.includes(sessionId)) return undefined;
+		if (this.archivedSessionPathIndexKey !== state.archivedSessionIds) {
+			const index = new Map();
+			const archived = new Set(state.archivedSessionIds);
+			const table = this.requireTable();
+			for (const workspaceId of state.workspaceIds) {
+				const record = table.get(workspaceId);
+				if (record === undefined) continue;
+				for (const id of record.sessionIds) {
+					if (archived.has(id)) index.set(id, record.path);
+				}
+			}
+			this.archivedSessionPathIndex = index;
+			this.archivedSessionPathIndexKey = state.archivedSessionIds;
+		}
+		return this.archivedSessionPathIndex.get(sessionId);
+	}
 	/**
-	 * 从归档集合摘掉已经不存在的会话。打开归档列表时调用，
-	 * 避免孤儿 id 留在「全部恢复」作用域里却不出现在界面上。
+	 * 只有 persistence.stat 明确说文件不在时才从持久集合摘掉。
+	 * list/header 读不出不等于文件没了；没有 stat 时宁可不落盘删除。
+	 */
+	async sessionArtifactMissing(sessionId) {
+		const persistence = this.ctx.get("sessionPersistence");
+		if (typeof persistence?.stat !== "function") return false;
+		try {
+			return (await persistence.stat(sessionId)) === undefined;
+		} catch (error) {
+			this.ctx.logger.warn(
+				`archive-manager: could not stat archived session "${sessionId}": ${String(error)}`,
+			);
+			return false;
+		}
+	}
+	/**
+	 * 从归档集合摘掉已经确认不存在的会话。打开归档列表时调用。
+	 * 读不出头部的标记留在持久集合里，只从本次元数据结果里隐藏。
 	 */
 	async pruneUnknownArchivedSessionIds() {
 		return this.enqueueOperation(async () => {
 			const state = this.requireState();
+			const listed = new Set();
+			for (const item of await this.listStoredHeaders()) {
+				const header = item.header ?? item;
+				if (typeof header?.id === "string") listed.add(header.id);
+			}
+			const sessions = this.ctx.get("sessions");
 			const kept = [];
 			const seen = new Set();
 			for (const sessionId of state.archivedSessionIds) {
 				if (seen.has(sessionId)) continue;
-				if (!(await this.sessionKnown(sessionId))) continue;
 				seen.add(sessionId);
-				kept.push(sessionId);
+				if (sessions?.get(sessionId) !== undefined) {
+					kept.push(sessionId);
+					continue;
+				}
+				if (this.deletedSessionIds.has(sessionId)) {
+					if (await this.coldReuseKnown(sessionId)) kept.push(sessionId);
+					continue;
+				}
+				if (this.headers.has(sessionId) || listed.has(sessionId)) {
+					kept.push(sessionId);
+					continue;
+				}
+				if (!(await this.sessionArtifactMissing(sessionId))) kept.push(sessionId);
 			}
 			if (
 				kept.length === state.archivedSessionIds.length &&
@@ -421,7 +460,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 	 * 归档设置页创建时间排序所需的最小元数据。老用户可能仍有会话原文和
 	 * 归档标记、却没有投影缓存；这里按需从完整日志重建一次，再通知客户端
 	 * 刷新会话列表。已有缓存不读原文，新老 DSH 的缓存布局都走同一 put。
-	 * 读取前先清掉不存在的归档标记。
+	 * 读取前只清掉文件已确认不存在的归档标记。
 	 */
 	async archivedSessionMetadata() {
 		await this.pruneUnknownArchivedSessionIds();
@@ -958,7 +997,6 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 					if (!(await this.sessionKnown(childId))) continue;
 					await this.deleteSessionCore(childId);
 				} catch (error) {
-					if (error instanceof ArchiveUnknownSessionError) continue;
 					this.ctx.logger.warn(
 						`archive-manager: cascade delete of subagent session "${childId}" (child of "${sessionId}") failed: ${String(error)}`,
 					);
