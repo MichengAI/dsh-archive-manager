@@ -10,7 +10,7 @@ Published release notes are retained below; new versions are added without remov
 - Declare DeepSeek Harness `0.1.6-alpha.1` in the DSH peer range and pin development dependencies to `0.1.6-alpha.1`. Host `workspace` and `session-projection-cache` remain replaced so batch archive and permanent delete keep working.
 - Treat unknown session ids as a no-op on archive and unarchive: skip them instead of throwing `UNKNOWN_SESSION`, and drop orphan archive markers on restore.
 - Opening the archived-sessions page drops an archive id from the durable set only when `persistence.stat` confirms the transcript is gone. Unreadable headers stay archived and are omitted from the visible metadata list. Hosts without `stat` do not persist-drop.
-- Batch archive and restore run serially and can succeed in part: a later failure leaves earlier changes written and shows the error.
+- Batch archive and restore run serially and can succeed in part: a later failure leaves earlier changes written and shows the error. DSH 0.1.6+ success counts come from the official workspace snapshot and can lag; older hosts use the plugin remote archive set.
 - Treat missing sessions the same on delete as on archive: clean leftover traces without throwing `UNKNOWN_SESSION`.
 - Register the archive sidebar without waiting for official `uiWorkspace`, so the session menu is not stuck on the official three-item archive menu on DSH 0.1.6.
 - Bind archived-session navigation after official `uiWorkspace` is ready so Open session is not immediately cleared.
