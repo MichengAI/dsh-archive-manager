@@ -6,6 +6,8 @@
 
 ## Unreleased
 
+## 0.1.43 - 2026-09-16
+
 - 安装时禁用 DSH 0.1.6+ 官方「已归档会话」设置页（`ui-settings-unarchive-sessions`），设置里只保留本插件的归档管理入口。
 - DSH peer 范围纳入 `0.1.6-alpha.1`，开发依赖固定到同一版本。仍替换官方 `workspace` 与 `session-projection-cache`，以保留批量归档和永久删除。
 - 归档和恢复遇到未知 id 都不再抛 `UNKNOWN_SESSION`：跳过不存在的会话，恢复时清掉孤儿归档标记。

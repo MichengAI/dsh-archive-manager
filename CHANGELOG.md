@@ -6,6 +6,8 @@ Published release notes are retained below; new versions are added without remov
 
 ## Unreleased
 
+## 0.1.43 - 2026-09-16
+
 - Disable the official DSH 0.1.6+ Archived sessions settings plugin (`ui-settings-unarchive-sessions`) on install, so only this plugin's archive manager remains in Settings.
 - Declare DeepSeek Harness `0.1.6-alpha.1` in the DSH peer range and pin development dependencies to `0.1.6-alpha.1`. Host `workspace` and `session-projection-cache` remain replaced so batch archive and permanent delete keep working.
 - Treat unknown session ids as a no-op on archive and unarchive: skip them instead of throwing `UNKNOWN_SESSION`, and drop orphan archive markers on restore.
