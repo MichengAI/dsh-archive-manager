@@ -1,4 +1,4 @@
-import { allowArchivedNavigation, openArchivedConversation, formatArchiveNavigationError } from "./archive-experience.js";
+import { allowArchivedNavigation, openArchivedConversation, formatArchiveNavigationError, ArchiveNavigationError } from "./archive-experience.js";
 import { mirrorDirectoryFlow } from "./directory-flow-slot.js";
 import { observePluginUpdate } from "./plugin-update-ui.js";
 
@@ -3734,17 +3734,22 @@ window.__ModuleLoader__.load({
 				enName: "Archived sessions",
 				createIcon: createPluginUpdateIcon
 			}), "dsh-archive-manager: plugin update ui");
-			// 导航由官方插件提供；旧宿主仍使用其 workspaces/sessions API。
+			// 侧栏先注册；导航适配等官方 uiWorkspace 出现再绑，否则打开归档会被官方清掉。
 			const uiWorkspaceAt = () => ctx.get("uiWorkspace");
 			const archiveViewState = {};
 			let archiveNavigation;
-			ctx.effect(() => {
-				archiveNavigation = allowArchivedNavigation(uiWorkspaceAt(), ctx.sessions, ctx.workspaces, {
+			const attachArchiveNavigation = (navigation) => {
+				archiveNavigation = allowArchivedNavigation(navigation, ctx.sessions, ctx.workspaces, {
 					onOpened: () => ctx.get("layout")?.selectPanel(null)
 				});
 				return () => archiveNavigation.dispose();
-			}, "archive-manager: explicit archived navigation");
-			const openConversation = (sessionId) => archiveNavigation.open(sessionId);
+			};
+			if (typeof ctx.inject === "function") ctx.inject(["uiWorkspace"], (ready) => attachArchiveNavigation(ready.uiWorkspace ?? uiWorkspaceAt()));
+			else ctx.effect(() => attachArchiveNavigation(uiWorkspaceAt()), "archive-manager: explicit archived navigation");
+			const openConversation = (sessionId) => {
+				if (archiveNavigation === undefined) throw new ArchiveNavigationError("navigationUnavailable");
+				return archiveNavigation.open(sessionId);
+			};
 			const searchSessions = async (query, signal) => {
 				const result = await ctx.sessions.search(query, signal);
 				if (!result.ok) throw new Error(result.error.message);

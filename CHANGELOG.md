@@ -12,6 +12,7 @@ Published release notes are retained below; new versions are added without remov
 - Opening the archived-sessions page prunes missing ids from the durable archive set so Restore all matches the visible list.
 - Treat missing sessions the same on delete as on archive: clean leftover traces without throwing `UNKNOWN_SESSION`.
 - Register the archive sidebar without waiting for official `uiWorkspace`, so the session menu is not stuck on the official three-item archive menu on DSH 0.1.6.
+- Bind archived-session navigation after official `uiWorkspace` is ready so Open session is not immediately cleared.
 - Settings and sidebar batch archive now call official `archiveSession` serially instead of the plugin `archiveSessions` channel.
 - Batch restore now calls official `unarchiveSession` serially; unused plugin `archiveSessions` / `archiveWorkspaceSessions` / `unarchiveSessions` endpoints and client sync helpers are removed.
 

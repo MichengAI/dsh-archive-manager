@@ -12,6 +12,7 @@
 - 打开归档列表时从持久化集合清掉已经不存在的 id，使「全部恢复」与可见列表一致。
 - 删除与归档对失踪会话同一套逻辑：清掉残留痕迹，不抛 `UNKNOWN_SESSION`。
 - 侧栏不再等待官方 `uiWorkspace` 才注册，避免 0.1.6 上官方三项菜单一直占着、删除进不来。
+- 打开归档会话改为在官方 `uiWorkspace` 就绪后再适配 `clearArchivedCurrent`，避免点「打开会话」被官方立刻清掉。
 - 设置页与侧栏批量归档改为串行调用官方 `archiveSession`，不再走插件 `archiveSessions` 通道。
 - 批量恢复改为串行调用官方 `unarchiveSession`；删除插件 `archiveSessions`、`archiveWorkspaceSessions`、`unarchiveSessions` 以及已无调用方的客户端同步辅助方法。
 
