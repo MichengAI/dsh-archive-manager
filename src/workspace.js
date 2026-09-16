@@ -368,6 +368,24 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 	deletedIdentities = /* @__PURE__ */ new Map();
 	constructor(ctx) {
 		super(ctx);
+		const indexedPath = this.host.sessionPath;
+		this.host.sessionPath = (id) => {
+			const path = indexedPath(id);
+			if (path !== undefined) return path;
+			// 只保护仍在归档集合里、但路径索引还没编上的记账，避免官方 mutate 把归档会话写丢。
+			// 未归档会话仍走官方过滤，不改工作区成员语义。
+			if (this.invalidSessionPaths.has(id)) return undefined;
+			try {
+				if (!this.requireState().archivedSessionIds.includes(id)) return undefined;
+				const table = this.requireTable();
+				for (const workspaceId of this.requireState().workspaceIds) {
+					const record = table.get(workspaceId);
+					if (record?.sessionIds.includes(id)) return record.path;
+				}
+			} catch {
+				return undefined;
+			}
+		};
 		this.typertRemote = bindTypertRemote(this, this.name);
 		markRemoteMethod(this, "unarchiveSession");
 		markRemoteMethod(this, "deleteSession");
@@ -554,8 +572,33 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 				),
 			};
 			await this.setState(next);
+			await this.restoreWorkspaceMembership(sessionId);
 			return { archivedSessionIds: [...next.archivedSessionIds] };
 		});
+	}
+	/**
+	 * 恢复后重新编入路径索引；若会话已不在任何工作区记账但 cwd 仍对应某工作区，
+	 * 则挂回去，避免「恢复并打开」时官方成员过滤把会话从原工作区抹掉。
+	 */
+	async restoreWorkspaceMembership(sessionId) {
+		let header;
+		try {
+			header = await this.readSessionHeader(sessionId);
+			await this.indexHeader(header);
+		} catch {
+			return;
+		}
+		const path = this.sessionPaths.get(sessionId);
+		if (path === undefined) return;
+		const table = this.requireTable();
+		for (const workspaceId of this.requireState().workspaceIds) {
+			const record = table.get(workspaceId);
+			if (record === undefined || record.path !== path) continue;
+			if (record.sessionIds.includes(sessionId)) return;
+			const entity = this.entities.get(workspaceId);
+			if (entity !== undefined) await entity.attachSession(sessionId);
+			return;
+		}
 	}
 	/**
 	 * 按作用域永久删除归档会话。跨会话文件删除无法组成事务，因此继续处理

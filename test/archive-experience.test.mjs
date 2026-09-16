@@ -4,15 +4,19 @@ import { openArchivedConversation, allowArchivedNavigation, ArchiveNavigationErr
 
 test("继续对话不恢复；恢复并打开必须等持久化成功，失败不导航", async () => {
   const calls = [];
-  const actions = { open: id => calls.push(["open", id]), restore: async id => calls.push(["restore", id]) };
+  const actions = {
+    prepare: id => calls.push(["prepare", id]),
+    open: id => calls.push(["open", id]),
+    restore: async id => calls.push(["restore", id])
+  };
   await openArchivedConversation(actions, "a", false);
   assert.deepEqual(calls, [["open", "a"]]);
   calls.length = 0;
   await openArchivedConversation(actions, "a", true);
-  assert.deepEqual(calls, [["restore", "a"], ["open", "a"]]);
+  assert.deepEqual(calls, [["prepare", "a"], ["restore", "a"], ["open", "a"]]);
   calls.length = 0;
   await assert.rejects(openArchivedConversation({ ...actions, restore: async () => { throw new Error("磁盘失败"); } }, "a", true), /磁盘失败/);
-  assert.deepEqual(calls, []);
+  assert.deepEqual(calls, [["prepare", "a"]]);
 });
 
 test("离开页面后恢复完成不产生迟到导航", async () => {
@@ -95,6 +99,20 @@ test("目标会话未保留时不调用会提前关闭设置的官方 openSessio
   assert.equal(env.warnings.length, 0, "挂载不警告");
   assert.throws(() => guard.open("old"), { code: "sessionNotRetained" });
   assert.equal(env.panel, "settings");
+  guard.dispose();
+});
+
+test("打开前中止进行中的工作区导航，避免其他工作区抢走会话", () => {
+  const env = navigationFixture();
+  const navigations = [];
+  const guard = allowArchivedNavigation(env.navigation, env.sessions, env.workspaces, {
+    ...env.options,
+    beginNavigation: () => { navigations.push("begin"); }
+  });
+  guard.open("old");
+  assert.deepEqual(navigations, ["begin"]);
+  assert.equal(env.sessions.list.getSnapshot().current, "old");
+  assert.equal(env.panel, null);
   guard.dispose();
 });
 

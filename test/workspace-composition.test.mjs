@@ -307,6 +307,7 @@ for (const restore of [false, true]) {
       await pending;
       assert.deepEqual(calls, [...(restore ? [["restore", "old"]] : []), ["open", "old"], ...(failure ? [] : [["close"]])]);
       if (failure) assert.ok(writes.includes("open rejected"), "打开失败应显示错误");
+      if (restore && failure) assert.ok(writes.includes("unarchived"), "恢复成功但打开失败应切到未归档，避免会话从列表消失");
     });
   }
 }

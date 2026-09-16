@@ -294,7 +294,7 @@ window.__ModuleLoader__.load({
 		/**
 		* 归档管理设置页：集中处理筛选、多选、恢复、删除和原生会话导航。
 		*/
-		function ArchivedSessionsSection({ archiveSessions, sessionStore, workspaceStore, unarchiveSession, deleteSession, unarchiveSessions, deleteArchivedSessions, archivedSessionMetadata, openConversation, viewState, close, t }) {
+		function ArchivedSessionsSection({ archiveSessions, sessionStore, workspaceStore, unarchiveSession, deleteSession, unarchiveSessions, deleteArchivedSessions, archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState, close, t }) {
 			const sessions = (0, react.useSyncExternalStore)(sessionStore.subscribe, sessionStore.getSnapshot);
 			const workspaceState = (0, react.useSyncExternalStore)(workspaceStore.subscribe, workspaceStore.getSnapshot);
 			const [archiveTab, setArchiveTab] = (0, react.useState)("archived");
@@ -321,10 +321,30 @@ window.__ModuleLoader__.load({
 			const viewConversation = async (session, restore = false) => {
 				if (busy || navigationPending.current) return;
 				navigationPending.current = true; setBusy(true); setError(null);
+				let restored = false;
 				try {
 					// close 由 settings.section 的壳通过 renderSlot 传入，不属于 inject；主面板切换不会关闭设置遮罩。
-					await openArchivedConversation({ restore: unarchiveSession, open: async (id) => { await openConversation(id); if (navigationActive.current) close?.(); } }, session.id, restore, () => navigationActive.current);
-				} catch (reason) { if (navigationActive.current) setError(formatArchiveNavigationError(reason, t)); }
+					await openArchivedConversation({
+						prepare: restore ? async (id) => { await focusSessionWorkspace?.(id); } : undefined,
+						restore: async (id) => {
+							await unarchiveSession(id);
+							restored = true;
+						},
+						open: async (id) => {
+							await openConversation(id);
+							if (navigationActive.current) close?.();
+						}
+					}, session.id, restore, () => navigationActive.current);
+				} catch (reason) {
+					if (!navigationActive.current) return;
+					// 恢复已成功但没打开时，会话已离开「已归档」；切到未归档并定位到原工作区，避免看起来像丢失。
+					if (restored) {
+						setArchiveTab("unarchived");
+						const group = groups.find((item) => item.sessions.some((row) => row.id === session.id));
+						if (group !== undefined) setProject(group.key);
+					}
+					setError(formatArchiveNavigationError(reason, t));
+				}
 				finally { navigationPending.current = false; if (navigationActive.current) setBusy(false); }
 			};
 			(0, react.useEffect)(() => { if (viewState) Object.assign(viewState, { query, project, sortBy }); }, [query, project, sortBy, viewState]);
@@ -1264,12 +1284,13 @@ window.__ModuleLoader__.load({
 		* @param props.onArchive - archive a session by id.
 		* @param props.onUnarchive - unarchive a session by id.
 		* @param props.onDeleteSession - request the delete-session confirmation.
+		* @param props.onReveal - scroll this row into view after cross-workspace open, then acknowledge it.
 		* @param props.drag - optional draggable-row wiring.
 		* @param props.flat - omit the empty status slot in the hierarchy-free flat list.
 		* @param props.t - the browser root's locale seat.
 		* @returns the session row.
 		*/
-		function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork, onArchive, onUnarchive, onDeleteSession, drag, flat = false, t }) {
+		function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork, onArchive, onUnarchive, onDeleteSession, onReveal, drag, flat = false, t }) {
 			const row = node;
 			const title = displayTitle(node, t);
 			const selected = node.id === currentId;
@@ -1277,6 +1298,12 @@ window.__ModuleLoader__.load({
 			const statuses = sessionStatuses(node, t);
 			const showStatus = statuses[0].state !== "done" || row.completed;
 			const [menuOpen, setMenuOpen] = (0, react.useState)(false);
+			const rowRef = (0, react.useRef)(null);
+			(0, react.useEffect)(() => {
+				if (onReveal === void 0) return;
+				rowRef.current?.scrollIntoView({ block: "nearest" });
+				onReveal();
+			}, [onReveal]);
 			const sessionMenuItems = archived ? [
 				{
 					id: "unarchive",
@@ -1314,6 +1341,7 @@ window.__ModuleLoader__.load({
 			];
 			return (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.HoverCard, {
 				anchor: (0, react_jsx_runtime.jsxs)("div", {
+					ref: rowRef,
 					className: clsx(Rows_module_css_default.sessionRow, selected && Rows_module_css_default.selected, menuOpen && Rows_module_css_default.menuOpen, flat && !showStatus && Rows_module_css_default.flatSessionRowWithoutStatus, archived && ARCHIVED_CLASSES.row, drag?.marker === "before" && Rows_module_css_default.dropBefore, drag?.marker === "after" && Rows_module_css_default.dropAfter),
 					role: "treeitem",
 					"aria-selected": selected,
@@ -1815,7 +1843,7 @@ window.__ModuleLoader__.load({
 			return e.clientY < rect.top + rect.height / 2 ? "before" : "after";
 		}
 		/** The scrolling session tree; unmounting drops the sessions subscription and expand-all state. */
-		function SessionTree({ useSessions, useSessionPendingInteraction, startSession, open, forkSession, workspaces, archivedSessionIds, showArchived, onRenameRequest, onArchiveRequest, onDeleteRequest, onSessionRename, onSessionArchive, onSessionUnarchive, onSessionDelete, insertWorkspaceBefore, insertSessionBefore, orderBy, groupExpansion, setGroupExpanded, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t }) {
+		function SessionTree({ useSessions, useSessionPendingInteraction, startSession, open, forkSession, workspaces, archivedSessionIds, showArchived, onRenameRequest, onArchiveRequest, onDeleteRequest, onSessionRename, onSessionArchive, onSessionUnarchive, onSessionDelete, insertWorkspaceBefore, insertSessionBefore, orderBy, groupExpansion, setGroupExpanded, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t, revealSessionId, onSessionRevealed }) {
 			const list = useSessions((s) => s);
 			const pendingInteractions = useSessionPendingInteraction((s) => s);
 			const current = list.current;
@@ -1827,7 +1855,9 @@ window.__ModuleLoader__.load({
 			const previousOrderBy = (0, react.useRef)(orderBy);
 			useNativeDragAcceptance(drag !== null || workspaceDrag !== null);
 			const currentGroup = current === void 0 ? void 0 : workspaces.find((w) => w.sessionIds.includes(current))?.workspaceId ?? "";
+			const revealGroup = revealSessionId === void 0 ? void 0 : workspaces.find((w) => w.sessionIds.includes(revealSessionId))?.workspaceId ?? "";
 			(0, react.useEffect)(() => {
+				// 与官方一致：只在从未记过展开状态时自动展开当前组。选中后仍允许用户折叠。
 				if (current === void 0 || currentGroup === void 0 || Object.hasOwn(groupExpansion, currentGroup)) return;
 				setGroupExpanded(currentGroup, true);
 			}, [
@@ -1835,6 +1865,14 @@ window.__ModuleLoader__.load({
 				currentGroup,
 				setGroupExpanded,
 				groupExpansion
+			]);
+			(0, react.useEffect)(() => {
+				if (revealGroup === void 0 || groupExpansion[revealGroup] === true) return;
+				setGroupExpanded(revealGroup, true);
+			}, [
+				groupExpansion,
+				revealGroup,
+				setGroupExpanded
 			]);
 			const expandedGroups = (0, react.useMemo)(() => Object.entries(groupExpansion).filter(([, expanded]) => expanded).map(([key]) => key), [groupExpansion]);
 			const ungroupedSessionIds = (0, react.useMemo)(() => {
@@ -1896,6 +1934,17 @@ window.__ModuleLoader__.load({
 				showArchived,
 				expandedGroups,
 				sessionOrderByAccount
+			]);
+			(0, react.useEffect)(() => {
+				if (revealSessionId === void 0 || revealGroup === void 0) return;
+				const group = groups.find((candidate) => candidate.key === revealGroup);
+				if (group === void 0 || !group.expanded || !group.sessions.some((row) => row.id === revealSessionId)) return;
+				if (group.sessions.slice(0, COLLAPSED_SESSION_LIMIT).some((row) => row.id === revealSessionId)) return;
+				setExpandedSessionGroups((keys) => keys.includes(revealGroup) ? keys : [...keys, revealGroup]);
+			}, [
+				groups,
+				revealGroup,
+				revealSessionId
 			]);
 			const now = Date.now();
 			const commitSessionDrag = (activeDrag, over) => {
@@ -2046,6 +2095,9 @@ window.__ModuleLoader__.load({
 											onArchive: onSessionArchive,
 											onUnarchive: onSessionUnarchive,
 											onDeleteSession: onSessionDelete,
+											onReveal: node.id === revealSessionId && group.key === revealGroup ? () => {
+												onSessionRevealed?.(node.id);
+											} : void 0,
 											drag: {
 												start: () => {
 													sessionDropCommitted.current = false;
@@ -2102,7 +2154,7 @@ window.__ModuleLoader__.load({
 			});
 		}
 		/** The flat "In one list" body: every session is one draggable top-level row. */
-		function FlatList({ useSessions, useSessionPendingInteraction, open, forkSession, onSessionRename, onSessionArchive, onSessionUnarchive, onSessionDelete, archivedSessionIds, showArchived, orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t }) {
+		function FlatList({ useSessions, useSessionPendingInteraction, open, forkSession, onSessionRename, onSessionArchive, onSessionUnarchive, onSessionDelete, archivedSessionIds, showArchived, orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t, revealSessionId, onSessionRevealed }) {
 			const list = useSessions((s) => s);
 			const pendingInteractions = useSessionPendingInteraction((s) => s);
 			const baseRows = (0, react.useMemo)(() => deriveFlat(list, archivedSessionIds, pendingInteractions, showArchived), [
@@ -2192,6 +2244,9 @@ window.__ModuleLoader__.load({
 							onArchive: onSessionArchive,
 							onUnarchive: onSessionUnarchive,
 							onDeleteSession: onSessionDelete,
+							onReveal: node.id === revealSessionId ? () => {
+								onSessionRevealed?.(node.id);
+							} : void 0,
 							flat: true,
 							drag: {
 								start: () => {
@@ -2298,6 +2353,16 @@ window.__ModuleLoader__.load({
 		* @param props - composed slot props (shell owner share + store + injected actions).
 		* @returns the region element tree.
 		*/
+		const sidebarReveal = {
+			listeners: new Set(),
+			request(sessionId) {
+				for (const listener of this.listeners) listener(sessionId);
+			},
+			subscribe(listener) {
+				this.listeners.add(listener);
+				return () => { this.listeners.delete(listener); };
+			}
+		};
 		function WorkspaceBrowser({ wide, expandSidebar, useSessions, useSessionPendingInteraction, useWorkspaces, useStore, actions, startSession, open, renameSession, forkSession, renameWorkspace, deleteWorkspace, insertWorkspaceBefore, archiveSession, archiveWorkspaceSessions, unarchiveSession, deleteSession, insertSessionBefore, createWorkspace, searchSessions, searchResultLimit, useDirectoryFlow, renderSlot, t }) {
 			const useEffectiveSessionPendingInteraction = useSessionPendingInteraction ?? useEmptySessionPendingInteraction;
 			const workspaces = useWorkspaces((state) => state.items);
@@ -2312,6 +2377,11 @@ window.__ModuleLoader__.load({
 			const sessionOrderByAccount = useStore((s) => s.sessionOrderByAccount);
 			const sessionUpdatedAtByAccount = useStore((s) => s.sessionUpdatedAtByAccount);
 			const archivedSet = (0, react.useMemo)(() => new Set(archivedSessionIds), [archivedSessionIds]);
+			const [revealSessionId, setRevealSessionId] = (0, react.useState)(void 0);
+			(0, react.useEffect)(() => sidebarReveal.subscribe((sessionId) => setRevealSessionId(sessionId)), []);
+			const acknowledgeSessionReveal = (sessionId) => {
+				setRevealSessionId((current) => current === sessionId ? void 0 : current);
+			};
 			const [archivedToast, setArchivedToast] = (0, react.useState)(null);
 			const archivedToastSeq = (0, react.useRef)(0);
 			const showArchivedToast = (text) => {
@@ -2723,7 +2793,12 @@ window.__ModuleLoader__.load({
 						children: wide && (normalizedQuery !== "" ? (0, react_jsx_runtime.jsx)(SearchResults, {
 							useSessions,
 							useSessionPendingInteraction: useEffectiveSessionPendingInteraction,
-							open: guardedOpen,
+							open: (sessionId) => {
+								setRevealSessionId(sessionId);
+								setQuery("");
+								setSearchExpanded(false);
+								guardedOpen(sessionId);
+							},
 							workspaces,
 							archivedSessionIds,
 							showArchived,
@@ -2735,6 +2810,8 @@ window.__ModuleLoader__.load({
 							useSessions,
 							useSessionPendingInteraction: useEffectiveSessionPendingInteraction,
 							open: guardedOpen,
+							revealSessionId,
+							onSessionRevealed: acknowledgeSessionReveal,
 							forkSession,
 							onSessionRename,
 							onSessionArchive,
@@ -2754,6 +2831,8 @@ window.__ModuleLoader__.load({
 						}) : (0, react_jsx_runtime.jsx)(SessionTree, {
 							useSessions,
 							useSessionPendingInteraction: useEffectiveSessionPendingInteraction,
+							revealSessionId,
+							onSessionRevealed: acknowledgeSessionReveal,
 							onSessionRename,
 							onSessionArchive,
 							onSessionUnarchive,
@@ -3740,7 +3819,8 @@ window.__ModuleLoader__.load({
 			let archiveNavigation;
 			const attachArchiveNavigation = (navigation) => {
 				archiveNavigation = allowArchivedNavigation(navigation, ctx.sessions, ctx.workspaces, {
-					onOpened: () => ctx.get("layout")?.selectPanel(null)
+					onOpened: () => ctx.get("layout")?.selectPanel(null),
+					beginNavigation: () => ctx.get("layout")?.beginNavigation?.()
 				});
 				return () => archiveNavigation.dispose();
 			};
@@ -3748,7 +3828,12 @@ window.__ModuleLoader__.load({
 			else ctx.effect(() => attachArchiveNavigation(uiWorkspaceAt()), "archive-manager: explicit archived navigation");
 			const openConversation = (sessionId) => {
 				if (archiveNavigation === undefined) throw new ArchiveNavigationError("navigationUnavailable");
+				sidebarReveal.request(sessionId);
 				return archiveNavigation.open(sessionId);
+			};
+			const focusSessionWorkspace = async (sessionId) => {
+				ctx.get("layout")?.beginNavigation?.();
+				sidebarReveal.request(sessionId);
 			};
 			const searchSessions = async (query, signal) => {
 				const result = await ctx.sessions.search(query, signal);
@@ -3903,7 +3988,7 @@ window.__ModuleLoader__.load({
 					deleteSession,
 					unarchiveSessions,
 					deleteArchivedSessions,
-					archivedSessionMetadata, openConversation, viewState: archiveViewState,
+					archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState: archiveViewState,
 					t: ctx.locale.bind(NS)
 				})
 			}, ArchivedSessionsSection));

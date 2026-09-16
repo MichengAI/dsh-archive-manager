@@ -13,6 +13,8 @@
 - 删除与归档对失踪会话同一套逻辑：清掉残留痕迹，不抛 `UNKNOWN_SESSION`。
 - 侧栏不再等待官方 `uiWorkspace` 才注册，避免 0.1.6 上官方三项菜单一直占着、删除进不来。
 - 打开归档会话改为在官方 `uiWorkspace` 就绪后再适配 `clearArchivedCurrent`，避免点「打开会话」被官方立刻清掉。
+- 「恢复并打开」先中止其他工作区正在进行的导航并展开原分组，再走官方恢复，最后打开；打开失败则留在未归档列表。选中工作区仍可折叠。
+- 仍在归档集合中、但路径索引缺失的记账，恢复前不被官方 mutate 写丢；恢复时按 cwd 重新编入索引，必要时挂回原工作区。不改未归档会话的官方成员过滤。
 - 设置页与侧栏批量归档改为串行调用官方 `archiveSession`，不再走插件 `archiveSessions` 通道。
 - 批量恢复改为串行调用官方 `unarchiveSession`；删除插件 `archiveSessions`、`archiveWorkspaceSessions`、`unarchiveSessions` 以及已无调用方的客户端同步辅助方法。
 

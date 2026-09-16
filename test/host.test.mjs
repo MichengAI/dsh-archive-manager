@@ -310,6 +310,33 @@ test("archiveSession + unarchiveSession round trip (idempotent, durable)", async
 	assert.deepEqual(second.archivedSessionIds, []);
 });
 
+test("未编入路径索引的已记账会话仍留在原工作区，mutate 不会写丢", async () => {
+	const env = buildRoot({
+		headers: [header(s1, cwdA), header(s2, cwdA)],
+		workspaces: { [A]: workspace("D:\\proj-a", [s1, s2]) },
+	});
+	const registry = await mountWorkspaceRegistry(env);
+	await registry.archiveSession(s1);
+	registry.sessionPaths.delete(s1);
+	assert.deepEqual(registry.get(A).sessionIds, [s1, s2]);
+	await registry.get(A).setTitle("proj-a-renamed");
+	assert.deepEqual(env.table.get(A).sessionIds, [s1, s2]);
+	assert.deepEqual(registry.get(A).sessionIds, [s1, s2]);
+});
+
+test("恢复不在工作区记账的会话时按 cwd 重新挂回原工作区", async () => {
+	const env = buildRoot({
+		headers: [header(s1, cwdA)],
+		workspaces: { [A]: workspace("D:\\proj-a", []) },
+		archived: [s1],
+	});
+	const registry = await mountWorkspaceRegistry(env);
+	await registry.unarchiveSession(s1);
+	assert.deepEqual(env.global.archivedSessionIds, []);
+	assert.ok(env.table.get(A).sessionIds.includes(s1));
+	assert.ok(registry.get(A).sessionIds.includes(s1));
+});
+
 test("archiveSession skips unknown ids", async () => {
 	const env = buildRoot({
 		headers: [header(s1, cwdA)],

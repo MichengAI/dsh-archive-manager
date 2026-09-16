@@ -16,12 +16,17 @@ export function formatArchiveNavigationError(error, t) {
 
 /** 恢复失败不导航；页面卸载后不让迟到响应抢占当前会话。 */
 export async function openArchivedConversation(actions, sessionId, restore, isActive = () => true) {
-  if (restore) await actions.restore(sessionId);
+  if (restore) {
+    // 先离开当前选中的其他工作区导航，再官方恢复，避免恢复后仍停在别人的文件夹里。
+    if (typeof actions.prepare === "function") await actions.prepare(sessionId);
+    if (!isActive()) return;
+    await actions.restore(sessionId);
+  }
   if (isActive()) await actions.open(sessionId);
 }
 
 /** 仅放行显式打开的归档；保留官方导航实例和其他归档清理行为。 */
-export function allowArchivedNavigation(navigation, sessions, workspaces, { onOpened = () => {}, warn = (...args) => console.warn(...args) } = {}) {
+export function allowArchivedNavigation(navigation, sessions, workspaces, { onOpened = () => {}, beginNavigation, warn = (...args) => console.warn(...args) } = {}) {
   let allowed;
   const original = navigation?.clearArchivedCurrent;
   const descriptor = navigation && Object.getOwnPropertyDescriptor(navigation, "clearArchivedCurrent");
@@ -48,6 +53,8 @@ export function allowArchivedNavigation(navigation, sessions, workspaces, { onOp
           warn("archive-manager: 归档导航适配不可用或已被替换。");
           throw new ArchiveNavigationError("navigationUnavailable");
         }
+        // 中止进行中的 openWorkspace，避免当前选中的其他工作区在创建空白会话后抢走目标。
+        beginNavigation?.();
         // 官方 openSession 会立即关闭全局面板；先验证会话选择，再退出设置。
         sessions.open(id);
         if (sessions.list.getSnapshot().current !== id) {
