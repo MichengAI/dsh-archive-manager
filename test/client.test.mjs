@@ -316,15 +316,15 @@ test("manifest keeps one DSH peer range and both client contracts optional", () 
 		.map(([, version]) => version);
 	assert.ok(dshPeerRanges.length > 0);
 	assert.equal(new Set(dshPeerRanges).size, 1);
-	assert.equal(dshPeerRanges[0], "0.1.0-rc.8 || 0.1.1-rc.2 || 0.1.2-rc.1 || 0.1.5-rc.1 || 0.1.5-rc.2 || 0.1.6-alpha.1");
-	for (const version of ["0.1.0-rc.8", "0.1.1-rc.2", "0.1.2-rc.1", "0.1.5-rc.1", "0.1.5-rc.2", "0.1.6-alpha.1"]) {
+	assert.equal(dshPeerRanges[0], "0.1.0-rc.8 || 0.1.1-rc.2 || 0.1.2-rc.1 || 0.1.5-rc.1 || 0.1.5-rc.2 || 0.1.6-alpha.1 || 0.1.6-alpha.2");
+	for (const version of ["0.1.0-rc.8", "0.1.1-rc.2", "0.1.2-rc.1", "0.1.5-rc.1", "0.1.5-rc.2", "0.1.6-alpha.1", "0.1.6-alpha.2"]) {
 		assert.ok(semver.satisfies(version, dshPeerRanges[0]), `peer 范围必须接纳已验证宿主 ${version}`);
 	}
-	for (const version of ["0.1.0-rc.5", "0.1.0-rc.9", "0.1.3-alpha.2", "0.1.5-rc.3", "0.1.5", "0.1.6-alpha.2", "0.1.6", "0.2.0"]) {
+	for (const version of ["0.1.0-rc.5", "0.1.0-rc.9", "0.1.3-alpha.2", "0.1.5-rc.3", "0.1.5", "0.1.6", "0.2.0"]) {
 		assert.equal(semver.satisfies(version, dshPeerRanges[0]), false, `不接纳未声明版本 ${version}`);
 	}
 	assert.ok(dshDevelopmentVersions.length > 0);
-	assert.deepEqual([...new Set(dshDevelopmentVersions)], ["0.1.6-alpha.1"]);
+	assert.deepEqual([...new Set(dshDevelopmentVersions)], ["0.1.6-alpha.2"]);
 	assert.equal(PACKAGE_MANIFEST.peerDependenciesMeta?.["@deepseek-ai/dsh-client-store"]?.optional, true);
 	assert.equal(PACKAGE_MANIFEST.peerDependenciesMeta?.["@deepseek-ai/dsh-client-runtime"]?.optional, true);
 	assert.equal(PACKAGE_MANIFEST.dsh.client.inject.includes("@deepseek-ai/dsh-client-runtime"), false);
@@ -377,6 +377,53 @@ test("侧栏注册的打开和分叉操作委托新版导航服务，并保留�
 		assert.deepEqual(forked, ["s1"]);
 		await dispose();
 	}
+});
+
+test("Typert remotes 同时带 create 和 schema", () => {
+	for (const descriptor of t.ARCHIVE_MANAGER_REMOTE.descriptors) {
+		assert.equal(typeof descriptor.result.create, "function");
+		assert.equal(descriptor.result.create(), descriptor.result.schema);
+		for (const parameter of descriptor.parameters) {
+			assert.equal(typeof parameter.codec.create, "function");
+			assert.equal(parameter.codec.create(), parameter.codec.schema);
+		}
+	}
+});
+
+test("deriveGroups: 当前会话优先 retainedBy.mainView，没有再看 list.current", () => {
+	const view = { expandedGroups: ["w1", "w2"], showArchived: false };
+	const withCurrent = t.deriveGroups({ ...list, current: "s3" }, workspaces, [], noPendingInteractions, view);
+	assert.equal(withCurrent.find((g) => g.workspaceId === "w2").containsCurrent, true);
+	const staleCurrent = t.deriveGroups({
+		...list,
+		current: "s1",
+		byId: {
+			s1: summary("s1"),
+			s2: summary("s2"),
+			s3: summary("s3", { retainedBy: { mainView: 1 } })
+		}
+	}, workspaces, [], noPendingInteractions, view);
+	assert.equal(staleCurrent.find((g) => g.workspaceId === "w2").containsCurrent, true);
+	assert.equal(staleCurrent.find((g) => g.workspaceId === "w1").containsCurrent, false);
+	const withMainView = t.deriveGroups({
+		ids: list.ids,
+		byId: {
+			s1: summary("s1"),
+			s2: summary("s2"),
+			s3: summary("s3", { retainedBy: { mainView: 1 } })
+		}
+	}, workspaces, [], noPendingInteractions, view);
+	assert.equal(withMainView.find((g) => g.workspaceId === "w2").containsCurrent, true);
+	assert.equal(withMainView.find((g) => g.workspaceId === "w1").containsCurrent, false);
+});
+
+test("derive* 把 completionUnread 投影为完成态", () => {
+	const facts = { pending: new Map(), completed: new Set(["s1"]) };
+	const view = { expandedGroups: ["w1"], showArchived: false };
+	const groups = t.deriveGroups(list, workspaces, [], facts, view);
+	assert.equal(groups.find((g) => g.workspaceId === "w1").sessions.find((s) => s.id === "s1").completed, true);
+	const search = t.deriveSearchResults(list, workspaces, "Title", [], facts, { items: [], hasMore: false }, 50, false);
+	assert.equal(search.items.find((s) => s.id === "s1").completed, true);
 });
 
 test("displayTitle: SessionSummary 使用 displayTitle，包括未命名会话", () => {

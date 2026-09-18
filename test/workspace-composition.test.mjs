@@ -8,7 +8,7 @@ import { dirname, join } from "node:path";
 import { Context } from "@deepseek-ai/cordis";
 import { loadClientStore } from "./helpers/client-store.mjs";
 import { mirrorDirectoryFlow } from "../src/directory-flow-slot.js";
-import { allowArchivedNavigation } from "../src/archive-experience.js";
+import { allowArchivedNavigation, currentSessionId } from "../src/archive-experience.js";
 
 const require = createRequire(import.meta.url);
 const statics = {};
@@ -17,6 +17,15 @@ const store = await loadClientStore();
 statics[store.id] = store.exports;
 statics["@deepseek-ai/dsh-client-ui-primitives"] = new Proxy({}, { get: () => () => null });
 globalThis.window = globalThis;
+if (globalThis.localStorage === undefined) {
+	const memory = new Map();
+	globalThis.localStorage = {
+		getItem: (key) => memory.has(key) ? memory.get(key) : null,
+		setItem: (key, value) => { memory.set(String(key), String(value)); },
+		removeItem: (key) => { memory.delete(String(key)); },
+		clear: () => memory.clear()
+	};
+}
 globalThis.document = { body: null, querySelector: () => ({}), createElement: () => ({ dataset: {} }), head: { appendChild() {} } };
 const factories = new Map();
 window.__ModuleLoader__ = { load: ({ id, factory }) => factories.set(id, factory) };
@@ -39,11 +48,46 @@ test("真实官方导航监听器：显式查看归档不再被清空，切换�
     const listeners = new Set();
     return { getSnapshot: () => state, subscribe: fn => { listeners.add(fn); return () => listeners.delete(fn); }, update(next) { state = next; for (const fn of listeners) fn(); } };
   };
+  const retainOn = (list, id, source) => {
+    const snapshot = list.getSnapshot();
+    const previous = snapshot.byId[id] ?? { id };
+    list.update({
+      ...snapshot,
+      current: id,
+      byId: { ...snapshot.byId, [id]: { ...previous, id, retainedBy: { ...(previous.retainedBy ?? {}), [source]: 1 } } }
+    });
+    return {
+      sessionId: id,
+      release() {
+        const next = list.getSnapshot();
+        const row = next.byId[id];
+        const retainedBy = { ...(row?.retainedBy ?? {}) };
+        delete retainedBy[source];
+        list.update({
+          ...next,
+          current: next.current === id ? undefined : next.current,
+          byId: { ...next.byId, [id]: { ...row, id, retainedBy } }
+        });
+      }
+    };
+  };
   const root = new Context();
   const slots = new SlotRegistry(root);
   root.provide("locale", { register: () => () => {}, bind: () => key => key });
-  const list = observable({ phase: "ready", ids: ["old", "normal"], byId: {}, current: "normal" });
-  const sessions = { list, open(id) { list.update({ ...list.getSnapshot(), current: id }); }, clear() { list.update({ ...list.getSnapshot(), current: undefined }); } };
+  const list = observable({
+    phase: "ready",
+    ids: ["old", "normal"],
+    byId: { old: { id: "old", retainedBy: {} }, normal: { id: "normal", retainedBy: {} } },
+    current: "normal"
+  });
+  const sessions = {
+    list,
+    open(id) { list.update({ ...list.getSnapshot(), current: id }); },
+    clear() { list.update({ ...list.getSnapshot(), current: undefined }); },
+    retain(id, options) { return retainOn(list, typeof id === "string" ? id : id.sessionId, options.source); },
+    subagentAddress() {},
+    refreshSubagents() {}
+  };
   const workspaces = { list: observable({ phase: "ready", items: [], archivedSessionIds: ["old"] }) };
   root.provide("sessions", sessions); root.provide("workspaces", workspaces);
   root.provide("remote", {});
@@ -53,19 +97,28 @@ test("真实官方导航监听器：显式查看归档不再被清空，切换�
   await stock;
   const navigation = root.get("uiWorkspace");
   if (typeof navigation?.clearArchivedCurrent !== "function") { await stock.dispose(); t.skip("此旧宿主无新版导航监听器"); return; }
+  const selected = () => currentSessionId(list.getSnapshot());
+  const selectWithoutGuard = (id) => {
+    if (typeof navigation.openSession === "function") navigation.openSession(id);
+    else sessions.open(id);
+    // alpha.2 在 retain 之后才写入 mainReference；官方清理看随后的列表刷新。
+    list.update({ ...list.getSnapshot() });
+  };
   let guard;
   try {
-    sessions.open("old");
-    assert.equal(list.getSnapshot().current, undefined, "复现：官方监听器清空归档选择");
+    selectWithoutGuard("old");
+    assert.equal(selected(), undefined, "复现：官方监听器清空归档选择");
     guard = allowArchivedNavigation(navigation, sessions, workspaces);
     guard.open("old");
-    assert.equal(list.getSnapshot().current, "old");
+    assert.equal(selected(), "old");
     list.update({ ...list.getSnapshot() });
-    assert.equal(list.getSnapshot().current, "old", "后续列表刷新不清空");
-    sessions.open("normal"); sessions.open("old");
-    assert.equal(list.getSnapshot().current, undefined, "离开后取消本次放行");
+    assert.equal(selected(), "old", "后续列表刷新不清空");
+    selectWithoutGuard("normal"); selectWithoutGuard("old");
+    assert.equal(selected(), undefined, "离开后取消本次放行");
     guard.open("old"); guard.dispose(); guard = undefined;
-    assert.equal(list.getSnapshot().current, undefined, "卸载恢复官方策略");
+    if (typeof navigation.openSession === "function") selectWithoutGuard("old");
+    else list.update({ ...list.getSnapshot() });
+    assert.equal(selected(), undefined, "卸载恢复官方策略");
   } finally { guard?.dispose(); await stock.dispose(); }
 });
 
@@ -151,7 +204,18 @@ for (const archiveFirst of [false, true]) test(`官方选择器和导航保持�
 		bind: () => (key) => key
 	});
 	const opened = [];
-	root.provide("sessions", { list: source({ phase: "ready", ids: [], byId: {}, current: "existing" }), open: (id) => opened.push(id), create: async () => "new-session" });
+	root.provide("sessions", {
+		list: source({ phase: "ready", ids: [], byId: {}, current: "existing" }),
+		open: (id) => opened.push(id),
+		create: async () => "new-session",
+		retain(id) {
+			const sessionId = typeof id === "string" ? id : id.sessionId;
+			opened.push(sessionId);
+			return { sessionId, release() {} };
+		},
+		subagentAddress() {},
+		refreshSubagents() {}
+	});
 	root.provide("workspaces", { list: source({ phase: "ready", items: [{ workspaceId: "w1", path: "C:\\project", sessionIds: [] }], archivedSessionIds: [] }) });
 	root.provide("remote", { $mount: async () => () => {} });
 	root.provide("remote.directoryPicker", {});
@@ -184,7 +248,7 @@ for (const archiveFirst of [false, true]) test(`官方选择器和导航保持�
 			const draft = [];
 			await navigation.openWorkspace("w1", (id) => draft.push(id));
 			assert.deepEqual(draft, ["new-session"]);
-			assert.deepEqual(opened, ["new-session"]);
+			assert.ok(opened.includes("new-session"));
 		}
 		const flow = () => null;
 		const injected = () => ({ pick: "official" });

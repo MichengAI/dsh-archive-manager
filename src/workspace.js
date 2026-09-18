@@ -80,6 +80,16 @@ function jsonlSessionDirectory(persistence, header, location) {
 	return directory;
 }
 
+/** alpha.1 读 schema.parse；alpha.2 只接受 create()。两套字段一起带上。 */
+function strictCodec(typeSymbol, schema) {
+	return {
+		mode: "strict",
+		typeSymbol,
+		create: () => schema,
+		schema,
+	};
+}
+
 function markRemoteMethod(instance, method) {
 	// 模拟 TS 装饰器管线 `@Remote(method)`：`Remote` 返回标准方法装饰器，
 	// 这里构造一个 addInitializer 立即以 `this` = instance 执行的装饰器上下文。
@@ -228,18 +238,10 @@ const ARCHIVE_MANAGER_INVOCATIONS = [
 				name: "sessionId",
 				wire: "sessionId",
 				source: "json",
-				codec: {
-					mode: "strict",
-					typeSymbol: "@deepseek-ai/dsh-session/types#SessionId",
-					schema: sessionIdSchema,
-				},
+				codec: strictCodec("@deepseek-ai/dsh-session/types#SessionId", sessionIdSchema),
 			},
 		],
-		result: {
-			mode: "strict",
-			typeSymbol: "@michengai/dsh-archive-manager/types#ArchivedSessionIds",
-			schema: archivedSetSchema,
-		},
+		result: strictCodec("@michengai/dsh-archive-manager/types#ArchivedSessionIds", archivedSetSchema),
 		sourceLocation: {
 			file: "@michengai/dsh-archive-manager/lib/workspace.js",
 			line: 1,
@@ -257,18 +259,10 @@ const ARCHIVE_MANAGER_INVOCATIONS = [
 				name: "sessionId",
 				wire: "sessionId",
 				source: "json",
-				codec: {
-					mode: "strict",
-					typeSymbol: "@deepseek-ai/dsh-session/types#SessionId",
-					schema: sessionIdSchema,
-				},
+				codec: strictCodec("@deepseek-ai/dsh-session/types#SessionId", sessionIdSchema),
 			},
 		],
-		result: {
-			mode: "strict",
-			typeSymbol: "@michengai/dsh-archive-manager/types#Deleted",
-			schema: deletedSchema,
-		},
+		result: strictCodec("@michengai/dsh-archive-manager/types#Deleted", deletedSchema),
 		sourceLocation: {
 			file: "@michengai/dsh-archive-manager/lib/workspace.js",
 			line: 1,
@@ -286,18 +280,10 @@ const ARCHIVE_MANAGER_INVOCATIONS = [
 				name: "target",
 				wire: "target",
 				source: "json",
-				codec: {
-					mode: "strict",
-					typeSymbol: "@michengai/dsh-archive-manager/types#ArchivedBatchTarget",
-					schema: archivedBatchTargetSchema,
-				},
+				codec: strictCodec("@michengai/dsh-archive-manager/types#ArchivedBatchTarget", archivedBatchTargetSchema),
 			},
 		],
-		result: {
-			mode: "strict",
-			typeSymbol: "@michengai/dsh-archive-manager/types#DeletedBatch",
-			schema: deletedBatchSchema,
-		},
+		result: strictCodec("@michengai/dsh-archive-manager/types#DeletedBatch", deletedBatchSchema),
 		sourceLocation: {
 			file: "@michengai/dsh-archive-manager/lib/workspace.js",
 			line: 1,
@@ -311,11 +297,7 @@ const ARCHIVE_MANAGER_INVOCATIONS = [
 		method: "archivedSessionMetadata",
 		invocation: { kind: "direct" },
 		parameters: [],
-		result: {
-			mode: "strict",
-			typeSymbol: "@michengai/dsh-archive-manager/types#ArchivedSessionMetadata",
-			schema: archivedSessionMetadataSchema,
-		},
+		result: strictCodec("@michengai/dsh-archive-manager/types#ArchivedSessionMetadata", archivedSessionMetadataSchema),
 		sourceLocation: {
 			file: "@michengai/dsh-archive-manager/lib/workspace.js",
 			line: 1,

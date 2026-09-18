@@ -6,6 +6,11 @@ Published release notes are retained below; new versions are added without remov
 
 ## Unreleased
 
+## 0.1.44 - 2026-09-18
+
+- Opening an archived session from Settings no longer falsely reports that the host did not keep the conversation.
+- Support DeepSeek Harness `0.1.6-alpha.2` while remaining compatible with earlier hosts. The archive page, opening archives, and permanent deletion keep working after the official API changes.
+
 ## 0.1.43 - 2026-09-16
 
 - Support DeepSeek Harness 0.1.6 while remaining compatible with earlier hosts. Settings keeps only this plugin's archive page, and the sidebar archive menu works on 0.1.6.

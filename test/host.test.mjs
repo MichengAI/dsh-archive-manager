@@ -2319,6 +2319,10 @@ test("typert local contribution registers deleteSession before SRC discovery", a
 		local.get("workspaceRegistry/deleteSession").method,
 		"deleteSession",
 	);
+	const deleteSession = local.get("workspaceRegistry/deleteSession");
+	assert.equal(typeof deleteSession.parameters[0].codec.create, "function");
+	assert.equal(typeof deleteSession.result.create, "function");
+	assert.equal(deleteSession.parameters[0].codec.create(), deleteSession.parameters[0].codec.schema);
 });
 test("legacy workspaceRegistry API surface is intact", async () => {
 	const env = buildRoot({

@@ -1,4 +1,4 @@
-import { allowArchivedNavigation, openArchivedConversation, formatArchiveNavigationError, ArchiveNavigationError } from "./archive-experience.js";
+import { allowArchivedNavigation, openArchivedConversation, formatArchiveNavigationError, ArchiveNavigationError, currentSessionId } from "./archive-experience.js";
 import { mirrorDirectoryFlow } from "./directory-flow-slot.js";
 import { observePluginUpdate } from "./plugin-update-ui.js";
 
@@ -101,6 +101,10 @@ window.__ModuleLoader__.load({
 				return value;
 			}
 		};
+		/** alpha.1 读 schema.parse；alpha.2 只接受 create()。 */
+		function strictCodec(typeSymbol, schema) {
+			return { mode: "strict", typeSymbol, create: () => schema, schema };
+		}
 		/**
 		* 客户端通过 `ctx.remote.$mount` 注册 workspaceRegistry 的远程方法。
 		* 调用走 typert gateway SRC 路径，不影响既有 `/api/workspace.*` 网关。
@@ -118,13 +122,9 @@ window.__ModuleLoader__.load({
 						name: "sessionId",
 						wire: "sessionId",
 						source: "json",
-						codec: { mode: "strict", typeSymbol: "@deepseek-ai/dsh-session/types#SessionId", schema: sessionIdSchema }
+						codec: strictCodec("@deepseek-ai/dsh-session/types#SessionId", sessionIdSchema)
 					}],
-					result: {
-						mode: "strict",
-						typeSymbol: "@michengai/dsh-archive-manager/types#ArchivedSessionIds",
-						schema: archivedSetSchema
-					},
+					result: strictCodec("@michengai/dsh-archive-manager/types#ArchivedSessionIds", archivedSetSchema),
 					sourceLocation: { file: "@michengai/dsh-archive-manager/lib/workspace.js", line: 1, column: 1 }
 				},
 				{
@@ -137,13 +137,9 @@ window.__ModuleLoader__.load({
 						name: "sessionId",
 						wire: "sessionId",
 						source: "json",
-						codec: { mode: "strict", typeSymbol: "@deepseek-ai/dsh-session/types#SessionId", schema: sessionIdSchema }
+						codec: strictCodec("@deepseek-ai/dsh-session/types#SessionId", sessionIdSchema)
 					}],
-					result: {
-						mode: "strict",
-						typeSymbol: "@michengai/dsh-archive-manager/types#Deleted",
-						schema: deletedSchema
-					},
+					result: strictCodec("@michengai/dsh-archive-manager/types#Deleted", deletedSchema),
 					sourceLocation: { file: "@michengai/dsh-archive-manager/lib/workspace.js", line: 1, column: 1 }
 				},
 				{
@@ -156,13 +152,9 @@ window.__ModuleLoader__.load({
 						name: "target",
 						wire: "target",
 						source: "json",
-						codec: { mode: "strict", typeSymbol: "@michengai/dsh-archive-manager/types#ArchivedBatchTarget", schema: archivedBatchTargetSchema }
+						codec: strictCodec("@michengai/dsh-archive-manager/types#ArchivedBatchTarget", archivedBatchTargetSchema)
 					}],
-					result: {
-						mode: "strict",
-						typeSymbol: "@michengai/dsh-archive-manager/types#DeletedBatch",
-						schema: deletedBatchSchema
-					},
+					result: strictCodec("@michengai/dsh-archive-manager/types#DeletedBatch", deletedBatchSchema),
 					sourceLocation: { file: "@michengai/dsh-archive-manager/lib/workspace.js", line: 1, column: 1 }
 				},
 				{
@@ -172,11 +164,7 @@ window.__ModuleLoader__.load({
 					method: "archivedSessionMetadata",
 					invocation: { kind: "direct" },
 					parameters: [],
-					result: {
-						mode: "strict",
-						typeSymbol: "@michengai/dsh-archive-manager/types#ArchivedSessionMetadata",
-						schema: archivedSessionMetadataSchema
-					},
+					result: strictCodec("@michengai/dsh-archive-manager/types#ArchivedSessionMetadata", archivedSessionMetadataSchema),
 					sourceLocation: { file: "@michengai/dsh-archive-manager/lib/workspace.js", line: 1, column: 1 }
 				},
 			]
@@ -702,12 +690,12 @@ window.__ModuleLoader__.load({
 					const summary = list.byId[id];
 					if (summary === void 0) continue;
 					accounted.add(id);
-					if (!sessionVisible(summary, list.current, archived, showArchived)) continue;
+					if (!sessionVisible(summary, currentSessionId(list), archived, showArchived)) continue;
 					members.push(summary);
 				}
 				groups.push(buildGroup(workspace.workspaceId, workspace.workspaceId, workspace.path, Date.parse(workspace.createdAt), workspace.title, members, "account"));
 			}
-			const stray = list.ids.map((id) => list.byId[id]).filter((s) => s !== void 0 && !accounted.has(s.id) && sessionVisible(s, list.current, archived, showArchived));
+			const stray = list.ids.map((id) => list.byId[id]).filter((s) => s !== void 0 && !accounted.has(s.id) && sessionVisible(s, currentSessionId(list), archived, showArchived));
 			if (stray.length > 0) groups.push(buildGroup("", void 0, void 0, void 0, UNGROUPED_LABEL, ungroupedOrder === void 0 ? stray : orderedUngrouped(stray, ungroupedOrder), ungroupedOrder === void 0 ? "recency" : "account"));
 			return groups;
 		}
@@ -742,18 +730,49 @@ window.__ModuleLoader__.load({
 			return visiblePendingKind(kind);
 		}
 		const EMPTY_PENDING_INTERACTIONS = /* @__PURE__ */ new Map();
+		const EMPTY_COMPLETED_SESSIONS = /* @__PURE__ */ new Set();
+		const EMPTY_SESSION_STATUS = /* @__PURE__ */ new Map();
 		function useEmptySessionPendingInteraction(selector) {
 			return selector(EMPTY_PENDING_INTERACTIONS);
 		}
+		function useEmptySessionStatus(selector) {
+			return selector(EMPTY_SESSION_STATUS);
+		}
+		function pendingFacts(pendingInteractions) {
+			if (pendingInteractions instanceof Map || pendingInteractions == null) {
+				return { pending: pendingInteractions ?? EMPTY_PENDING_INTERACTIONS, completed: EMPTY_COMPLETED_SESSIONS };
+			}
+			return {
+				pending: pendingInteractions.pending ?? EMPTY_PENDING_INTERACTIONS,
+				completed: pendingInteractions.completed ?? EMPTY_COMPLETED_SESSIONS
+			};
+		}
+		function factsFromSessionStatus(status) {
+			const pending = new Map();
+			const completed = new Set();
+			if (status instanceof Map) {
+				for (const [id, entry] of status) {
+					if (entry?.pendingInteraction !== undefined) pending.set(id, entry.pendingInteraction);
+					if (entry?.completionUnread === true) completed.add(id);
+				}
+			}
+			return { pending, completed };
+		}
+		function useSessionUiFacts(usePending, useStatus, preferStatus) {
+			const pending = usePending((s) => s);
+			const status = useStatus((s) => s);
+			return preferStatus ? factsFromSessionStatus(status) : { pending, completed: EMPTY_COMPLETED_SESSIONS };
+		}
 		function sessionNode(s, descendants, archived, pendingInteractions) {
-			const pendingInteraction = pendingInteractionForSession(s, pendingInteractions);
+			const facts = pendingFacts(pendingInteractions);
+			const pendingInteraction = pendingInteractionForSession(s, facts.pending);
 			return {
 				id: s.id,
 				title: sessionTitle(s),
 				blank: s.blank,
 				running: s.running,
 				runningSubagentCount: descendants.get(s.id)?.runningCount ?? 0,
-				completed: s.completed === true,
+				completed: s.completed === true || facts.completed.has(s.id),
 				updatedAt: s.updatedAt,
 				archived: archived.has(s.id),
 				...pendingInteraction === void 0 ? {} : { pendingInteraction }
@@ -768,7 +787,7 @@ window.__ModuleLoader__.load({
 		* "show archived" view toggle is on.
 		* Content search lives outside this derivation
 		* (see {@link deriveSearchResults}).
-		* @param list - sessions list snapshot (`current` feeds containsCurrent).
+		* @param list - sessions list snapshot (`current` or `retainedBy.mainView` feeds containsCurrent).
 		* @param workspaces - real workspaces in stable Host order.
 		* @param archivedSessionIds - registry-global archive set.
 		* @param pendingInteractions - pending UI interactions by Session.
@@ -779,7 +798,8 @@ window.__ModuleLoader__.load({
 			const archived = new Set(archivedSessionIds);
 			const expandedGroups = new Set(view.expandedGroups);
 			const descendants = indexSubagentDescendants(list.byId);
-			const currentGroup = list.current === void 0 ? void 0 : workspaces.find((w) => w.sessionIds.includes(list.current))?.workspaceId ?? "";
+			const current = currentSessionId(list);
+			const currentGroup = current === void 0 ? void 0 : workspaces.find((w) => w.sessionIds.includes(current))?.workspaceId ?? "";
 			const groups = [];
 			for (const g of groupByWorkspace(list, workspaces, archived, view.ungroupedOrder, view.showArchived)) {
 				const expanded = expandedGroups.has(g.key);
@@ -816,7 +836,7 @@ window.__ModuleLoader__.load({
 			const rows = [];
 			for (const id of list.ids) {
 				const s = list.byId[id];
-				if (s === void 0 || !sessionVisible(s, list.current, archived, showArchived)) continue;
+				if (s === void 0 || !sessionVisible(s, currentSessionId(list), archived, showArchived)) continue;
 				rows.push(s);
 			}
 			rows.sort(byRecency);
@@ -854,7 +874,7 @@ window.__ModuleLoader__.load({
 			const local = [];
 			for (const id of list.ids) {
 				const summary = list.byId[id];
-				if (summary === void 0 || summary.blank || !sessionVisible(summary, list.current, archived, showArchived)) continue;
+				if (summary === void 0 || summary.blank || !sessionVisible(summary, currentSessionId(list), archived, showArchived)) continue;
 				if (sessionTitle(summary).toLowerCase().includes(q) || labelOf(summary).toLowerCase().includes(q)) local.push(summary);
 			}
 			local.sort(byRecency);
@@ -868,12 +888,13 @@ window.__ModuleLoader__.load({
 			for (const summary of local) include(summary);
 			for (const item of content.items) {
 				const summary = list.byId[item.sessionId];
-				if (summary !== void 0 && !summary.blank && sessionVisible(summary, list.current, archived, showArchived)) include(summary);
+				if (summary !== void 0 && !summary.blank && sessionVisible(summary, currentSessionId(list), archived, showArchived)) include(summary);
 			}
+			const facts = pendingFacts(pendingInteractions);
 			return {
 				items: ordered.slice(0, limit).map((summary) => {
 					const match = contentBySession.get(summary.id);
-					const pendingInteraction = pendingInteractionForSession(summary, pendingInteractions);
+					const pendingInteraction = pendingInteractionForSession(summary, facts.pending);
 					return {
 						id: summary.id,
 						title: sessionTitle(summary),
@@ -882,7 +903,7 @@ window.__ModuleLoader__.load({
 						runningSubagentCount: descendants.get(summary.id)?.runningCount ?? 0,
 						archived: archived.has(summary.id),
 						...pendingInteraction === void 0 ? {} : { pendingInteraction },
-						completed: summary.completed === true,
+						completed: summary.completed === true || facts.completed.has(summary.id),
 						...match === void 0 ? {} : { snippet: match.snippet }
 					};
 				}),
@@ -1860,10 +1881,10 @@ window.__ModuleLoader__.load({
 			return e.clientY < rect.top + rect.height / 2 ? "before" : "after";
 		}
 		/** The scrolling session tree; unmounting drops the sessions subscription and expand-all state. */
-		function SessionTree({ useSessions, useSessionPendingInteraction, startSession, open, forkSession, workspaces, archivedSessionIds, showArchived, onRenameRequest, onArchiveRequest, onDeleteRequest, onSessionRename, onSessionArchive, onSessionUnarchive, onSessionDelete, insertWorkspaceBefore, insertSessionBefore, orderBy, groupExpansion, setGroupExpanded, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t, revealSessionId, onSessionRevealed }) {
+		function SessionTree({ useSessions, useSessionPendingInteraction, useSessionStatus, preferSessionStatus, startSession, open, forkSession, workspaces, archivedSessionIds, showArchived, onRenameRequest, onArchiveRequest, onDeleteRequest, onSessionRename, onSessionArchive, onSessionUnarchive, onSessionDelete, insertWorkspaceBefore, insertSessionBefore, orderBy, groupExpansion, setGroupExpanded, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t, revealSessionId, onSessionRevealed }) {
 			const list = useSessions((s) => s);
-			const pendingInteractions = useSessionPendingInteraction((s) => s);
-			const current = list.current;
+			const pendingInteractions = useSessionUiFacts(useSessionPendingInteraction, useSessionStatus, preferSessionStatus);
+			const current = currentSessionId(list);
 			const [expandedSessionGroups, setExpandedSessionGroups] = (0, react.useState)([]);
 			const [drag, setDrag] = (0, react.useState)(null);
 			const sessionDropCommitted = (0, react.useRef)(false);
@@ -2171,9 +2192,10 @@ window.__ModuleLoader__.load({
 			});
 		}
 		/** The flat "In one list" body: every session is one draggable top-level row. */
-		function FlatList({ useSessions, useSessionPendingInteraction, open, forkSession, onSessionRename, onSessionArchive, onSessionUnarchive, onSessionDelete, archivedSessionIds, showArchived, orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t, revealSessionId, onSessionRevealed }) {
+		function FlatList({ useSessions, useSessionPendingInteraction, useSessionStatus, preferSessionStatus, open, forkSession, onSessionRename, onSessionArchive, onSessionUnarchive, onSessionDelete, archivedSessionIds, showArchived, orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t, revealSessionId, onSessionRevealed }) {
 			const list = useSessions((s) => s);
-			const pendingInteractions = useSessionPendingInteraction((s) => s);
+			const pendingInteractions = useSessionUiFacts(useSessionPendingInteraction, useSessionStatus, preferSessionStatus);
+			const current = currentSessionId(list);
 			const baseRows = (0, react.useMemo)(() => deriveFlat(list, archivedSessionIds, pendingInteractions, showArchived), [
 				list,
 				archivedSessionIds,
@@ -2249,7 +2271,7 @@ window.__ModuleLoader__.load({
 						const active = drag !== null;
 						return (0, react_jsx_runtime.jsx)(SessionNodeItem, {
 							node,
-							currentId: list.current,
+							currentId: current,
 							now,
 							onOpen: open,
 							onRename: onSessionRename,
@@ -2304,9 +2326,9 @@ window.__ModuleLoader__.load({
 			});
 		}
 		/** Flat search body: local metadata matches plus the current Host result page. */
-		function SearchResults({ useSessions, useSessionPendingInteraction, open, workspaces, archivedSessionIds, showArchived, query, remote, resultLimit, t }) {
+		function SearchResults({ useSessions, useSessionPendingInteraction, useSessionStatus, preferSessionStatus, open, workspaces, archivedSessionIds, showArchived, query, remote, resultLimit, t }) {
 			const list = useSessions((s) => s);
-			const pendingInteractions = useSessionPendingInteraction((s) => s);
+			const pendingInteractions = useSessionUiFacts(useSessionPendingInteraction, useSessionStatus, preferSessionStatus);
 			const ungroupedLabel = t("group.ungrouped");
 			const currentRemote = remote.query === query ? remote : {
 				query,
@@ -2338,7 +2360,7 @@ window.__ModuleLoader__.load({
 							"aria-label": t("search.results.aria"),
 							children: results.items.map((result) => (0, react_jsx_runtime.jsx)(SearchResultItem, {
 								result,
-								currentId: list.current,
+								currentId: currentSessionId(list),
 								onOpen: open,
 								t
 							}, result.id))
@@ -2380,8 +2402,10 @@ window.__ModuleLoader__.load({
 				return () => { this.listeners.delete(listener); };
 			}
 		};
-		function WorkspaceBrowser({ wide, expandSidebar, useSessions, useSessionPendingInteraction, useWorkspaces, useStore, actions, startSession, open, renameSession, forkSession, renameWorkspace, deleteWorkspace, insertWorkspaceBefore, archiveSession, archiveWorkspaceSessions, unarchiveSession, deleteSession, insertSessionBefore, createWorkspace, searchSessions, searchResultLimit, useDirectoryFlow, renderSlot, t }) {
+		function WorkspaceBrowser({ wide, expandSidebar, useSessions, useSessionPendingInteraction, useSessionStatus, useWorkspaces, useStore, actions, startSession, open, renameSession, forkSession, renameWorkspace, deleteWorkspace, insertWorkspaceBefore, archiveSession, archiveWorkspaceSessions, unarchiveSession, deleteSession, insertSessionBefore, createWorkspace, searchSessions, searchResultLimit, useDirectoryFlow, renderSlot, t }) {
+			const preferSessionStatus = typeof useSessionStatus === "function";
 			const useEffectiveSessionPendingInteraction = useSessionPendingInteraction ?? useEmptySessionPendingInteraction;
+			const useEffectiveSessionStatus = useSessionStatus ?? useEmptySessionStatus;
 			const workspaces = useWorkspaces((state) => state.items);
 			const workspacePhase = useWorkspaces((state) => state.phase);
 			const archivedSessionIds = useWorkspaces((state) => state.archivedSessionIds);
@@ -2810,6 +2834,8 @@ window.__ModuleLoader__.load({
 						children: wide && (normalizedQuery !== "" ? (0, react_jsx_runtime.jsx)(SearchResults, {
 							useSessions,
 							useSessionPendingInteraction: useEffectiveSessionPendingInteraction,
+							useSessionStatus: useEffectiveSessionStatus,
+							preferSessionStatus,
 							open: (sessionId) => {
 								setRevealSessionId(sessionId);
 								setQuery("");
@@ -2826,6 +2852,8 @@ window.__ModuleLoader__.load({
 						}) : groupBy === "flat" ? (0, react_jsx_runtime.jsx)(FlatList, {
 							useSessions,
 							useSessionPendingInteraction: useEffectiveSessionPendingInteraction,
+							useSessionStatus: useEffectiveSessionStatus,
+							preferSessionStatus,
 							open: guardedOpen,
 							revealSessionId,
 							onSessionRevealed: acknowledgeSessionReveal,
@@ -2848,6 +2876,8 @@ window.__ModuleLoader__.load({
 						}) : (0, react_jsx_runtime.jsx)(SessionTree, {
 							useSessions,
 							useSessionPendingInteraction: useEffectiveSessionPendingInteraction,
+							useSessionStatus: useEffectiveSessionStatus,
+							preferSessionStatus,
 							revealSessionId,
 							onSessionRevealed: acknowledgeSessionReveal,
 							onSessionRename,
@@ -3950,16 +3980,24 @@ window.__ModuleLoader__.load({
 				searchSessions,
 				searchResultLimit: ctx.sessions.searchResultLimit,
 				renameSession: async (sessionId, title) => {
+					const rename = async (session) => {
+						const result = await session.rename(title);
+						if (!result.ok) throw new Error(result.error.message);
+					};
+					if (typeof ctx.sessions.using === "function") {
+						await ctx.sessions.using(sessionId, { source: "workspaceOperation" }, (reference) => rename(reference.binding.session));
+						return;
+					}
 					const session = ctx.sessions.binding(sessionId)?.session;
 					if (session === void 0) throw new Error(`unknown session "${sessionId}"`);
-					const result = await session.rename(title);
-					if (!result.ok) throw new Error(result.error.message);
+					await rename(session);
 				},
 				forkSession: (sessionId) => {
 					const uiWorkspace = uiWorkspaceAt();
 					if (typeof uiWorkspace?.forkSession === "function") return uiWorkspace.forkSession(sessionId);
 					return ctx.sessions.fork({ sessionId, increaseTitle: true }).then((childId) => {
-						ctx.sessions.open(childId);
+						if (typeof uiWorkspace?.openSession === "function") uiWorkspace.openSession(childId);
+						else ctx.sessions.open(childId);
 					});
 				},
 				renameWorkspace: async (workspaceId, title) => {
@@ -4062,7 +4100,8 @@ window.__ModuleLoader__.load({
 			hasSplitClientStore,
 			groupByWorkspace,
 			byRecency,
-			ARCHIVE_MANAGER_REMOTE
+			ARCHIVE_MANAGER_REMOTE,
+			currentSessionId
 		};
 		exports.apply = apply;
 		exports.inject = inject;

@@ -40,7 +40,7 @@ Find, restore, and clean up chats in **Settings → Archived sessions**:
 ## Prerequisites
 
 - A working [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web installation with `dsh` available in your terminal.
-- Supported DSH versions: `0.1.0-rc.8`, `0.1.1-rc.2`, `0.1.2-rc.1`, `0.1.5-rc.1`, `0.1.5-rc.2`, and `0.1.6-alpha.1`. Other versions are not currently supported.
+- Supported DSH versions: `0.1.0-rc.8`, `0.1.1-rc.2`, `0.1.2-rc.1`, `0.1.5-rc.1`, `0.1.5-rc.2`, `0.1.6-alpha.1`, and `0.1.6-alpha.2`. Other versions are not currently supported.
 - Node.js matching `^22.19.0 || >=24.0.0`. Source installation also requires pnpm.
 
 ## Installation
