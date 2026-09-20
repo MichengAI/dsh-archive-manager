@@ -1,3 +1,4 @@
+import { discoveryInvocations, searchInputSchema, previewInputSchema, extractConversation, findContentMatch, previewConversation } from "./archive-discovery.js";
 import { lstat, rm } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { WorkspaceRegistry } from "@deepseek-ai/dsh-workspace";
@@ -235,6 +236,7 @@ const archivedSessionMetadataSchema = {
  */
 const ARCHIVE_MANAGER_INVOCATIONS = [
 	...favoriteInvocations(),
+	...discoveryInvocations(),
 	{
 		id: "@michengai/dsh-archive-manager#workspaceRegistry/unarchiveSession",
 		service: "workspaceRegistry",
@@ -369,7 +371,43 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		markRemoteMethod(this, "archivedSessionMetadata");
 		markRemoteMethod(this, "favoriteSessions");
 		markRemoteMethod(this, "setSessionFavorite");
+		markRemoteMethod(this, "searchArchivedContent");
+		markRemoteMethod(this, "previewArchivedSession");
 		registerHostRemote(this.ctx);
+	}
+	/** 只读取归档日志；已有实时实例读取快照，不调用 prepare、enter 或恢复接口。 */
+	async readArchivedConversation(sessionId) {
+		const ensureArchived = () => {
+			if (!this.requireState().archivedSessionIds.includes(sessionId)) throw new Error("会话已不在归档中，请刷新列表");
+		};
+		ensureArchived();
+		const live = this.ctx.get("sessions")?.get(sessionId);
+		let events;
+		if (typeof live?.snapshotEvents === "function") events = live.snapshotEvents();
+		else {
+			const persistence = this.ctx.get("sessionPersistence");
+			if (!persistence || (typeof persistence.readFrom !== "function" && typeof persistence.open !== "function")) throw new Error("当前宿主不支持只读会话，请打开完整会话查看");
+			events = (await this.readStoredProjectionSource(persistence, sessionId)).events;
+		}
+		ensureArchived();
+		return extractConversation(events);
+	}
+	/** 输入为限定批次的归档 ID 和纯文本关键词；逐条返回命中或失败，不静默漏掉会话。 */
+	async searchArchivedContent(input) {
+		const { sessionIds, query } = searchInputSchema.parse(input);
+		const items = [], failures = [];
+		for (const sessionId of sessionIds) {
+			try {
+				const match = findContentMatch(await this.readArchivedConversation(sessionId), query);
+				if (match) items.push({ sessionId, ...match });
+			} catch (error) { failures.push({ sessionId, message: String(error?.message ?? error).slice(0, 500) }); }
+		}
+		return { items, failures };
+	}
+	/** 返回最近八条对话或关键词附近的八条，单条最多 2000 字，不写入宿主数据。 */
+	async previewArchivedSession(input) {
+		const { sessionId, query } = previewInputSchema.parse(input);
+		return { sessionId, ...previewConversation(await this.readArchivedConversation(sessionId), query) };
 	}
 	/** 独立收藏域不改变官方工作区数据结构；旧版本回退时可保留收藏。 */
 	async favoriteDomain() {

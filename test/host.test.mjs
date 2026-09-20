@@ -2267,7 +2267,18 @@ test("typert gateway SRC: claims + dispatch single and batch archive methods end
 	assert.deepEqual(favorites.value.favoriteSessionIds, [s1]);
 	const malformedFavorite = await captured.handler("workspaceRegistry/setSessionFavorite", { args: { input: { sessionId: s1, favorite: "true" } } }, void 0);
 	assert.equal(malformedFavorite.ok, false);
-	// SRC claims for the new endpoints
+	// 通过真实网关验证新描述符的参数解析、只读调用及返回编解码。
+    await registry.archiveSession(s1);
+    env.persistence.readFrom = async () => ({ events: [{ seq: 1, type: "user/message", data: { content: "检索测试正文" } }] });
+    const searched = await captured.handler("workspaceRegistry/searchArchivedContent", { args: { input: { sessionIds: [s1], query: "正文" } } }, void 0);
+    assert.equal(searched.ok, true);
+    assert.equal(searched.value.items[0].sessionId, s1);
+    const previewed = await captured.handler("workspaceRegistry/previewArchivedSession", { args: { input: { sessionId: s1 } } }, void 0);
+    assert.equal(previewed.ok, true);
+    assert.equal(previewed.value.messages[0].text, "检索测试正文");
+    const invalidSearch = await captured.handler("workspaceRegistry/searchArchivedContent", { args: { input: { sessionIds: [s1], query: "" } } }, void 0);
+    assert.equal(invalidSearch.ok, false);
+    // SRC claims for the new endpoints
 	assert.equal(captured.matches("workspaceRegistry/unarchiveSession"), true);
 	assert.equal(captured.matches("workspaceRegistry/deleteSession"), true);
 	assert.equal(
@@ -2402,4 +2413,34 @@ test("legacy workspaceRegistry API surface is intact", async () => {
 	);
 	await registry.archiveSession(s3);
 	assert.deepEqual(env.global.archivedSessionIds, [s3]);
+});
+
+test("归档检索与预览只读日志，不激活会话、不修改归档或工作区", async () => {
+  const env = buildRoot({ headers: [header(s1), header(s2)], archived: [s1, s2] });
+  const registry = await mountWorkspaceRegistry(env);
+  const events = [{ type: "user/message", seq: 0, data: { content: [{ type: "text", text: "订单退款" }] } }];
+  env.persistence.readFrom = async id => { if (id === s2) throw new Error("读取失败"); return { events }; };
+  const found = await registry.searchArchivedContent({ sessionIds: [s1, s2], query: "退款" });
+  assert.equal(found.items[0].sessionId, s1);
+  assert.equal(found.failures[0].sessionId, s2);
+  const preview = await registry.previewArchivedSession({ sessionId: s1 });
+  assert.equal(preview.messages[0].text, "订单退款");
+  assert.deepEqual(env.global.archivedSessionIds, [s1, s2]);
+  assert.deepEqual(env.persistence.prepared, []);
+  await assert.rejects(registry.previewArchivedSession({ sessionId: s3 }), /归档/);
+});
+
+test("新版预览关闭只读句柄，失败也关闭，期间恢复的会话不返回旧内容", async () => {
+  const env = buildRoot({ headers: [header(s1)], archived: [s1] });
+  const registry = await mountWorkspaceRegistry(env);
+  let closed = 0;
+  env.persistence.open = async (_id, mode) => {
+    assert.equal(mode, "read");
+    return { header: header(s1), read: async () => { throw new Error("损坏日志"); }, close: async () => { closed++; } };
+  };
+  await assert.rejects(registry.previewArchivedSession({ sessionId: s1 }), /损坏日志/);
+  assert.equal(closed, 1);
+  env.persistence.open = async () => ({ header: header(s1), read: async () => { env.global.archivedSessionIds = []; return { events: [] }; }, close: async () => { closed++; } });
+  await assert.rejects(registry.previewArchivedSession({ sessionId: s1 }), /归档/);
+  assert.equal(closed, 2);
 });

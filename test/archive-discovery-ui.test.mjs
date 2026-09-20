@@ -1,0 +1,61 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createDiscoveryTools } from "../src/archive-discovery-ui.js";
+
+// 最小钩子驱动器保留依赖和清理，用可控请求验证异步竞争。
+function harness() {
+  const slots = []; let cursor = 0; let effects = [];
+  const React = {
+    useState(initial) { const i = cursor++; slots[i] ??= { value: typeof initial === "function" ? initial() : initial }; return [slots[i].value, next => { slots[i].value = typeof next === "function" ? next(slots[i].value) : next; }]; },
+    useEffect(fn, deps) { const i = cursor++; const previous = slots[i]; if (!previous || deps.some((v, j) => !Object.is(v, previous.deps[j]))) { effects.push(() => { previous?.cleanup?.(); slots[i] = { deps, cleanup: fn() }; }); } },
+    createElement: (type, props, ...children) => ({ type, props, children })
+  };
+  return { tools: createDiscoveryTools(React), render(fn) { cursor = 0; const result = fn(); const pending = effects; effects = []; pending.forEach(fn => fn()); return result; }, dispose() { slots.forEach(slot => slot.cleanup?.()); } };
+}
+const tick = () => new Promise(resolve => setImmediate(resolve));
+
+test("预览切换与关闭会忽略迟到响应，错误可重试", async () => {
+  const env = harness(), requests = [];
+  const call = input => new Promise((resolve, reject) => requests.push({ input, resolve, reject }));
+  const render = () => env.render(() => env.tools.useArchivePreview(call, ["a", "b"]));
+  let state = render(); state.open({ id: "a" }); state = render(); await tick();
+  state.open({ id: "b" }); state = render(); await tick();
+  requests[0].resolve({ sessionId: "a" }); await tick(); state = render();
+  assert.equal(state.status, "loading");
+  requests[1].reject(new Error("读取失败")); await tick(); state = render();
+  assert.equal(state.error, "读取失败"); state.retry(); render(); await tick();
+  requests[2].resolve({ sessionId: "b" }); await tick(); state = render();
+  assert.equal(state.value.sessionId, "b"); state.close(); state = render(); assert.equal(state.target, null);
+  state.open({ id: "b" }); state = render(); assert.equal(state.status, "loading", "再次打开相同会话必须重新读取，不能闪现上次内容");
+  env.dispose();
+});
+
+test("正文搜索切换后不发布旧命中，禁用后不继续请求", async () => {
+  const env = harness(), requests = [];
+  let query = "旧", enabled = true;
+  const call = input => new Promise(resolve => requests.push({ input, resolve }));
+  const render = () => env.render(() => env.tools.useArchiveSearch(["a"], query, enabled, call));
+  render(); await new Promise(resolve => setTimeout(resolve, 380));
+  query = "新"; let state = render(); assert.deepEqual(state.items, []);
+  requests[0].resolve({ items: [{ sessionId: "a", seq: 1, snippet: "旧" }], failures: [] }); await tick();
+  state = render(); assert.deepEqual(state.items, []);
+  enabled = false; state = render(); assert.equal(state.status, "idle");
+  await new Promise(resolve => setTimeout(resolve, 380)); assert.equal(requests.length, 1);
+  env.dispose();
+});
+
+test("日期浮层点击内部保持展开，点击外部关闭，卸载移除监听", () => {
+  const listeners = new Map(); let cleanup;
+  const inside = {}, outside = {};
+  const root = { open: true, contains: target => target === inside, ownerDocument: {
+    addEventListener: (name, fn, capture) => listeners.set(name, { fn, capture }),
+    removeEventListener: (name, fn, capture) => { assert.equal(listeners.get(name).fn, fn); assert.equal(listeners.get(name).capture, capture); listeners.delete(name); }
+  } };
+  const React = { useRef: () => ({ current: root }), useEffect: fn => { cleanup = fn(); }, createElement: (type, props, ...children) => ({ type, props, children }) };
+  const { DiscoveryFilters } = createDiscoveryTools(React);
+  DiscoveryFilters({ t: key => key, from: "", to: "" });
+  assert.ok(listeners.has("pointerdown"), "日期浮层应监听外部指针操作");
+  listeners.get("pointerdown").fn({ target: inside }); assert.equal(root.open, true);
+  listeners.get("pointerdown").fn({ target: outside }); assert.equal(root.open, false);
+  cleanup(); assert.equal(listeners.size, 0);
+});

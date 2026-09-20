@@ -536,3 +536,29 @@ test("整理页收藏、闲置预览、部分失败重试及撤回形成完整�
   assert.equal(panel().props.undoCount, 0);
   assert.deepEqual([...favorites], ["protected"]);
 });
+
+test("归档发现入口提供组合日期筛选及只读预览", () => {
+  const values = []; let cursor = 0;
+  const hooks = { ...statics.react, useSyncExternalStore: (_s, get) => get(), useState: initial => { const i = cursor++; if (!(i in values)) values[i] = typeof initial === "function" ? initial() : initial; return [values[i], next => { values[i] = typeof next === "function" ? next(values[i]) : next; }]; }, useRef: initial => { const i = cursor++; return values[i] ??= { current: initial }; }, useMemo: fn => fn(), useEffect: () => {} };
+  const client = factories.get("@michengai/dsh-archive-manager")(name => name === "react" ? hooks : statics[name]);
+  const props = { sessionStore: source({ byId: { a: { id: "a", title: "九月", updatedAt: new Date(2026, 8, 20).getTime() }, b: { id: "b", title: "八月", updatedAt: new Date(2026, 7, 20).getTime() } } }), workspaceStore: source({ items: [], archivedSessionIds: ["a", "b"] }), archivedSessionMetadata: async () => ({ items: [] }), previewArchivedSession: async () => ({}), searchArchivedContent: async () => ({ items: [], failures: [] }), t: key => key };
+  const nodes = node => Array.isArray(node) ? node.flatMap(nodes) : node?.props ? [node, ...nodes(node.props.children)] : [];
+  const render = () => { cursor = 0; return client.__test.ArchivedSessionsSection(props); };
+  let tree = render();
+  const filters = nodes(tree).find(n => n.type?.name === "DiscoveryFilters");
+  assert.ok(filters, "日期筛选应接入真实设置页");
+  const searchRow = nodes(tree).find(n => n.props.className === "dsham_settingsSearch");
+  assert.ok(nodes(searchRow).includes(filters), "日期筛选应位于搜索框右侧");
+  assert.ok(nodes(searchRow).some(n => n.type?.name === "ArchiveProjectSelect" && n.props["aria-label"] === "discovery.scope"), "搜索框左侧常驻查找范围切换");
+  filters.props.onFrom("2026-09-01"); tree = render();
+  assert.equal(nodes(tree).filter(n => n.type === "article").length, 1);
+  const menuNode = nodes(tree).find(n => n.type?.name === "ArchivedSessionMenu");
+  const menu = menuNode.type(menuNode.props);
+  assert.deepEqual(menu.props.items.map(i => i.id), ["preview", "restoreOpen", "delete"]);
+  menu.props.onSelect("preview"); tree = render();
+  assert.ok(nodes(tree).some(n => n.props.open && n.props.title === "九月"), "预览弹窗应打开且仍保持归档列表");
+  nodes(tree).find(n => n.props.open).props.onClose(); tree = render();
+  assert.equal(nodes(tree).some(n => n.props.open), false);
+  nodes(tree).find(n => n.type?.name === "DiscoveryFilters").props.onClear(); tree = render();
+  assert.equal(nodes(tree).filter(n => n.type === "article").length, 2);
+});

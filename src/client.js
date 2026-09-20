@@ -1,3 +1,5 @@
+import { createDiscoveryTools, discoveryCss, discoveryZh, discoveryEn } from "./archive-discovery-ui.js";
+import { discoveryInvocations, matchesUpdatedRange, validUpdatedRange } from "./archive-discovery.js";
 import { allowArchivedNavigation, openArchivedConversation, formatArchiveNavigationError, ArchiveNavigationError, currentSessionId } from "./archive-experience.js";
 import { mirrorDirectoryFlow } from "./directory-flow-slot.js";
 import { observePluginUpdate } from "./plugin-update-ui.js";
@@ -23,6 +25,7 @@ window.__ModuleLoader__.load({
 		let react_jsx_runtime = require("react/jsx-runtime");
 		let react = require("react");
 		const OrganizerPanel = createOrganizerPanel(react);
+        const { HighlightedText, useArchiveSearch, useArchivePreview, DiscoveryFilters, SearchStatus, PreviewContent } = createDiscoveryTools(react);
 		let _deepseek_ai_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
 		const UPDATE_ICON_PATHS = {
 			refresh: ["M13.5 5.5V2.5m0 0h-3m3 0-2.1 2.1A5.5 5.5 0 1 0 13.2 12"],
@@ -116,6 +119,7 @@ window.__ModuleLoader__.load({
 			package: "@michengai/dsh-archive-manager",
 			descriptors: [
 				...favoriteInvocations(),
+				...discoveryInvocations(),
 				{
 					id: "@michengai/dsh-archive-manager#workspaceRegistry/unarchiveSession",
 					service: "workspaceRegistry",
@@ -303,7 +307,7 @@ window.__ModuleLoader__.load({
 		/**
 		* 归档管理设置页：集中处理筛选、多选、恢复、删除和原生会话导航。
 		*/
-		function ArchivedSessionsSection({ archiveSessions, sessionStore, workspaceStore, unarchiveSession, deleteSession, unarchiveSessions, deleteArchivedSessions, archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState, close, t, favoriteSessions, setSessionFavorite, organizeBatch, useSessionPendingInteraction, useSessionStatus }) {
+		function ArchivedSessionsSection({ archiveSessions, sessionStore, workspaceStore, unarchiveSession, deleteSession, unarchiveSessions, deleteArchivedSessions, archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState, close, t, searchArchivedContent, previewArchivedSession, favoriteSessions, setSessionFavorite, organizeBatch, useSessionPendingInteraction, useSessionStatus }) {
 			const sessions = (0, react.useSyncExternalStore)(sessionStore.subscribe, sessionStore.getSnapshot);
 			const workspaceState = (0, react.useSyncExternalStore)(workspaceStore.subscribe, workspaceStore.getSnapshot);
 			const [archiveTab, setArchiveTab] = (0, react.useState)("archived");
@@ -329,7 +333,10 @@ window.__ModuleLoader__.load({
 			const [favoriteBusy, setFavoriteBusy] = (0, react.useState)(false);
 			const favoriteLock = (0, react.useRef)(false);
 			const [favoritesOnly, setFavoritesOnly] = (0, react.useState)(false);
-			const [collapsedGroups, setCollapsedGroups] = (0, react.useState)(() => new Set());
+			const [searchScope, setSearchScope] = react.useState("title");
+            const [dateFrom, setDateFrom] = react.useState("");
+            const [dateTo, setDateTo] = react.useState("");
+            const [collapsedGroups, setCollapsedGroups] = (0, react.useState)(() => new Set());
 			const [idleDays, setIdleDays] = (0, react.useState)("30");
 			const [idleRequest, setIdleRequest] = (0, react.useState)(false);
 			const [batchProgress, setBatchProgress] = (0, react.useState)(null);
@@ -447,14 +454,15 @@ window.__ModuleLoader__.load({
 			(0, react.useEffect)(() => {
 				if (project !== "all" && !groups.some((group) => group.key === project)) setProject("all");
 			}, [groups, project]);
-			const filteredGroups = (0, react.useMemo)(() => {
-				const normalizedQuery = query.trim().toLocaleLowerCase();
-				return sortedGroups.filter((group) => project === "all" || project === group.key).map((group) => ({
-					...group,
-					sessions: group.sessions.filter((session) => (normalizedQuery === "" || displayTitle(session, t).toLocaleLowerCase().includes(normalizedQuery)) && (!favoritesOnly || favoriteIds.includes(session.id)))
-				})).filter((group) => group.sessions.length > 0);
-			}, [sortedGroups, project, query, t, favoritesOnly, favoriteIds]);
-			const idleCandidates = favoritesReady ? filteredGroups.flatMap((group) => group.sessions).filter((session) => idleArchiveCandidate(session, { days: Number(idleDays), favorites: favoriteSet, currentId: currentSessionId(sessions), pending: uiFacts.pending })).map((session) => session.id) : [];
+			const invalidDate = !validUpdatedRange(dateFrom, dateTo);
+            const candidateGroups = sortedGroups.filter(group => project === "all" || project === group.key).map(group => ({ ...group, sessions: group.sessions.filter(session => (!favoritesOnly || favoriteIds.includes(session.id)) && matchesUpdatedRange(session.updatedAt, dateFrom, dateTo)) })).filter(group => group.sessions.length);
+            const contentEnabled = isArchived && searchScope === "content" && !invalidDate;
+            const contentSearch = useArchiveSearch(candidateGroups.flatMap(group => group.sessions.map(session => session.id)), query, contentEnabled, searchArchivedContent);
+            const contentMatches = new Map(contentSearch.items.map(item => [item.sessionId, item]));
+            const preview = useArchivePreview(previewArchivedSession, isArchived ? workspaceState.archivedSessionIds : []);
+            const normalizedQuery = query.trim().toLocaleLowerCase();
+            const filteredGroups = candidateGroups.map(group => ({ ...group, sessions: group.sessions.filter(session => !normalizedQuery || displayTitle(session, t).toLocaleLowerCase().includes(normalizedQuery) || contentMatches.has(session.id)) })).filter(group => group.sessions.length);
+            const idleCandidates = favoritesReady ? filteredGroups.flatMap((group) => group.sessions).filter((session) => idleArchiveCandidate(session, { days: Number(idleDays), favorites: favoriteSet, currentId: currentSessionId(sessions), pending: uiFacts.pending })).map((session) => session.id) : [];
 			const visibleSessionIds = (0, react.useMemo)(() => archivedSessionIdsInGroups(filteredGroups), [filteredGroups]);
 			const selectedSessionIdSet = (0, react.useMemo)(() => new Set(selectedSessionIds), [selectedSessionIds]);
 			const selectedVisibleCount = visibleSessionIds.filter((sessionId) => selectedSessionIdSet.has(sessionId)).length;
@@ -587,11 +595,11 @@ window.__ModuleLoader__.load({
 					})]
 				}), (0, react_jsx_runtime.jsxs)("div", { id: "dsham-archive-panel", role: "tabpanel", "aria-labelledby": "dsham-tab-" + archiveTab, children: [(0, react_jsx_runtime.jsxs)("div", {
 					className: "dsham_settingsToolbar",
-					children: [(0, react_jsx_runtime.jsxs)("label", {
+					children: [(0, react_jsx_runtime.jsxs)("div", {
 						className: "dsham_settingsSearch",
-						children: [(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconSearchOutline16, {}), (0, react_jsx_runtime.jsx)("input", { type: "search", value: query, onChange: (event) => setQuery(event.target.value), placeholder: t(isArchived ? "archives.searchPlaceholder" : "archives.searchUnarchived"), "aria-label": t(isArchived ? "archives.searchPlaceholder" : "archives.searchUnarchived") })]
+						children: [isArchived && react.createElement("div", { className: "dsham_searchScope" }, react.createElement(ArchiveProjectSelect, { id: "dsham-search-scope", value: searchScope, "aria-label": t("discovery.scope"), onChange: setSearchScope, options: [{ value: "title", label: t("discovery.titleOnly") }, { value: "content", label: t("discovery.titleAndContent") }] })), (0, react_jsx_runtime.jsx)("input", { type: "search", maxLength: 200, value: query, onChange: (event) => setQuery(event.target.value), placeholder: t(contentEnabled ? "discovery.searchPlaceholder" : isArchived ? "archives.searchPlaceholder" : "archives.searchUnarchived"), "aria-label": t(contentEnabled ? "discovery.searchPlaceholder" : isArchived ? "archives.searchPlaceholder" : "archives.searchUnarchived") }), react.createElement(DiscoveryFilters, { t, from: dateFrom, to: dateTo, onFrom: setDateFrom, onTo: setDateTo, invalid: invalidDate, onClear: () => { setDateFrom(""); setDateTo(""); } })]
 					}), (0, react_jsx_runtime.jsx)(ArchiveProjectSelect, { id: "dsham-sort-filter", value: sortBy, options: [{ value: "updated", label: t("archives.sortUpdated") }, ...isArchived ? [{ value: "created", label: t("archives.sortCreated") }] : [], { value: "alphabetical", label: t("archives.sortAlphabetical") }], onChange: setSortBy, "aria-label": t("archives.sortBy") }), (0, react_jsx_runtime.jsx)(ArchiveProjectSelect, { id: "dsham-project-filter", value: project, options: [{ value: "all", label: t("archives.allProjects") }, ...sortedGroups.map((group) => ({ value: group.key, label: group.title }))], onChange: setProject, "aria-label": t("archives.projectFilter") }), setSessionFavorite && (0, react_jsx_runtime.jsx)(ArchiveProjectSelect, { id: "dsham-favorite-filter", value: favoritesOnly ? "favorites" : "all", disabled: busy || favoriteBusy || !favoritesReady, options: [{ value: "all", label: t("organizer.allSessions") }, { value: "favorites", label: t("organizer.favoritesOnly") }], onChange: (value) => setFavoritesOnly(value === "favorites"), "aria-label": t("organizer.favoriteFilter") })]
-				}), organizeBatch && (0, react_jsx_runtime.jsx)(OrganizerPanel, {
+				}), react.createElement("style", null, discoveryCss), react.createElement(SearchStatus, { state: contentSearch, t }), organizeBatch && (0, react_jsx_runtime.jsx)(OrganizerPanel, {
 					t, archived: isArchived, busy: busy || favoriteBusy || unarchivingSessionIds.size > 0, ready: favoritesReady,
 					days: idleDays, onDays: setIdleDays, count: idleCandidates.length,
 					onPreview: () => { requestArchive(idleCandidates); setIdleRequest(true); },
@@ -608,7 +616,7 @@ window.__ModuleLoader__.load({
 					onArchive: isArchived ? undefined : () => requestArchive([...selectedSessionIds]),
 					onRestore: onSelectedUnarchive,
 					onDelete: () => setDeleteTarget({ kind: "batch", target: { scope: "sessions", sessionIds: selectedSessionIds }, count: selectedSessionIds.length })
-				}), groups.length === 0 ? (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsEmpty", children: t(isArchived ? "archives.empty" : "archives.emptyUnarchived") }) : filteredGroups.length === 0 ? (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsEmpty", children: t("archives.emptyFiltered") }) : filteredGroups.map((group) => {
+				}), groups.length === 0 ? (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsEmpty", children: t(isArchived ? "archives.empty" : "archives.emptyUnarchived") }) : filteredGroups.length === 0 ? (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsEmpty", children: contentSearch.status === "loading" || contentSearch.status === "error" || contentSearch.failures.length ? null : t("archives.emptyFiltered") }) : filteredGroups.map((group) => {
 					const target = archivedBatchTargetForGroup(group.key);
 					const groupSessionIds = groups.find((item) => item.key === group.key)?.sessions.map((session) => session.id) ?? [];
 					const count = isArchived ? deriveArchivedBatchIds(workspaceState.archivedSessionIds, workspaceState.items, target).length : groupSessionIds.length;
@@ -626,18 +634,22 @@ window.__ModuleLoader__.load({
                     (0, react_jsx_runtime.jsx)(ArchiveSelectionCheckbox, { checked: selectedSessionIdSet.has(session.id), disabled: busy, label: t("archives.selectSession", { name: displayTitle(session, t) }), onChange: (event) => toggleSessionSelection(session.id, event.target.checked) }),
                     (0, react_jsx_runtime.jsxs)("div", { className: "dsham_settingsContent", children: [
                       (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsTitleLink", title: displayTitle(session, t), "aria-label": t("archives.openSession") + "：" + displayTitle(session, t), disabled: busy || unarchivingSessionIds.has(session.id), onClick: () => viewConversation(session), children: displayTitle(session, t) }),
-                      (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsMeta", children: archiveTimeLabel(session.updatedAt, t) })
+                      (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsMeta", children: archiveTimeLabel(session.updatedAt, t) }), contentMatches.has(session.id) && react.createElement("button", { type: "button", className: "dsham_settingsSnippet", disabled: busy, title: t("discovery.preview"), onClick: () => preview.open(session, query) }, react.createElement(HighlightedText, { text: contentMatches.get(session.id).snippet, query }))
                     ] }),
                     (0, react_jsx_runtime.jsxs)("div", { className: "dsham_settingsActions", children: [
                       setSessionFavorite && (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_favorite", title: t(favoriteSet.has(session.id) ? "organizer.unfavorite" : "organizer.favorite"), "aria-pressed": favoriteSet.has(session.id), "aria-label": t(favoriteSet.has(session.id) ? "organizer.unfavorite" : "organizer.favorite") + "：" + displayTitle(session, t), disabled: busy || favoriteBusy || !favoritesReady, onClick: () => toggleFavorite(session.id), children: (0, react_jsx_runtime.jsx)("span", { "aria-hidden": true, children: favoriteSet.has(session.id) ? "★" : "☆" }) }),
                       (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_restoreIcon", title: t(isArchived ? "archives.restore" : "archives.archiveSelected"), "aria-label": t(isArchived ? "archives.restore" : "archives.archiveSelected"), disabled: busy || unarchivingSessionIds.has(session.id), onClick: () => isArchived ? onUnarchive(session.id) : requestArchive([session.id]), children: (0, react_jsx_runtime.jsx)(isArchived ? _deepseek_ai_dsh_client_ui_primitives.IconRefreshOutline16 : _deepseek_ai_dsh_client_ui_primitives.IconArchiveOutline20, { size: 16 }) }),
-                      isArchived && (0, react_jsx_runtime.jsx)(ArchivedSessionMenu, { busy: busy || unarchivingSessionIds.has(session.id), t, title: displayTitle(session, t), onRestoreOpen: () => viewConversation(session, true), onDelete: () => setDeleteTarget({ kind: "session", session }) })
+                      isArchived && (0, react_jsx_runtime.jsx)(ArchivedSessionMenu, { busy: busy || unarchivingSessionIds.has(session.id), t, title: displayTitle(session, t), onPreview: previewArchivedSession ? () => preview.open(session, query) : undefined, onRestoreOpen: () => viewConversation(session, true), onDelete: () => setDeleteTarget({ kind: "session", session }) })
                     ] })
                   ]
                 }, session.id))
 						})]
 					}, group.key);
-				}), archiveTarget === null && error !== null && (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsError", role: "alert", children: error }), notice !== null && (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsStatus", role: "status", children: notice }), (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Modal, {
+				}), react.createElement(_deepseek_ai_dsh_client_ui_primitives.Modal, {
+                    open: preview.target !== null, onClose: preview.close, closeLabel: t("close"), title: preview.target ? displayTitle(preview.target.session, t) : t("discovery.preview"),
+                    footer: react.createElement(_deepseek_ai_dsh_client_ui_primitives.Button, { variant: "outline", disabled: busy, onClick: () => { if (preview.target) { const session = preview.target.session; preview.close(); return viewConversation(session); } } }, t("discovery.openFull")),
+                    children: react.createElement(PreviewContent, { preview, t })
+                }), archiveTarget === null && error !== null && (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsError", role: "alert", children: error }), notice !== null && (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsStatus", role: "status", children: notice }), (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Modal, {
 					open: archiveTarget !== null,
 					onClose: closeArchive, closeLabel: t("close"),
 					title: t("archives.archiveTitle", { n: archiveTarget?.length ?? 0 }), description: archiveGroup === null ? t("archives.archiveSelectedDesc") : t(archiveGroup.key === ARCHIVE_UNGROUPED_KEY ? "archives.archiveUngroupedDesc" : "archives.archiveProjectDesc", { name: archiveGroup.title, n: archiveTarget?.length ?? 0 }),
@@ -3401,15 +3413,16 @@ window.__ModuleLoader__.load({
 			});
 		}
 		/** 低频和危险操作收进菜单，复用宿主的焦点、键盘及弹出层行为。 */
-		function ArchivedSessionMenu({ busy, title, t, onRestoreOpen, onDelete }) {
+		function ArchivedSessionMenu({ busy, title, t, onPreview, onRestoreOpen, onDelete }) {
 			const [open, setOpen] = (0, react.useState)(false);
 			return (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Menu, {
 				open, onClose: () => setOpen(false), portal: true, align: "end", autoFocus: true,
 				items: [
-					{ id: "restoreOpen", label: t("archives.restoreOpen"), icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconRefreshOutline16, {}) },
+					...onPreview ? [{ id: "preview", label: t("discovery.preview"), icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconSearchOutline16, {}) }] : [],
+                    { id: "restoreOpen", label: t("archives.restoreOpen"), icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconRefreshOutline16, {}) },
 					{ id: "delete", label: t("menu.deleteSession"), icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconTrashOutline16, {}), danger: true }
 				],
-				onSelect: (id) => { setOpen(false); if (busy) return; if (id === "restoreOpen") return onRestoreOpen(); if (id === "delete") onDelete(); },
+				onSelect: (id) => { setOpen(false); if (busy) return; if (id === "preview") return onPreview?.(); if (id === "restoreOpen") return onRestoreOpen(); if (id === "delete") onDelete(); },
 				anchor: (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsGroupMenu", disabled: busy, title: t("archives.moreActions"), "aria-label": t("archives.moreActions") + "：" + title, "aria-haspopup": "menu", "aria-expanded": open, onClick: () => setOpen(value => !value), children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconEllipsisOutline16, {}) })
 			});
 		}
@@ -3571,7 +3584,7 @@ window.__ModuleLoader__.load({
 		}
 
 		const zh = {
-			...organizerZh,
+			...organizerZh, ...discoveryZh,
 			"archives.archiveProject": "归档该项目的全部聊天",
 			"archives.archiveUngrouped": "归档全部未分组聊天",
 			"archives.archiveProjectDesc": "将“{name}”中全部 {n} 条未归档会话归档，不受当前搜索筛选影响。之后可在“已归档”中恢复。",
@@ -3725,7 +3738,7 @@ window.__ModuleLoader__.load({
 		};
 		/** English dictionary, checked complete against the zh key set. */
 		const en = {
-			...organizerEn,
+			...organizerEn, ...discoveryEn,
 			"archives.moreActions": "More actions",
 			"archives.archiveProject": "Archive all chats in this project",
 			"archives.archiveUngrouped": "Archive all ungrouped chats",
@@ -4038,7 +4051,16 @@ window.__ModuleLoader__.load({
 				if (!result.ok) throw new Error(result.error.message);
 				return result.value;
 			};
-			const favoriteSessions = () => favoriteCall("favoriteSessions");
+			const discoveryCall = async (method, input) => {
+                const registry = ctx.get("remote.workspaceRegistry");
+                if (!registry || typeof registry[method] !== "function") throw new Error("归档检索服务尚未就绪，请重试");
+                const result = await registry[method](input);
+                if (!result.ok) throw new Error(result.error.message);
+                return result.value;
+            };
+            const searchArchivedContent = input => discoveryCall("searchArchivedContent", input);
+            const previewArchivedSession = input => discoveryCall("previewArchivedSession", input);
+            const favoriteSessions = () => favoriteCall("favoriteSessions");
 			const setSessionFavorite = (input) => favoriteCall("setSessionFavorite", input);
 			const organizeBatch = createSessionOrganizer({
 				workspaces: ctx.workspaces.list, sessions: ctx.sessions.list,
@@ -4191,7 +4213,7 @@ window.__ModuleLoader__.load({
 					unarchiveSessions,
 					deleteArchivedSessions,
 					archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState: archiveViewState,
-					favoriteSessions, setSessionFavorite, organizeBatch,
+					favoriteSessions, setSessionFavorite, organizeBatch, searchArchivedContent, previewArchivedSession,
 					t: ctx.locale.bind(NS)
 				})
 			}, ArchivedSessionsSection));
