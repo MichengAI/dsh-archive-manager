@@ -50,3 +50,20 @@ test("搜索参数限制批量大小、关键词和会话 ID，防止无限请�
   assert.throws(() => searchInputSchema.parse({ sessionIds: [""], query: "x" }));
   assert.throws(() => searchInputSchema.parse({ sessionIds: ["a"], query: "x".repeat(201) }));
 });
+
+test("轮次排序的未知值始终置后，复制成功与拒绝均有明确结果", async () => {
+  const { countConversationTurns, compareTurnCounts, copySessionText, detailsResultSchema } = await import("../src/archive-discovery.js");
+  assert.equal(countConversationTurns([user(0, ""), assistant(1, "回答"), { type: "user/message", data: { source: { kind: "agent-message" } } }]), 1);
+  for (const order of ["turnsAsc", "turnsDesc"]) {
+    assert.ok(compareTurnCounts(0, null, order) < 0);
+    assert.ok(compareTurnCounts(undefined, 2, order) > 0);
+  }
+  assert.ok(compareTurnCounts(2, 5, "turnsAsc") < 0);
+  assert.ok(compareTurnCounts(2, 5, "turnsDesc") > 0);
+  let copied;
+  await copySessionText("会话-ID", { writeText: async text => { copied = text; } });
+  assert.equal(copied, "会话-ID");
+  await assert.rejects(copySessionText("ID", { writeText: async () => { throw new Error("denied"); } }), /复制失败/);
+  await assert.rejects(copySessionText("ID", null), /不支持剪贴板/);
+  assert.throws(() => detailsResultSchema.parse({ items: [{ sessionId: "a", turnCount: -1, path: null, error: "" }] }));
+});

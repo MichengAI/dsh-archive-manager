@@ -100,6 +100,13 @@ const legacyBundle = materialize("@michengai/dsh-archive-manager", {
 
 const t = bundle.__test;
 
+test("完整客户端中英文词条和占位符对应", () => {
+  assert.deepEqual(Object.keys(t.zh).sort(), Object.keys(t.en).sort());
+  for (const key of Object.keys(t.zh)) {
+    assert.deepEqual((t.zh[key].match(/\{\w+\}/g) ?? []).sort(), (t.en[key].match(/\{\w+\}/g) ?? []).sort(), key);
+  }
+});
+
 function summary(id, extra = {}) {
 	return { id, displayTitle: `Title-${id}`, origin: "root", blank: false, running: false, updatedAt: 1, ...extra };
 }
@@ -693,4 +700,16 @@ test("未归档列表排除已归档、子代理和空白占位，保留跨项�
 		summary("a"), summary("b"), summary("loose"), summary("old"), summary("child", {origin:"subagent"}), summary("blank", {blank:true})
 	].map(item => [item.id, item]));
 	assert.deepEqual(t.unarchivedSessionIds(byId, ["old"]), ["a", "b", "loose"]);
+});
+
+test("轮次排序覆盖组内与组间，零轮有效而未知置后", () => {
+  const groups = [{ key: "a", title: "甲", sessions: [summary("unknown", { updatedAt: 99 }), summary("zero", { updatedAt: 1 })] }, { key: "b", title: "乙", sessions: [summary("many", { updatedAt: 2 })] }];
+  const details = { zero: { turnCount: 0 }, many: { turnCount: 9 }, unknown: { turnCount: null } };
+  const asc = t.sortArchivedGroups(groups, "turnsAsc", {}, key => key, details);
+  assert.deepEqual(asc.map(group => group.key), ["a", "b"]);
+  assert.deepEqual(asc[0].sessions.map(row => row.id), ["zero", "unknown"]);
+  const desc = t.sortArchivedGroups(groups, "turnsDesc", {}, key => key, details);
+  assert.deepEqual(desc.map(group => group.key), ["b", "a"]);
+  assert.deepEqual(desc[1].sessions.map(row => row.id), ["zero", "unknown"]);
+  assert.equal(groups[0].sessions[0].id, "unknown");
 });

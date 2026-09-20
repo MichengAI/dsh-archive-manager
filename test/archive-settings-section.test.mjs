@@ -25,7 +25,7 @@ test("设置菜单与页面大标题统一命名为归档会话", async () => {
   assert.doesNotMatch(client, /"archives\.title": "已归档的聊天"/);
 });
 
-test("归档设置页提供搜索、排序、筛选、全部恢复和全部删除入口", async () => {
+test("归档设置页保留筛选并移除重复的全量操作入口", async () => {
   const client = await readFile(clientPath, "utf8");
 
   assert.match(client, /dsham_settingsToolbar/);
@@ -35,9 +35,9 @@ test("归档设置页提供搜索、排序、筛选、全部恢复和全部删�
   assert.match(client, /value: "updated", label: t\("archives\.sortUpdated"\)/);
   assert.match(client, /value: "created", label: t\("archives\.sortCreated"\)/);
   assert.match(client, /value: "alphabetical", label: t\("archives\.sortAlphabetical"\)/);
-  assert.match(client, /className: "dsham_settingsRestoreAll"/);
-  assert.match(client, /onClick: \(\) => onBatchUnarchive\(allBatchTarget\)/);
-  assert.match(client, /target: allBatchTarget/);
+  assert.doesNotMatch(client, /className: "dsham_settingsRestoreAll"/);
+  assert.doesNotMatch(client, /onClick: \(\) => onBatchUnarchive\(allBatchTarget\)/);
+  assert.doesNotMatch(client, /target: allBatchTarget/);
   assert.doesNotMatch(client, /value: chatType, onChange: \(event\) => setChatType\(event\.target\.value\)/);
   assert.doesNotMatch(client, /chatType === "all"/);
 });
@@ -93,8 +93,8 @@ test("创建时间排序从宿主归档头部读取元数据，更新时间继�
 
   assert.match(client, /registry\.archivedSessionMetadata\(\)/);
   assert.match(client, /Object\.fromEntries\(result\.items\.map/);
-  assert.match(client, /sortBy === "created" \? createdAtById\[session\.id\] : session\.updatedAt/);
-  assert.match(client, /sortArchivedGroups\(groups, sortBy, createdAtById, t\)/);
+  assert.match(client, /sortBy === "created" \? \(details\[session\.id\]\?\.createdAt \?\? createdAtById\[session\.id\]\) : session\.updatedAt/);
+  assert.match(client, /sortArchivedGroups\(groups, sortBy, createdAtById, t, details.byId\)/);
 });
 
 test("老归档缺少投影时由宿主重建，并在新老客户端会话服务上刷新列表", async () => {
@@ -174,7 +174,7 @@ test("归档设置页使用自定义项目筛选菜单，而不是原生 select"
 test("批量计数直接取归档集合与 workspace 记账，不依赖摘要是否已加载", async () => {
   const client = await readFile(clientPath, "utf8");
 
-  assert.match(client, /deriveArchivedBatchIds\(workspaceState\.archivedSessionIds, workspaceState\.items, allBatchTarget\)/);
+  assert.doesNotMatch(client, /allBatchTarget/);
   assert.match(client, /const accounted = new Set\(items\.find/);
   assert.match(client, /const accounted = new Set\(items\.flatMap/);
   assert.doesNotMatch(client, /allBatchSessionIds = \(0, react\.useMemo\)\(\(\) => groups\.flatMap/);

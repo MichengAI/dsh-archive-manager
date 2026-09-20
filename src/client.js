@@ -1,5 +1,6 @@
+import { createSessionHealthPanel, healthZh, healthEn } from "./session-health-ui.js";
 import { createDiscoveryTools, discoveryCss, discoveryZh, discoveryEn } from "./archive-discovery-ui.js";
-import { discoveryInvocations, matchesUpdatedRange, validUpdatedRange } from "./archive-discovery.js";
+import { compareTurnCounts, copySessionText, discoveryInvocations, matchesUpdatedRange, validUpdatedRange } from "./archive-discovery.js";
 import { allowArchivedNavigation, openArchivedConversation, formatArchiveNavigationError, ArchiveNavigationError, currentSessionId } from "./archive-experience.js";
 import { mirrorDirectoryFlow } from "./directory-flow-slot.js";
 import { observePluginUpdate } from "./plugin-update-ui.js";
@@ -25,8 +26,9 @@ window.__ModuleLoader__.load({
 		let react_jsx_runtime = require("react/jsx-runtime");
 		let react = require("react");
 		const OrganizerPanel = createOrganizerPanel(react);
-        const { HighlightedText, useArchiveSearch, useArchivePreview, DiscoveryFilters, SearchStatus, PreviewContent } = createDiscoveryTools(react);
+        const { HighlightedText, useSessionDetails, useArchiveSearch, useArchivePreview, DiscoveryFilters, SearchStatus, PreviewContent } = createDiscoveryTools(react);
 		let _deepseek_ai_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
+        const SessionHealthPanel = createSessionHealthPanel(react, { warning: _deepseek_ai_dsh_client_ui_primitives.IconWarningOutline16, info: _deepseek_ai_dsh_client_ui_primitives.IconInfoOutline14, check: _deepseek_ai_dsh_client_ui_primitives.IconCheckOutline16, refresh: _deepseek_ai_dsh_client_ui_primitives.IconRefreshOutline16, search: _deepseek_ai_dsh_client_ui_primitives.IconSearchOutline16, chevron: _deepseek_ai_dsh_client_ui_primitives.IconChevronDownOutline14 });
 		const UPDATE_ICON_PATHS = {
 			refresh: ["M13.5 5.5V2.5m0 0h-3m3 0-2.1 2.1A5.5 5.5 0 1 0 13.2 12"],
 			download: ["M8 2v8m0 0 3-3m-3 3-3-3M3 13v2h10v-2"],
@@ -307,7 +309,7 @@ window.__ModuleLoader__.load({
 		/**
 		* 归档管理设置页：集中处理筛选、多选、恢复、删除和原生会话导航。
 		*/
-		function ArchivedSessionsSection({ archiveSessions, sessionStore, workspaceStore, unarchiveSession, deleteSession, unarchiveSessions, deleteArchivedSessions, archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState, close, t, searchArchivedContent, previewArchivedSession, favoriteSessions, setSessionFavorite, organizeBatch, useSessionPendingInteraction, useSessionStatus }) {
+		function ArchivedSessionsSection({ archiveSessions, sessionStore, workspaceStore, unarchiveSession, deleteSession, unarchiveSessions, deleteArchivedSessions, archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState, close, t, diagnoseSession, repairSession, sessionDetails, searchSessionContent, searchArchivedContent, previewArchivedSession, favoriteSessions, setSessionFavorite, organizeBatch, useSessionPendingInteraction, useSessionStatus }) {
 			const sessions = (0, react.useSyncExternalStore)(sessionStore.subscribe, sessionStore.getSnapshot);
 			const workspaceState = (0, react.useSyncExternalStore)(workspaceStore.subscribe, workspaceStore.getSnapshot);
 			const [archiveTab, setArchiveTab] = (0, react.useState)("archived");
@@ -367,7 +369,7 @@ window.__ModuleLoader__.load({
 				if (kind === "archive" && !retry) setLastArchive([]);
 				try {
 					const result = await organizeBatch(kind, ids, { idleDays: idle ? Number(idleDays) : undefined, getPending: () => pendingRef.current, onProgress: setBatchProgress });
-					setBatchResult({ ...result, kind });
+					setBatchResult({ ...result, kind, tab: archiveTab });
 					retryBatch.current = result.remaining.length ? { kind, ids: result.remaining, idle } : null;
 					if (kind === "archive") setLastArchive((previous) => [...new Set([...previous, ...result.succeeded])]);
 					if (kind === "undo" || kind === "restore" || kind === "delete") setLastArchive((previous) => previous.filter((id) => !result.succeeded.includes(id) && !result.skipped.includes(id)));
@@ -415,7 +417,7 @@ window.__ModuleLoader__.load({
 			const switchTab = (tab) => {
 				if (busy || unarchivingSessionIdsRef.current.size > 0) return;
 				setArchiveTab(tab); setSelectedSessionIds([]); setArchiveTarget(null); setArchiveGroup(null); setError(null); setNotice(null); setProject("all"); setQuery("");
-				if (tab === "unarchived" && sortBy === "created") setSortBy("updated");
+
 			};
 			const confirmArchive = async () => {
 				if (archiveBusy.current || busy || !archiveTarget?.length) return;
@@ -439,7 +441,22 @@ window.__ModuleLoader__.load({
 				} catch (reason) { setError(t("archives.archiveBatchFailed", { detail: reason instanceof Error ? reason.message : String(reason) })); }
 				finally { archiveBusy.current = false; setBusy(false); }
 			};
-			const sortedGroups = (0, react.useMemo)(() => sortArchivedGroups(groups, sortBy, createdAtById, t), [groups, sortBy, createdAtById, t]);
+			const details = useSessionDetails(groups.flatMap(group => group.sessions), sessionDetails);
+            const copyDetail = async (session, kind) => {
+                setError(null); setNotice(null);
+                try {
+                    let text = session.id;
+                    if (kind === "path") {
+                        let row = details.byId[session.id];
+                        if (!row) row = (await sessionDetails({ sessionIds: [session.id] })).items[0];
+                        if (!row?.path) throw new Error(t("details.noPath"));
+                        text = row.path;
+                    }
+                    await copySessionText(text);
+                    if (navigationActive.current) setNotice(t("details.copied"));
+                } catch (reason) { if (navigationActive.current) setError(reason?.code?.startsWith("copy.") ? t(reason.code) : String(reason?.message ?? reason)); }
+            };
+            const sortedGroups = (0, react.useMemo)(() => sortArchivedGroups(groups, sortBy, createdAtById, t, details.byId), [groups, sortBy, createdAtById, t, details.byId]);
 			(0, react.useEffect)(() => {
 				let cancelled = false;
 				archivedSessionMetadata().then((result) => {
@@ -456,8 +473,8 @@ window.__ModuleLoader__.load({
 			}, [groups, project]);
 			const invalidDate = !validUpdatedRange(dateFrom, dateTo);
             const candidateGroups = sortedGroups.filter(group => project === "all" || project === group.key).map(group => ({ ...group, sessions: group.sessions.filter(session => (!favoritesOnly || favoriteIds.includes(session.id)) && matchesUpdatedRange(session.updatedAt, dateFrom, dateTo)) })).filter(group => group.sessions.length);
-            const contentEnabled = isArchived && searchScope === "content" && !invalidDate;
-            const contentSearch = useArchiveSearch(candidateGroups.flatMap(group => group.sessions.map(session => session.id)), query, contentEnabled, searchArchivedContent);
+            const contentEnabled = searchScope === "content" && !invalidDate;
+            const contentSearch = useArchiveSearch(candidateGroups.flatMap(group => group.sessions.map(session => session.id)), query, contentEnabled, searchSessionContent ?? searchArchivedContent);
             const contentMatches = new Map(contentSearch.items.map(item => [item.sessionId, item]));
             const preview = useArchivePreview(previewArchivedSession, isArchived ? workspaceState.archivedSessionIds : []);
             const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -467,8 +484,6 @@ window.__ModuleLoader__.load({
 			const selectedSessionIdSet = (0, react.useMemo)(() => new Set(selectedSessionIds), [selectedSessionIds]);
 			const selectedVisibleCount = visibleSessionIds.filter((sessionId) => selectedSessionIdSet.has(sessionId)).length;
 			const allVisibleSelected = visibleSessionIds.length > 0 && selectedVisibleCount === visibleSessionIds.length;
-			const allBatchTarget = { scope: "all" };
-			const allBatchSessionIds = (0, react.useMemo)(() => deriveArchivedBatchIds(workspaceState.archivedSessionIds, workspaceState.items, allBatchTarget), [workspaceState.archivedSessionIds, workspaceState.items]);
 			(0, react.useEffect)(() => {
 				setSelectedSessionIds((current) => pruneArchivedSelection(current, eligibleIds));
 			}, [eligibleIds]);
@@ -589,21 +604,18 @@ window.__ModuleLoader__.load({
 							}
 						}, children: t("archives.tab." + tab)
 					}, tab))
-					}), isArchived && (0, react_jsx_runtime.jsxs)("div", {
-						className: "dsham_settingsHeaderActions",
-						children: [(0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsRestoreAll", disabled: busy || allBatchSessionIds.length === 0, onClick: () => onBatchUnarchive(allBatchTarget), children: t("archives.restoreAll") }), (0, react_jsx_runtime.jsxs)("button", { type: "button", className: "dsham_settingsDanger", disabled: busy || allBatchSessionIds.length === 0, onClick: () => setDeleteTarget({ kind: "batch", target: allBatchTarget, title: t("archives.allProjects"), count: allBatchSessionIds.length }), children: [(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconTrashOutline16, {}), t("archives.deleteAll")] })]
 					})]
 				}), (0, react_jsx_runtime.jsxs)("div", { id: "dsham-archive-panel", role: "tabpanel", "aria-labelledby": "dsham-tab-" + archiveTab, children: [(0, react_jsx_runtime.jsxs)("div", {
 					className: "dsham_settingsToolbar",
 					children: [(0, react_jsx_runtime.jsxs)("div", {
 						className: "dsham_settingsSearch",
-						children: [isArchived && react.createElement("div", { className: "dsham_searchScope" }, react.createElement(ArchiveProjectSelect, { id: "dsham-search-scope", value: searchScope, "aria-label": t("discovery.scope"), onChange: setSearchScope, options: [{ value: "title", label: t("discovery.titleOnly") }, { value: "content", label: t("discovery.titleAndContent") }] })), (0, react_jsx_runtime.jsx)("input", { type: "search", maxLength: 200, value: query, onChange: (event) => setQuery(event.target.value), placeholder: t(contentEnabled ? "discovery.searchPlaceholder" : isArchived ? "archives.searchPlaceholder" : "archives.searchUnarchived"), "aria-label": t(contentEnabled ? "discovery.searchPlaceholder" : isArchived ? "archives.searchPlaceholder" : "archives.searchUnarchived") }), react.createElement(DiscoveryFilters, { t, from: dateFrom, to: dateTo, onFrom: setDateFrom, onTo: setDateTo, invalid: invalidDate, onClear: () => { setDateFrom(""); setDateTo(""); } })]
-					}), (0, react_jsx_runtime.jsx)(ArchiveProjectSelect, { id: "dsham-sort-filter", value: sortBy, options: [{ value: "updated", label: t("archives.sortUpdated") }, ...isArchived ? [{ value: "created", label: t("archives.sortCreated") }] : [], { value: "alphabetical", label: t("archives.sortAlphabetical") }], onChange: setSortBy, "aria-label": t("archives.sortBy") }), (0, react_jsx_runtime.jsx)(ArchiveProjectSelect, { id: "dsham-project-filter", value: project, options: [{ value: "all", label: t("archives.allProjects") }, ...sortedGroups.map((group) => ({ value: group.key, label: group.title }))], onChange: setProject, "aria-label": t("archives.projectFilter") }), setSessionFavorite && (0, react_jsx_runtime.jsx)(ArchiveProjectSelect, { id: "dsham-favorite-filter", value: favoritesOnly ? "favorites" : "all", disabled: busy || favoriteBusy || !favoritesReady, options: [{ value: "all", label: t("organizer.allSessions") }, { value: "favorites", label: t("organizer.favoritesOnly") }], onChange: (value) => setFavoritesOnly(value === "favorites"), "aria-label": t("organizer.favoriteFilter") })]
-				}), react.createElement("style", null, discoveryCss), react.createElement(SearchStatus, { state: contentSearch, t }), organizeBatch && (0, react_jsx_runtime.jsx)(OrganizerPanel, {
+						children: [react.createElement("div", { className: "dsham_searchScope" }, react.createElement(ArchiveProjectSelect, { id: "dsham-search-scope", value: searchScope, "aria-label": t("discovery.scope"), onChange: setSearchScope, options: [{ value: "title", label: t("discovery.titleOnly") }, { value: "content", label: t("discovery.titleAndContent") }] })), (0, react_jsx_runtime.jsx)("input", { type: "search", maxLength: 200, value: query, onChange: (event) => setQuery(event.target.value), placeholder: t(contentEnabled ? "discovery.searchPlaceholder" : isArchived ? "archives.searchPlaceholder" : "archives.searchUnarchived"), "aria-label": t(contentEnabled ? "discovery.searchPlaceholder" : isArchived ? "archives.searchPlaceholder" : "archives.searchUnarchived") }), react.createElement(DiscoveryFilters, { t, from: dateFrom, to: dateTo, onFrom: setDateFrom, onTo: setDateTo, invalid: invalidDate, onClear: () => { setDateFrom(""); setDateTo(""); } })]
+					}), (0, react_jsx_runtime.jsx)(ArchiveProjectSelect, { id: "dsham-sort-filter", value: sortBy, options: [{ value: "updated", label: t("archives.sortUpdated") }, { value: "created", label: t("archives.sortCreated") }, { value: "alphabetical", label: t("archives.sortAlphabetical") }, ...sessionDetails ? [{ value: "turnsDesc", label: t("details.more") }, { value: "turnsAsc", label: t("details.less") }] : []], onChange: setSortBy, "aria-label": t("archives.sortBy") }), (0, react_jsx_runtime.jsx)(ArchiveProjectSelect, { id: "dsham-project-filter", value: project, options: [{ value: "all", label: t("archives.allProjects") }, ...sortedGroups.map((group) => ({ value: group.key, label: group.title }))], onChange: setProject, "aria-label": t("archives.projectFilter") }), setSessionFavorite && (0, react_jsx_runtime.jsx)(ArchiveProjectSelect, { id: "dsham-favorite-filter", value: favoritesOnly ? "favorites" : "all", disabled: busy || favoriteBusy || !favoritesReady, options: [{ value: "all", label: t("organizer.allSessions") }, { value: "favorites", label: t("organizer.favoritesOnly") }], onChange: (value) => setFavoritesOnly(value === "favorites"), "aria-label": t("organizer.favoriteFilter") })]
+				}), react.createElement("style", null, discoveryCss), react.createElement(SearchStatus, { state: contentSearch, t }), react.createElement(SessionHealthPanel, { key: archiveTab, t, isArchived, items: details.items, sessions: groups.flatMap(group => group.sessions), diagnoseSession, repairSession, retry: details.retry, pending: details.pending }), organizeBatch && (0, react_jsx_runtime.jsx)(OrganizerPanel, {
 					t, archived: isArchived, busy: busy || favoriteBusy || unarchivingSessionIds.size > 0, ready: favoritesReady,
 					days: idleDays, onDays: setIdleDays, count: idleCandidates.length,
 					onPreview: () => { requestArchive(idleCandidates); setIdleRequest(true); },
-					progress: batchProgress, result: batchResult,
+					progress: batchProgress, result: batchResult?.tab === archiveTab ? batchResult : null,
 					onRetry: () => { const retry = retryBatch.current; if (retry) { if (retry.kind === "delete") setDeleteTarget({ kind: "batch", target: { scope: "sessions", sessionIds: retry.ids }, count: retry.ids.length }); else executeBatch(retry.kind, retry.ids, { idle: retry.idle, retry: true }); } },
 					undoCount: lastArchive.filter((id) => workspaceState.archivedSessionIds.includes(id)).length,
 					onUndo: () => executeBatch("undo", lastArchive, { retry: true }), onReload: loadFavorites
@@ -624,7 +636,7 @@ window.__ModuleLoader__.load({
 						className: "dsham_settingsGroup",
 						children: [(0, react_jsx_runtime.jsxs)("div", {
 							className: "dsham_settingsGroupHeading",
-							children: [(0, react_jsx_runtime.jsx)("h3", { className: "dsham_settingsGroupTitle", children: (0, react_jsx_runtime.jsxs)("button", { type: "button", className: "dsham_groupToggle", "aria-expanded": !collapsedGroups.has(group.key), "aria-controls": "dsham-group-" + encodeURIComponent(group.key), onClick: () => setCollapsedGroups((previous) => { const next = new Set(previous); if (next.has(group.key)) next.delete(group.key); else next.add(group.key); return next; }), children: [(0, react_jsx_runtime.jsx)(collapsedGroups.has(group.key) ? _deepseek_ai_dsh_client_ui_primitives.IconChevronRightOutline14 : _deepseek_ai_dsh_client_ui_primitives.IconChevronDownOutline14, {}), (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderOpenOutline16, {}), (0, react_jsx_runtime.jsx)("span", { children: group.title })] }) }), (0, react_jsx_runtime.jsxs)("div", { className: "dsham_settingsGroupMeta", children: [(0, react_jsx_runtime.jsx)("span", { className: "dsham_settingsCount", children: t("archives.sessionCount", { n: count }) }), (0, react_jsx_runtime.jsx)(ArchivedGroupActions, { group, busy, onArchive: isArchived ? undefined : () => requestArchive(groupSessionIds, group), onRestore: () => onBatchUnarchive(target), onDelete: () => setDeleteTarget({ kind: "batch", target, title: group.title, count }), t })] })]
+							children: [(0, react_jsx_runtime.jsx)("h3", { className: "dsham_settingsGroupTitle", children: (0, react_jsx_runtime.jsxs)("button", { type: "button", className: "dsham_groupToggle", "aria-expanded": !collapsedGroups.has(group.key), "aria-controls": "dsham-group-" + encodeURIComponent(group.key), onClick: () => setCollapsedGroups((previous) => { const next = new Set(previous); if (next.has(group.key)) next.delete(group.key); else next.add(group.key); return next; }), children: [(0, react_jsx_runtime.jsx)(collapsedGroups.has(group.key) ? _deepseek_ai_dsh_client_ui_primitives.IconChevronRightOutline14 : _deepseek_ai_dsh_client_ui_primitives.IconChevronDownOutline14, {}), (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderOpenOutline16, {}), (0, react_jsx_runtime.jsx)("span", { children: group.title })] }) }), (0, react_jsx_runtime.jsxs)("div", { className: "dsham_settingsGroupMeta", children: [(0, react_jsx_runtime.jsx)("span", { className: "dsham_settingsCount", children: t("archives.sessionCount", { n: group.sessions.length }) }), (0, react_jsx_runtime.jsx)(ArchivedGroupActions, { group, busy, onArchive: isArchived ? undefined : () => requestArchive(groupSessionIds, group), onRestore: () => onBatchUnarchive(target), onDelete: () => setDeleteTarget({ kind: "batch", target, title: group.title, count }), t })] })]
 						}), (0, react_jsx_runtime.jsx)("div", {
 							className: "dsham_settingsList", id: "dsham-group-" + encodeURIComponent(group.key), hidden: collapsedGroups.has(group.key),
 							children: !collapsedGroups.has(group.key) && group.sessions.map((session) => (0, react_jsx_runtime.jsxs)("article", {
@@ -634,21 +646,21 @@ window.__ModuleLoader__.load({
                     (0, react_jsx_runtime.jsx)(ArchiveSelectionCheckbox, { checked: selectedSessionIdSet.has(session.id), disabled: busy, label: t("archives.selectSession", { name: displayTitle(session, t) }), onChange: (event) => toggleSessionSelection(session.id, event.target.checked) }),
                     (0, react_jsx_runtime.jsxs)("div", { className: "dsham_settingsContent", children: [
                       (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsTitleLink", title: displayTitle(session, t), "aria-label": t("archives.openSession") + "：" + displayTitle(session, t), disabled: busy || unarchivingSessionIds.has(session.id), onClick: () => viewConversation(session), children: displayTitle(session, t) }),
-                      (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsMeta", children: archiveTimeLabel(session.updatedAt, t) }), contentMatches.has(session.id) && react.createElement("button", { type: "button", className: "dsham_settingsSnippet", disabled: busy, title: t("discovery.preview"), onClick: () => preview.open(session, query) }, react.createElement(HighlightedText, { text: contentMatches.get(session.id).snippet, query }))
+                      (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsMeta", children: [archiveTimeLabel(session.updatedAt, t), sessionDetails && react.createElement("span", { key: "turns", title: details.byId[session.id]?.error || t("details.hint") }, " · ", t(typeof details.byId[session.id]?.turnCount === "number" ? "details.turns" : details.byId[session.id] ? "details.unknown" : "details.pending", { n: details.byId[session.id]?.turnCount }))] }), contentMatches.has(session.id) && react.createElement("button", { type: "button", className: "dsham_settingsSnippet", disabled: busy, title: t(isArchived ? "discovery.preview" : "archives.openSession"), onClick: () => isArchived ? preview.open(session, query) : viewConversation(session) }, react.createElement(HighlightedText, { text: contentMatches.get(session.id).snippet, query }))
                     ] }),
                     (0, react_jsx_runtime.jsxs)("div", { className: "dsham_settingsActions", children: [
                       setSessionFavorite && (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_favorite", title: t(favoriteSet.has(session.id) ? "organizer.unfavorite" : "organizer.favorite"), "aria-pressed": favoriteSet.has(session.id), "aria-label": t(favoriteSet.has(session.id) ? "organizer.unfavorite" : "organizer.favorite") + "：" + displayTitle(session, t), disabled: busy || favoriteBusy || !favoritesReady, onClick: () => toggleFavorite(session.id), children: (0, react_jsx_runtime.jsx)("span", { "aria-hidden": true, children: favoriteSet.has(session.id) ? "★" : "☆" }) }),
                       (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_restoreIcon", title: t(isArchived ? "archives.restore" : "archives.archiveSelected"), "aria-label": t(isArchived ? "archives.restore" : "archives.archiveSelected"), disabled: busy || unarchivingSessionIds.has(session.id), onClick: () => isArchived ? onUnarchive(session.id) : requestArchive([session.id]), children: (0, react_jsx_runtime.jsx)(isArchived ? _deepseek_ai_dsh_client_ui_primitives.IconRefreshOutline16 : _deepseek_ai_dsh_client_ui_primitives.IconArchiveOutline20, { size: 16 }) }),
-                      isArchived && (0, react_jsx_runtime.jsx)(ArchivedSessionMenu, { busy: busy || unarchivingSessionIds.has(session.id), t, title: displayTitle(session, t), onPreview: previewArchivedSession ? () => preview.open(session, query) : undefined, onRestoreOpen: () => viewConversation(session, true), onDelete: () => setDeleteTarget({ kind: "session", session }) })
+                      (isArchived || sessionDetails) && (0, react_jsx_runtime.jsx)(ArchivedSessionMenu, { busy: busy || unarchivingSessionIds.has(session.id), t, title: displayTitle(session, t), onCopyId: () => copyDetail(session, "id"), onCopyPath: sessionDetails ? () => copyDetail(session, "path") : undefined, onPreview: isArchived && previewArchivedSession ? () => preview.open(session, query) : undefined, onRestoreOpen: isArchived ? () => viewConversation(session, true) : undefined, onDelete: isArchived ? () => setDeleteTarget({ kind: "session", session }) : undefined })
                     ] })
                   ]
                 }, session.id))
 						})]
 					}, group.key);
 				}), react.createElement(_deepseek_ai_dsh_client_ui_primitives.Modal, {
-                    open: preview.target !== null, onClose: preview.close, closeLabel: t("close"), title: preview.target ? displayTitle(preview.target.session, t) : t("discovery.preview"),
+                    className: "dsham_previewDialog", contentClassName: "dsham_previewDialogContent", open: preview.target !== null, onClose: preview.close, closeLabel: t("close"), title: preview.target ? displayTitle(preview.target.session, t) : t("discovery.preview"),
                     footer: react.createElement(_deepseek_ai_dsh_client_ui_primitives.Button, { variant: "outline", disabled: busy, onClick: () => { if (preview.target) { const session = preview.target.session; preview.close(); return viewConversation(session); } } }, t("discovery.openFull")),
-                    children: react.createElement(PreviewContent, { preview, t })
+                    children: react.createElement(PreviewContent, { preview, t, MarkdownText: _deepseek_ai_dsh_client_ui_primitives.MarkdownText })
                 }), archiveTarget === null && error !== null && (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsError", role: "alert", children: error }), notice !== null && (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsStatus", role: "status", children: notice }), (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Modal, {
 					open: archiveTarget !== null,
 					onClose: closeArchive, closeLabel: t("close"),
@@ -3223,13 +3235,13 @@ window.__ModuleLoader__.load({
 		}
 		//#endregion
 		//#region dsh-archive-manager: settings section
-		const ARCHIVE_TABS_CSS = ".dsham_archiveTabs{display:flex;gap:24px;border-bottom:1px solid var(--dsw-alias-border-l2)}.dsham_archiveTab{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;padding:12px 2px;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-weight:600;cursor:pointer}.dsham_archiveTab[aria-selected=true]{border-bottom-color:var(--dsw-alias-button-primary-fill);color:var(--dsw-alias-label-primary)}.dsham_archiveTab:focus-visible{outline:2px solid var(--dsw-alias-state-success-primary);outline-offset:2px}.dsham_archiveTab:disabled{opacity:.5;cursor:not-allowed}@container(max-width:520px){.dsham_archiveTabs{gap:16px}}";
-		const ARCHIVE_SETTINGS_CSS = ".dsham_settings{container-type:inline-size;min-width:0;box-sizing:border-box;width:min(100%,760px);margin:0 auto;padding:0 0 32px;color:var(--dsw-alias-label-primary)}.dsham_settingsHeader{display:flex;flex-direction:column;align-items:stretch;gap:16px;margin-bottom:16px}.dsham_settings h2{margin:0;font-size:24px;line-height:32px;font-weight:600;letter-spacing:-.4px;white-space:nowrap}.dsham_settingsIntro{margin:12px 0 0;max-width:42em;color:var(--dsw-alias-label-tertiary);font-size:14px;line-height:22px}.dsham_settingsDanger{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;color:var(--dsw-alias-state-error-primary);background:transparent;border:1px solid var(--dsw-alias-state-error-primary);border-radius:8px;cursor:pointer;font:inherit;font-size:13px;font-weight:500}.dsham_settingsDanger:hover{background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 20%,transparent)}.dsham_settingsToolbar{display:grid;grid-template-columns:minmax(150px,1fr) repeat(3,minmax(0,126px));align-items:center;gap:8px;margin-bottom:16px}.dsham_settingsSearch{display:flex;align-items:center;gap:8px;min-width:0;flex:1;height:32px;padding:0 12px;color:var(--dsw-alias-label-tertiary);background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-button-elevated-fill));border:1px solid var(--dsw-alias-border-l2);border-radius:8px}.dsham_settingsSearch:focus-within{border-color:var(--dsw-alias-label-tertiary)}.dsham_settingsSearch input{width:100%;min-width:0;padding:0;color:var(--dsw-alias-label-primary);background:transparent;border:0;outline:0;font:inherit;font-size:12px}.dsham_settingsSearch input::placeholder{color:var(--dsw-alias-label-tertiary)}.dsham_settingsFilter{position:relative;min-width:0;flex:none}.dsham_selectTrigger{box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:32px;padding:0 10px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-button-elevated-fill));border:1px solid var(--dsw-alias-border-l2);border-radius:8px;cursor:pointer;font:inherit;font-size:13px;line-height:20px;text-align:left}.dsham_selectTrigger:hover{background:var(--dsw-alias-interactive-bg-hover)}.dsham_selectTrigger:focus-visible{outline:2px solid var(--dsw-alias-state-success-primary);outline-offset:2px}.dsham_selectTrigger[aria-expanded='true']{border-color:var(--dsw-alias-state-success-primary)}.dsham_selectValue{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dsham_selectCaret{flex:none;width:12px;height:12px;color:var(--dsw-alias-label-tertiary)}.dsham_selectMenu{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:30;box-sizing:border-box;min-width:100%;max-height:280px;overflow:auto;padding:4px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2));box-shadow:var(--dsw-shadow-lv3)}.dsham_selectOption{box-sizing:border-box;display:flex;align-items:center;width:100%;min-height:32px;padding:0 10px;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;line-height:20px;text-align:left;cursor:pointer}.dsham_selectOption:hover,.dsham_selectOption[data-active='true']{background:var(--dsw-alias-interactive-bg-hover)}.dsham_selectOption[aria-selected='true']{color:var(--dsw-alias-state-success-primary)}.dsham_settingsGroup{margin:0 0 20px}.dsham_settingsGroupHeading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 14px}.dsham_settingsGroupTitle{display:flex;align-items:center;gap:8px;min-width:0;margin:0;color:var(--dsw-alias-label-primary);font-size:13px;font-weight:600}.dsham_settingsGroupTitle svg{flex:none;color:var(--dsw-alias-label-secondary)}.dsham_settingsCount{flex:none;color:var(--dsw-alias-label-tertiary);font-size:12px}.dsham_settingsList{overflow:hidden;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-2,var(--dsw-alias-button-elevated-fill))}.dsham_settingsRow{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:12px;min-height:64px;padding:10px 12px;border-bottom:1px solid var(--dsw-alias-border-l2)}.dsham_settingsRow:last-child{border-bottom:0}.dsham_settingsContent{min-width:0;flex:1}.dsham_settingsTitle{overflow:hidden;color:var(--dsw-alias-label-primary);font-size:13px;font-weight:600;line-height:18px;text-overflow:ellipsis;white-space:nowrap}.dsham_settingsMeta{margin-top:2px;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px}.dsham_settingsActions{display:flex;align-items:center;gap:4px;flex:none}.dsham_settingsAction{min-height:32px;padding:0 12px;color:var(--dsw-alias-label-primary);background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;cursor:pointer;font:inherit;font-size:13px;font-weight:500}.dsham_settingsAction:hover{filter:brightness(1.12)}.dsham_settingsDelete{display:flex;align-items:center;justify-content:center;width:28px;height:28px;color:var(--dsw-alias-label-tertiary);background:transparent;border:0;border-radius:8px;cursor:pointer}.dsham_settingsDelete:hover{color:var(--dsw-alias-state-error-primary);background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsEmpty{padding:28px 8px;color:var(--dsw-alias-label-secondary);text-align:center}.dsham_settingsError{margin-top:10px;color:var(--dsw-alias-state-error-primary);font-size:12px}@container(max-width:520px){.dsham_settingsHeader{margin-bottom:16px}.dsham_settingsToolbar{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:16px}.dsham_settingsSearch{grid-column:1/-1}.dsham_settingsFilter{flex:1;min-width:0}.dsham_settingsGroup{margin-bottom:32px}.dsham_settingsRow{padding:10px 12px}.dsham_settingsActions{gap:4px}}";
-		const ARCHIVE_SETTINGS_BATCH_CSS = ".dsham_favorite,.dsham_restoreIcon{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;border:0;background:transparent;border-radius:6px;color:var(--dsw-alias-label-secondary);cursor:pointer}.dsham_favorite{font-size:22px}.dsham_favorite[aria-pressed=true]{color:#eab308}.dsham_favorite:hover,.dsham_restoreIcon:hover{background:var(--dsw-alias-interactive-bg-hover)}.dsham_favorite:disabled,.dsham_restoreIcon:disabled{opacity:.5;cursor:not-allowed}.dsham_settingsTitleLink{display:block;max-width:100%;padding:0;border:0;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;font-weight:600;line-height:20px;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.dsham_settingsTitleLink:hover:not(:disabled){text-decoration:underline;text-underline-offset:3px}.dsham_settingsTitleLink:disabled{cursor:default;opacity:.6}.dsham_groupToggle{display:flex;align-items:center;gap:8px;min-width:0;max-width:100%;padding:4px 0;border:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}.dsham_groupToggle span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dsham_settingsRow:hover{background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsRow[data-selected=true]{background:color-mix(in srgb,var(--dsw-alias-state-business-primary,#3b82f6) 9%,transparent)}.dsham_settingsTitleLink:focus-visible,.dsham_groupToggle:focus-visible,.dsham_favorite:focus-visible,.dsham_restoreIcon:focus-visible,.dsham_settingsGroupMenu:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary,#3b82f6);outline-offset:2px}.dsham_selectTrigger:disabled{opacity:.5;cursor:not-allowed}@container(max-width:620px){.dsham_settingsToolbar{grid-template-columns:repeat(3,minmax(0,1fr))}.dsham_settingsSearch{grid-column:1/-1}}@container(max-width:400px){.dsham_settingsRow{gap:8px;padding:10px 8px}.dsham_settingsActions{gap:0}.dsham_settingsMeta{font-size:11px}.dsham_selectTrigger{font-size:12px;padding:0 8px}}.dsham_settingsHeaderActions,.dsham_settingsGroupMeta{display:flex;align-items:center;gap:8px;flex:none;flex-wrap:wrap}.dsham_settingsRestoreAll{display:inline-flex;align-items:center;min-height:32px;padding:0 12px;color:var(--dsw-alias-label-primary);background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;cursor:pointer;font:inherit;font-size:13px;font-weight:500}.dsham_settingsRestoreAll:hover{background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsRestoreAll:disabled,.dsham_settingsDanger:disabled,.dsham_settingsGroupMenu:disabled{cursor:not-allowed;opacity:.5}.dsham_settingsGroupMenu{display:flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;color:var(--dsw-alias-label-tertiary);background:transparent;border:0;border-radius:8px;cursor:pointer}.dsham_settingsGroupMenu:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsStatus{margin-top:10px;color:var(--dsw-alias-label-secondary);font-size:12px}@media(max-width:720px){.dsham_settingsHeader{flex-direction:column}.dsham_settingsHeaderActions{align-self:flex-start}}";
-		const ARCHIVE_SETTINGS_EXTERNAL_LINK_CSS = ".dsham_settingsTitleRow{display:flex;align-items:center;gap:8px 12px;min-width:0;flex-wrap:wrap}.dsham_settingsLinks{display:flex;align-items:center;gap:4px;flex-wrap:wrap}.dsham_settingsExternalLink{display:inline-flex;align-items:center;gap:5px;min-height:28px;padding:0 8px;color:var(--dsw-alias-label-secondary);background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:7px;font-size:12px;font-weight:500;line-height:18px;text-decoration:none;white-space:nowrap}.dsham_settingsExternalLink:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsExternalLink:focus-visible{outline:2px solid var(--dsw-alias-state-success-primary);outline-offset:2px}.dsham_settingsExternalLink svg{flex:none}@media(max-width:720px){.dsham_settingsTitleRow{flex-wrap:wrap}}";
+		const ARCHIVE_TABS_CSS = ".dsham_archiveTabs{display:flex;gap:24px;border-bottom:1px solid var(--dsw-alias-border-l2)}.dsham_archiveTab{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;padding:12px 2px;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-weight:600;cursor:pointer}.dsham_archiveTab[aria-selected=true]{border-bottom-color:var(--dsw-alias-button-primary-fill);color:var(--dsw-alias-label-primary)}.dsham_archiveTab:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}.dsham_archiveTab:disabled{opacity:.5;cursor:not-allowed}@container(max-width:520px){.dsham_archiveTabs{gap:16px}}";
+		const ARCHIVE_SETTINGS_CSS = ".dsham_settings{container-type:inline-size;min-width:0;box-sizing:border-box;width:min(100%,760px);margin:0 auto;padding:0 0 32px;color:var(--dsw-alias-label-primary)}.dsham_settingsHeader{display:flex;flex-direction:column;align-items:stretch;gap:16px;margin-bottom:16px}.dsham_settings h2{margin:0;font-size:24px;line-height:32px;font-weight:600;letter-spacing:-.4px;white-space:nowrap}.dsham_settingsIntro{margin:12px 0 0;max-width:42em;color:var(--dsw-alias-label-tertiary);font-size:14px;line-height:22px}.dsham_settingsDanger{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;color:var(--dsw-alias-state-error-primary);background:transparent;border:1px solid var(--dsw-alias-state-error-primary);border-radius:8px;cursor:pointer;font:inherit;font-size:13px;font-weight:500}.dsham_settingsDanger:hover{background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 20%,transparent)}.dsham_settingsToolbar{display:grid;grid-template-columns:minmax(150px,1fr) repeat(3,minmax(0,126px));align-items:center;gap:8px;margin-bottom:16px}.dsham_settingsSearch{display:flex;align-items:center;gap:8px;min-width:0;flex:1;height:32px;padding:0 12px;color:var(--dsw-alias-label-tertiary);background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-button-elevated-fill));border:1px solid var(--dsw-alias-border-l2);border-radius:8px}.dsham_settingsSearch:focus-within{border-color:var(--dsw-alias-label-tertiary)}.dsham_settingsSearch input{width:100%;min-width:0;padding:0;color:var(--dsw-alias-label-primary);background:transparent;border:0;outline:0;font:inherit;font-size:12px}.dsham_settingsSearch input::placeholder{color:var(--dsw-alias-label-tertiary)}.dsham_settingsFilter{position:relative;min-width:0;flex:none}.dsham_selectTrigger{box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:32px;padding:0 10px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-button-elevated-fill));border:1px solid var(--dsw-alias-border-l2);border-radius:8px;cursor:pointer;font:inherit;font-size:13px;line-height:20px;text-align:left}.dsham_selectTrigger:hover{background:var(--dsw-alias-interactive-bg-hover)}.dsham_selectTrigger:focus-visible{outline:2px solid var(--dsw-alias-label-secondary);outline-offset:2px}.dsham_selectTrigger[aria-expanded='true']{border-color:var(--dsw-alias-label-tertiary)}.dsham_selectValue{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dsham_selectCaret{flex:none;width:12px;height:12px;color:var(--dsw-alias-label-tertiary)}.dsham_selectMenu{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:30;box-sizing:border-box;min-width:100%;max-height:280px;overflow:auto;padding:4px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2));box-shadow:var(--dsw-shadow-lv3)}.dsham_selectOption{box-sizing:border-box;display:flex;align-items:center;width:100%;min-height:32px;padding:0 10px;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;line-height:20px;text-align:left;cursor:pointer}.dsham_selectOption:hover,.dsham_selectOption[data-active='true']{background:var(--dsw-alias-interactive-bg-hover)}.dsham_selectOption[aria-selected='true']{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsGroup{margin:0 0 20px}.dsham_settingsGroupHeading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 14px}.dsham_settingsGroupTitle{display:flex;align-items:center;gap:8px;min-width:0;margin:0;color:var(--dsw-alias-label-primary);font-size:13px;font-weight:600}.dsham_settingsGroupTitle svg{flex:none;color:var(--dsw-alias-label-secondary)}.dsham_settingsCount{flex:none;color:var(--dsw-alias-label-tertiary);font-size:12px}.dsham_settingsList{overflow:hidden;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-2,var(--dsw-alias-button-elevated-fill))}.dsham_settingsRow{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:12px;min-height:64px;padding:10px 12px;border-bottom:1px solid var(--dsw-alias-border-l2)}.dsham_settingsRow:last-child{border-bottom:0}.dsham_settingsContent{min-width:0;flex:1}.dsham_settingsTitle{overflow:hidden;color:var(--dsw-alias-label-primary);font-size:13px;font-weight:600;line-height:18px;text-overflow:ellipsis;white-space:nowrap}.dsham_settingsMeta{margin-top:2px;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px}.dsham_settingsActions{display:flex;align-items:center;gap:4px;flex:none}.dsham_settingsAction{min-height:32px;padding:0 12px;color:var(--dsw-alias-label-primary);background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;cursor:pointer;font:inherit;font-size:13px;font-weight:500}.dsham_settingsAction:hover{filter:brightness(1.12)}.dsham_settingsDelete{display:flex;align-items:center;justify-content:center;width:28px;height:28px;color:var(--dsw-alias-label-tertiary);background:transparent;border:0;border-radius:8px;cursor:pointer}.dsham_settingsDelete:hover{color:var(--dsw-alias-state-error-primary);background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsEmpty{padding:28px 8px;color:var(--dsw-alias-label-secondary);text-align:center}.dsham_settingsError{margin-top:10px;color:var(--dsw-alias-state-error-primary);font-size:12px}@container(max-width:520px){.dsham_settingsHeader{margin-bottom:16px}.dsham_settingsToolbar{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:16px}.dsham_settingsSearch{grid-column:1/-1}.dsham_settingsFilter{flex:1;min-width:0}.dsham_settingsGroup{margin-bottom:32px}.dsham_settingsRow{padding:10px 12px}.dsham_settingsActions{gap:4px}}";
+		const ARCHIVE_SETTINGS_BATCH_CSS = ".dsham_favorite,.dsham_restoreIcon{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;border:0;background:transparent;border-radius:6px;color:var(--dsw-alias-label-secondary);cursor:pointer}.dsham_favorite{font-size:22px}.dsham_favorite[aria-pressed=true]{color:var(--dsw-alias-state-warn-primary)}.dsham_favorite:hover,.dsham_restoreIcon:hover{background:var(--dsw-alias-interactive-bg-hover)}.dsham_favorite:disabled,.dsham_restoreIcon:disabled{opacity:.5;cursor:not-allowed}.dsham_settingsTitleLink{display:block;max-width:100%;padding:0;border:0;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;font-weight:600;line-height:20px;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.dsham_settingsTitleLink:hover:not(:disabled){text-decoration:underline;text-underline-offset:3px}.dsham_settingsTitleLink:disabled{cursor:default;opacity:.6}.dsham_groupToggle{display:flex;align-items:center;gap:8px;min-width:0;max-width:100%;padding:4px 0;border:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}.dsham_groupToggle span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dsham_settingsRow:hover{background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsRow[data-selected=true]{background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsTitleLink:focus-visible,.dsham_groupToggle:focus-visible,.dsham_favorite:focus-visible,.dsham_restoreIcon:focus-visible,.dsham_settingsGroupMenu:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary,#3b82f6);outline-offset:2px}.dsham_selectTrigger:disabled{opacity:.5;cursor:not-allowed}@container(max-width:620px){.dsham_settingsToolbar{grid-template-columns:repeat(3,minmax(0,1fr))}.dsham_settingsSearch{grid-column:1/-1}}@container(max-width:400px){.dsham_settingsRow{gap:8px;padding:10px 8px}.dsham_settingsActions{gap:0}.dsham_settingsMeta{font-size:11px}.dsham_selectTrigger{font-size:12px;padding:0 8px}}.dsham_settingsHeaderActions,.dsham_settingsGroupMeta{display:flex;align-items:center;gap:8px;flex:none;flex-wrap:wrap}.dsham_settingsRestoreAll{display:inline-flex;align-items:center;min-height:32px;padding:0 12px;color:var(--dsw-alias-label-primary);background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;cursor:pointer;font:inherit;font-size:13px;font-weight:500}.dsham_settingsRestoreAll:hover{background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsRestoreAll:disabled,.dsham_settingsDanger:disabled,.dsham_settingsGroupMenu:disabled{cursor:not-allowed;opacity:.5}.dsham_settingsGroupMenu{display:flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;color:var(--dsw-alias-label-tertiary);background:transparent;border:0;border-radius:8px;cursor:pointer}.dsham_settingsGroupMenu:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsStatus{margin-top:10px;color:var(--dsw-alias-label-secondary);font-size:12px}@media(max-width:720px){.dsham_settingsHeader{flex-direction:column}.dsham_settingsHeaderActions{align-self:flex-start}}";
+		const ARCHIVE_SETTINGS_EXTERNAL_LINK_CSS = ".dsham_settingsTitleRow{display:flex;align-items:center;gap:8px 12px;min-width:0;flex-wrap:wrap}.dsham_settingsLinks{display:flex;align-items:center;gap:4px;flex-wrap:wrap}.dsham_settingsExternalLink{display:inline-flex;align-items:center;gap:5px;min-height:28px;padding:0 8px;color:var(--dsw-alias-label-secondary);background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:7px;font-size:12px;font-weight:500;line-height:18px;text-decoration:none;white-space:nowrap}.dsham_settingsExternalLink:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsExternalLink:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}.dsham_settingsExternalLink svg{flex:none}@media(max-width:720px){.dsham_settingsTitleRow{flex-wrap:wrap}}";
 		const ARCHIVE_SETTINGS_DELETE_CONFIRM_CSS = ".dsham_settingsDeleteConfirm{color:var(--dsw-alias-state-error-primary)!important;background:transparent!important;border-color:var(--dsw-alias-state-error-primary)!important}.dsham_settingsDeleteConfirm:hover:not(:disabled){background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 20%,transparent)!important}.dsham_settingsDeleteConfirm:focus-visible{outline:2px solid var(--dsw-alias-state-error-secondary);outline-offset:2px}.dsham_settingsDeleteConfirm:disabled{cursor:not-allowed;opacity:.5}";
 		const ARCHIVE_WORKSPACE_CONFIRM_CSS = ".dsham_archiveWorkspaceConfirm{color:var(--dsw-alias-state-error-primary)!important;background:transparent!important;border-color:var(--dsw-alias-state-error-primary)!important}.dsham_archiveWorkspaceConfirm:hover:not(:disabled){background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 20%,transparent)!important}.dsham_archiveWorkspaceConfirm:focus-visible{outline:2px solid var(--dsw-alias-state-error-secondary);outline-offset:2px}.dsham_archiveWorkspaceConfirm:disabled{cursor:not-allowed;opacity:.5}";
-		const ARCHIVE_SETTINGS_SELECTION_CSS = ".dsham_settingsSelection{margin:-8px 0 16px;padding:4px 0 12px;border-bottom:1px solid var(--dsw-alias-border-l2)}.dsham_settingsSelectionMain{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;min-height:36px}.dsham_settingsSelectionSummary{display:flex;flex-wrap:wrap;align-items:center;gap:12px;min-width:0;max-width:100%}.dsham_settingsSelectionToggle{display:inline-flex;flex:none;white-space:nowrap;align-items:center;gap:12px;color:var(--dsw-alias-label-primary);font-size:13px;line-height:20px;cursor:pointer}.dsham_settingsCheckbox{flex:none;width:16px;height:16px;margin:0;accent-color:var(--dsw-alias-state-business-primary,#3b82f6)}.dsham_settingsSelectionClear{flex:none;min-height:28px;padding:0 0 0 12px;border:0;border-left:1px solid var(--dsw-alias-border-l2);background:transparent;color:var(--dsw-alias-state-business-primary,#3b82f6);font:inherit;font-size:13px;white-space:nowrap;cursor:pointer}.dsham_settingsSelectionClear:hover:not(:disabled){text-decoration:underline}.dsham_settingsSelectionActions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;max-width:100%;margin-left:auto}.dsham_settingsSelectionAction{flex:none;white-space:nowrap;min-height:32px;padding:0 14px;color:var(--dsw-alias-label-primary);background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:7px;cursor:pointer;font:inherit;font-size:13px;font-weight:500}.dsham_settingsSelectionAction:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsSelectionArchive,.dsham_settingsSelectionDelete{color:var(--dsw-alias-state-error-primary);border-color:var(--dsw-alias-state-error-primary)}.dsham_settingsSelectionScope{margin:8px 0 0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:20px;overflow-wrap:anywhere}.dsham_settingsSelectionAction:disabled,.dsham_settingsSelectionClear:disabled{cursor:not-allowed;opacity:.5}.dsham_settingsSelectionAction:focus-visible,.dsham_settingsSelectionClear:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary,#3b82f6);outline-offset:3px}";
+		const ARCHIVE_SETTINGS_SELECTION_CSS = ".dsham_settingsSelection{margin:-8px 0 16px;padding:4px 0 12px;border-bottom:1px solid var(--dsw-alias-border-l2)}.dsham_settingsSelectionMain{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;min-height:36px}.dsham_settingsSelectionSummary{display:flex;flex-wrap:wrap;align-items:center;gap:12px;min-width:0;max-width:100%}.dsham_settingsSelectionToggle{display:inline-flex;flex:none;white-space:nowrap;align-items:center;gap:12px;color:var(--dsw-alias-label-primary);font-size:13px;line-height:20px;cursor:pointer}.dsham_settingsCheckbox{flex:none;width:16px;height:16px;margin:0;accent-color:var(--dsw-alias-brand-primary)}.dsham_settingsSelectionClear{flex:none;min-height:28px;padding:0 0 0 12px;border:0;border-left:1px solid var(--dsw-alias-border-l2);background:transparent;color:var(--dsw-alias-state-business-primary,#3b82f6);font:inherit;font-size:13px;white-space:nowrap;cursor:pointer}.dsham_settingsSelectionClear:hover:not(:disabled){text-decoration:underline}.dsham_settingsSelectionActions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;max-width:100%;margin-left:auto}.dsham_settingsSelectionAction{flex:none;white-space:nowrap;min-height:32px;padding:0 14px;color:var(--dsw-alias-label-primary);background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:7px;cursor:pointer;font:inherit;font-size:13px;font-weight:500}.dsham_settingsSelectionAction:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsSelectionArchive,.dsham_settingsSelectionDelete{color:var(--dsw-alias-state-error-primary);border-color:var(--dsw-alias-state-error-primary)}.dsham_settingsSelectionScope{margin:8px 0 0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:20px;overflow-wrap:anywhere}.dsham_settingsSelectionAction:disabled,.dsham_settingsSelectionClear:disabled{cursor:not-allowed;opacity:.5}.dsham_settingsSelectionAction:focus-visible,.dsham_settingsSelectionClear:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary,#3b82f6);outline-offset:3px}";
 		const ARCHIVE_SETTINGS_LAYOUT_OVERRIDE = ".dsham_settings{margin:0 auto!important}@media(max-width:720px){.dsham_settings{margin:0 auto!important}}";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify("dsh-archive-manager/ArchiveSettings.layout.css") + "]") === null) {
 			const tag = document.createElement("style");
@@ -3413,16 +3425,18 @@ window.__ModuleLoader__.load({
 			});
 		}
 		/** 低频和危险操作收进菜单，复用宿主的焦点、键盘及弹出层行为。 */
-		function ArchivedSessionMenu({ busy, title, t, onPreview, onRestoreOpen, onDelete }) {
+		function ArchivedSessionMenu({ busy, title, t, onPreview, onRestoreOpen, onDelete, onCopyId, onCopyPath }) {
 			const [open, setOpen] = (0, react.useState)(false);
 			return (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Menu, {
 				open, onClose: () => setOpen(false), portal: true, align: "end", autoFocus: true,
 				items: [
 					...onPreview ? [{ id: "preview", label: t("discovery.preview"), icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconSearchOutline16, {}) }] : [],
-                    { id: "restoreOpen", label: t("archives.restoreOpen"), icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconRefreshOutline16, {}) },
-					{ id: "delete", label: t("menu.deleteSession"), icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconTrashOutline16, {}), danger: true }
+                    ...onRestoreOpen ? [{ id: "restoreOpen", label: t("archives.restoreOpen"), icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconRefreshOutline16, {}) }] : [],
+                    ...onCopyId ? [{ id: "copyId", label: t("details.copyId"), icon: react.createElement(_deepseek_ai_dsh_client_ui_primitives.IconCopyOutline16, {}) }] : [],
+                    ...onCopyPath ? [{ id: "copyPath", label: t("details.copyPath"), icon: react.createElement(_deepseek_ai_dsh_client_ui_primitives.IconFolderOpenOutline16, {}) }] : [],
+					...onDelete ? [{ id: "delete", label: t("menu.deleteSession"), icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconTrashOutline16, {}), danger: true }] : []
 				],
-				onSelect: (id) => { setOpen(false); if (busy) return; if (id === "preview") return onPreview?.(); if (id === "restoreOpen") return onRestoreOpen(); if (id === "delete") onDelete(); },
+				onSelect: (id) => { setOpen(false); if (busy) return; if (id === "copyId") return onCopyId?.(); if (id === "copyPath") return onCopyPath?.(); if (id === "preview") return onPreview?.(); if (id === "restoreOpen") return onRestoreOpen(); if (id === "delete") onDelete(); },
 				anchor: (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsGroupMenu", disabled: busy, title: t("archives.moreActions"), "aria-label": t("archives.moreActions") + "：" + title, "aria-haspopup": "menu", "aria-expanded": open, onClick: () => setOpen(value => !value), children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconEllipsisOutline16, {}) })
 			});
 		}
@@ -3560,13 +3574,17 @@ window.__ModuleLoader__.load({
 		* 归档设置页排序：时间排序同时按每组首条会话排列项目，字母排序则
 		* 同时排列项目名和组内标题；所有输入均复制后排序，不改写 store 快照。
 		*/
-		function sortArchivedGroups(groups, sortBy, createdAtById, t) {
+		function sortArchivedGroups(groups, sortBy, createdAtById, t, details = {}) {
 			const compareText = (left, right) => String(left).localeCompare(String(right), void 0, { numeric: true, sensitivity: "base" });
 			const timestampOf = (session) => {
-				const value = sortBy === "created" ? createdAtById[session.id] : session.updatedAt;
+				const value = sortBy === "created" ? (details[session.id]?.createdAt ?? createdAtById[session.id]) : session.updatedAt;
 				return typeof value === "number" && Number.isFinite(value) ? value : Number.NEGATIVE_INFINITY;
 			};
 			const compareSessions = (left, right) => {
+                if (sortBy === "turnsAsc" || sortBy === "turnsDesc") {
+                    const difference = compareTurnCounts(details[left.id]?.turnCount, details[right.id]?.turnCount, sortBy);
+                    if (difference) return difference;
+                }
 				if (sortBy !== "alphabetical") {
 					const byTime = timestampOf(right) - timestampOf(left);
 					if (Number.isFinite(byTime) && byTime !== 0) return byTime;
@@ -3575,6 +3593,10 @@ window.__ModuleLoader__.load({
 			};
 			const result = groups.map((group) => ({ ...group, sessions: [...group.sessions].sort(compareSessions) }));
 			return result.sort((left, right) => {
+                if (sortBy === "turnsAsc" || sortBy === "turnsDesc") {
+                    const difference = compareTurnCounts(details[left.sessions[0]?.id]?.turnCount, details[right.sessions[0]?.id]?.turnCount, sortBy);
+                    if (difference) return difference;
+                }
 				if (sortBy !== "alphabetical") {
 					const byTime = timestampOf(right.sessions[0]) - timestampOf(left.sessions[0]);
 					if (Number.isFinite(byTime) && byTime !== 0) return byTime;
@@ -3584,7 +3606,8 @@ window.__ModuleLoader__.load({
 		}
 
 		const zh = {
-			...organizerZh, ...discoveryZh,
+			...organizerZh, ...discoveryZh, ...healthZh,
+            "locale.language": "zh", "service.unavailable": "服务尚未就绪，请重试",
 			"archives.archiveProject": "归档该项目的全部聊天",
 			"archives.archiveUngrouped": "归档全部未分组聊天",
 			"archives.archiveProjectDesc": "将“{name}”中全部 {n} 条未归档会话归档，不受当前搜索筛选影响。之后可在“已归档”中恢复。",
@@ -3645,7 +3668,7 @@ window.__ModuleLoader__.load({
 			"archives.viewProject": "GitHub",
 			"archives.feedback": "问题反馈",
 			"archives.empty": "暂无已归档会话",
-			"archives.emptyFiltered": "没有匹配的已归档聊天",
+			"archives.emptyFiltered": "没有符合筛选条件的聊天",
 			"archives.searchPlaceholder": "搜索已归档聊天",
 			"archives.sortBy": "排序方式",
 			"archives.sortUpdated": "更新时间",
@@ -3738,7 +3761,8 @@ window.__ModuleLoader__.load({
 		};
 		/** English dictionary, checked complete against the zh key set. */
 		const en = {
-			...organizerEn, ...discoveryEn,
+			...organizerEn, ...discoveryEn, ...healthEn,
+            "locale.language": "en", "service.unavailable": "The service is not ready. Please retry.",
 			"archives.moreActions": "More actions",
 			"archives.archiveProject": "Archive all chats in this project",
 			"archives.archiveUngrouped": "Archive all ungrouped chats",
@@ -3799,7 +3823,7 @@ window.__ModuleLoader__.load({
 			"archives.viewProject": "GitHub",
 			"archives.feedback": "Issues",
 			"archives.empty": "No archived sessions.",
-			"archives.emptyFiltered": "No archived chats match your filters.",
+			"archives.emptyFiltered": "No chats match your filters.",
 			"archives.searchPlaceholder": "Search archived chats",
 			"archives.sortBy": "Sort archived chats",
 			"archives.sortUpdated": "Last updated",
@@ -4001,7 +4025,8 @@ window.__ModuleLoader__.load({
 				linksSelector: ".dsham_settingsLinks",
 				zhName: "归档会话",
 				enName: "Archived sessions",
-				createIcon: createPluginUpdateIcon
+				getLanguage: () => ctx.locale.bind(NS)("locale.language"),
+                createIcon: createPluginUpdateIcon
 			}), "dsh-archive-manager: plugin update ui");
 			// 侧栏先注册；导航适配等官方 uiWorkspace 出现再绑，否则打开归档会被官方清掉。
 			const uiWorkspaceAt = () => ctx.get("uiWorkspace");
@@ -4046,19 +4071,23 @@ window.__ModuleLoader__.load({
 			const unarchiveOne = createUnarchiveSession(ctx.workspaces, () => ctx.get("remote.workspaceRegistry"));
 			const favoriteCall = async (method, input) => {
 				const registry = ctx.get("remote.workspaceRegistry");
-				if (!registry || typeof registry[method] !== "function") throw new Error("收藏服务尚未就绪，请重试");
+				if (!registry || typeof registry[method] !== "function") throw new Error(ctx.locale.bind(NS)("service.unavailable"));
 				const result = input === undefined ? await registry[method]() : await registry[method](input);
 				if (!result.ok) throw new Error(result.error.message);
 				return result.value;
 			};
 			const discoveryCall = async (method, input) => {
                 const registry = ctx.get("remote.workspaceRegistry");
-                if (!registry || typeof registry[method] !== "function") throw new Error("归档检索服务尚未就绪，请重试");
+                if (!registry || typeof registry[method] !== "function") throw new Error(ctx.locale.bind(NS)("service.unavailable"));
                 const result = await registry[method](input);
                 if (!result.ok) throw new Error(result.error.message);
                 return result.value;
             };
+            const sessionDetails = input => discoveryCall("sessionDetails", input);
+            const diagnoseSession = input => discoveryCall("diagnoseSession", input);
+            const repairSession = input => discoveryCall("repairSession", input);
             const searchArchivedContent = input => discoveryCall("searchArchivedContent", input);
+            const searchSessionContent = input => discoveryCall("searchSessionContent", input);
             const previewArchivedSession = input => discoveryCall("previewArchivedSession", input);
             const favoriteSessions = () => favoriteCall("favoriteSessions");
 			const setSessionFavorite = (input) => favoriteCall("setSessionFavorite", input);
@@ -4067,7 +4096,7 @@ window.__ModuleLoader__.load({
 				archive: (id) => ctx.workspaces.archiveSession(id), restore: unarchiveOne,
 				deleteOne: async (id) => {
 					const registry = ctx.get("remote.workspaceRegistry");
-					if (!registry) throw new Error("归档服务尚未就绪，请重试");
+					if (!registry) throw new Error(ctx.locale.bind(NS)("service.unavailable"));
 					const result = await registry.deleteSession(id);
 					if (!result.ok) throw new Error(result.error.message);
 				},
@@ -4213,7 +4242,7 @@ window.__ModuleLoader__.load({
 					unarchiveSessions,
 					deleteArchivedSessions,
 					archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState: archiveViewState,
-					favoriteSessions, setSessionFavorite, organizeBatch, searchArchivedContent, previewArchivedSession,
+					favoriteSessions, setSessionFavorite, organizeBatch, diagnoseSession, repairSession, sessionDetails, searchSessionContent, searchArchivedContent, previewArchivedSession,
 					t: ctx.locale.bind(NS)
 				})
 			}, ArchivedSessionsSection));
@@ -4224,7 +4253,7 @@ window.__ModuleLoader__.load({
 			unarchivedSessionIds,
 			ArchiveSelectionToolbar,
 			ArchivedSessionsSection,
-			zh,
+			zh, en,
 			displayTitle,
 			sessionVisible,
 			indexSubagentDescendants,

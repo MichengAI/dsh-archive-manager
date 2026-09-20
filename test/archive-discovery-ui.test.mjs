@@ -59,3 +59,47 @@ test("日期浮层点击内部保持展开，点击外部关闭，卸载移除�
   listeners.get("pointerdown").fn({ target: outside }); assert.equal(root.open, false);
   cleanup(); assert.equal(listeners.size, 0);
 });
+
+test("详情分批读取取消后不发布旧结果，单批失败可重试", async () => {
+  const env = harness(); const calls = [];
+  let sessions = Array.from({ length: 21 }, (_, i) => ({ id: String(i), updatedAt: 1 }));
+  const call = input => new Promise((resolve, reject) => calls.push({ input, resolve, reject }));
+  const render = () => env.render(() => env.tools.useSessionDetails(sessions, call));
+  render(); assert.equal(calls[0].input.sessionIds.length, 20);
+  sessions = [{ id: "new", updatedAt: 2 }]; render();
+  calls[0].resolve({ items: [] }); await tick();
+  assert.equal(calls.length, 2, "取消旧查询后不再读取旧列表的下一批");
+  calls[1].reject(new Error("读取失败")); await tick();
+  let state = render(); assert.equal(state.byId.new.turnCount, null); assert.match(state.byId.new.error, /读取失败/);
+  state.retry(); render(); calls[2].resolve({ items: [{ sessionId: "new", turnCount: 5, path: "路径", error: "" }] }); await tick();
+  state = render(); assert.equal(state.byId.new.turnCount, 5); assert.equal(state.pending, false);
+  env.dispose();
+});
+
+test("快速预览默认使用宿主排版并允许切换原文高亮", () => {
+  const env = harness(); const MarkdownText = () => null;
+  const props = { t: key => key, MarkdownText, preview: { status: "ready", target: { query: "标题" }, value: { messages: [{ seq: 1, role: "assistant", text: "# 标题", truncated: false }], hasEarlier: false, hasLater: false } } };
+  const nodes = node => Array.isArray(node) ? node.flatMap(nodes) : node && typeof node === "object" ? [node, ...nodes(node.children)] : [];
+  let tree = env.render(() => env.tools.PreviewContent(props));
+  assert.ok(nodes(tree).some(node => node.type === MarkdownText && node.props.text === "# 标题"));
+  const raw = nodes(tree).find(node => node.type === "button" && node.children.includes("discovery.raw"));
+  assert.ok(raw); raw.props.onClick();
+  tree = env.render(() => env.tools.PreviewContent(props));
+  assert.equal(nodes(tree).some(node => node.type === MarkdownText), false);
+  assert.ok(nodes(tree).some(node => node.type?.name === "HighlightedText"));
+});
+
+test('预览按 Escape 只关闭自身，拦截外层设置关闭并在退出后清理监听', () => {
+  const previous=globalThis.window;
+  const target=new EventTarget();globalThis.window=target;
+  const env=harness();
+  try {
+    const render=()=>env.render(()=>env.tools.useArchivePreview(undefined,['a']));
+    let state=render();state.open({id:'a'});render();
+    let outer=0;target.addEventListener('keydown',()=>outer++);
+    const event=new Event('keydown',{cancelable:true});Object.defineProperty(event,'key',{value:'Escape'});
+    target.dispatchEvent(event);state=render();
+    assert.equal(state.target,null);assert.equal(outer,0);assert.equal(event.defaultPrevented,true);
+    target.dispatchEvent(new Event('keydown'));assert.equal(outer,1);
+  } finally {env.dispose();if(previous===undefined)delete globalThis.window;else globalThis.window=previous;}
+});

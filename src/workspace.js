@@ -1,4 +1,6 @@
-import { discoveryInvocations, searchInputSchema, previewInputSchema, extractConversation, findContentMatch, previewConversation } from "./archive-discovery.js";
+import * as SessionRuntime from "@deepseek-ai/dsh-session";
+import { prepareAutomationRepair } from "./session-repair.js";
+import { repairInputSchema, classifySessionError, detailsInputSchema, countConversationTurns, discoveryInvocations, searchInputSchema, previewInputSchema, extractConversation, findContentMatch, previewConversation } from "./archive-discovery.js";
 import { lstat, rm } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { WorkspaceRegistry } from "@deepseek-ai/dsh-workspace";
@@ -372,7 +374,11 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		markRemoteMethod(this, "favoriteSessions");
 		markRemoteMethod(this, "setSessionFavorite");
 		markRemoteMethod(this, "searchArchivedContent");
+        markRemoteMethod(this, "searchSessionContent");
 		markRemoteMethod(this, "previewArchivedSession");
+        markRemoteMethod(this, "sessionDetails");
+        markRemoteMethod(this, "diagnoseSession");
+        markRemoteMethod(this, "repairSession");
 		registerHostRemote(this.ctx);
 	}
 	/** 只读取归档日志；已有实时实例读取快照，不调用 prepare、enter 或恢复接口。 */
@@ -381,19 +387,120 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 			if (!this.requireState().archivedSessionIds.includes(sessionId)) throw new Error("会话已不在归档中，请刷新列表");
 		};
 		ensureArchived();
-		const live = this.ctx.get("sessions")?.get(sessionId);
-		let events;
-		if (typeof live?.snapshotEvents === "function") events = live.snapshotEvents();
-		else {
-			const persistence = this.ctx.get("sessionPersistence");
-			if (!persistence || (typeof persistence.readFrom !== "function" && typeof persistence.open !== "function")) throw new Error("当前宿主不支持只读会话，请打开完整会话查看");
-			events = (await this.readStoredProjectionSource(persistence, sessionId)).events;
-		}
+		const events = await this.readConversationEvents(sessionId);
 		ensureArchived();
 		return extractConversation(events);
 	}
-	/** 输入为限定批次的归档 ID 和纯文本关键词；逐条返回命中或失败，不静默漏掉会话。 */
-	async searchArchivedContent(input) {
+	/** 复用宿主只读接口读取事件，不激活会话。 */
+	async readConversationEvents(sessionId) {
+        const live = this.ctx.get("sessions")?.get(sessionId);
+        if (typeof live?.snapshotEvents === "function") return live.snapshotEvents();
+        const persistence = this.ctx.get("sessionPersistence");
+        if (!persistence || (typeof persistence.readFrom !== "function" && typeof persistence.open !== "function")) throw new Error("当前宿主不支持只读会话，请打开完整会话查看");
+        return (await this.readStoredProjectionSource(persistence, sessionId)).events;
+    }
+    /** 只读取当前宿主已知会话；路径由宿主定位，不根据错误文本或 ID 拼接。 */
+    async sessionDetails(input) {
+        const { sessionIds } = detailsInputSchema.parse(input);
+        const items = [];
+        for (const sessionId of sessionIds) {
+            const item = { sessionId, turnCount: null, path: null, error: "" };
+            try {
+                if (!(await this.sessionKnown(sessionId))) throw new Error("会话不存在，请刷新列表");
+                const header = await this.readSessionHeader(sessionId);
+                if (Number.isSafeInteger(header.createdAt) && header.createdAt >= 0) item.createdAt = header.createdAt;
+                const persistence = this.ctx.get("sessionPersistence");
+                try {
+                    const location = typeof persistence?.locate === "function" ? await persistence.locate(header) : undefined;
+                    if (typeof location?.path === "string") {
+                        // 新版 locate 指向当前代际目标，旧日志可能尚未生成该文件；官方布局复制会话目录。
+                        const path = jsonlSessionDirectory(persistence, header, location) ?? location.path;
+                        await lstat(path);
+                        item.path = path;
+                    }
+                } catch (error) { item.error = "路径不可用：" + String(error?.message ?? error).slice(0, 350); }
+                item.turnCount = countConversationTurns(await this.readConversationEvents(sessionId));
+            } catch (error) { item.error = String(error?.message ?? error).slice(0, 500); }
+            items.push(item);
+        }
+        return { items };
+    }
+    /** 诊断与执行共用同一工件校验；客户端不能提供文件路径。 */
+    async sessionRepairPlan(sessionId) {
+        if (!(await this.sessionKnown(sessionId))) throw new Error("会话不存在，请刷新列表");
+        await this.ensureSessionRepairIdle(sessionId);
+        const persistence = this.ctx.get("sessionPersistence");
+        const header = await this.readSessionHeader(sessionId);
+        const location = await persistence?.locate?.(header);
+        const directory = location && jsonlSessionDirectory(persistence, header, location);
+        if (!directory || !/^session\.v3\.jsonl(?:\.zstd)?$/.test(basename(location.path))) throw new Error("当前存储后端或格式不支持自动修复");
+        return prepareAutomationRepair({ directory, target: location.path, sessionId, format: { ...persistence.generationFormat, validateBytes: async bytes => {
+            if (location.path.endsWith(".zstd")) {
+                if (typeof persistence.readZstdPrefix !== "function") throw new Error("当前宿主缺少压缩日志校验能力");
+                const parsed = await persistence.readZstdPrefix(bytes);
+                if (parsed.meta.id !== sessionId || parsed.tornTruncateTo !== undefined) throw new Error("生成的压缩日志未通过宿主校验");
+            }
+        }, validate: artifact => {
+            if (typeof SessionRuntime.Session?.fromRestore !== "function") throw new Error("当前宿主缺少完整会话校验能力");
+            SessionRuntime.Session.fromRestore(artifact.header.id, artifact.events, artifact.header, artifact.inheritedEventCount, "detached");
+        } } });
+    }
+    async ensureSessionRepairIdle(sessionId) {
+        if (!this.requireState().archivedSessionIds.includes(sessionId)) throw new Error("请先归档会话，再进行修复");
+        if (this.ctx.get("sessions")?.get(sessionId)) throw new Error("会话仍在宿主内打开，请关闭会话并重启 DSH 后修复");
+    }
+    async diagnoseSession(input) {
+        const { sessionId } = repairInputSchema.parse(input);
+        const result = { sessionId, repairable: false, repaired: false, token: "", count: 0, reason: "", advice: "" };
+        try {
+            if (!(await this.sessionKnown(sessionId))) throw new Error("会话不存在，请刷新列表");
+            await this.readConversationEvents(sessionId);
+            return { ...result, code: "healthy", reason: "会话已可正常读取", advice: "刷新会话详情即可，无需修复。" };
+        } catch (error) {
+            const message = String(error?.message ?? error);
+            const diagnostic = classifySessionError(message);
+            result.code = diagnostic.code; result.reason = diagnostic.reason; result.advice = diagnostic.advice;
+            if (!["legacy-source", "repair-frame"].includes(diagnostic.code)) return result;
+        }
+        try {
+            const plan = await this.sessionRepairPlan(sessionId);
+            return { ...result, code: plan.correctingFrame ? "ready-frame" : "ready", repairable: true, token: plan.token, count: plan.count,
+                reason: plan.correctingFrame ? "发现旧版修复的压缩帧问题，已通过宿主读取校验" : `发现 ${plan.count} 处旧自动化来源，已通过宿主格式转换校验`,
+                advice: "将来源转换为 dsh-automation 插件归属，保留任务信息与正文，生成新版日志；旧日志原样保留。请确保其他 DSH 进程未打开该会话。" };
+        } catch (error) { return { ...result, code: "blocked", advice: "暂不能自动修复：" + String(error?.message ?? error).slice(0, 850) }; }
+    }
+    async repairSession(input) {
+        const { sessionId, token } = repairInputSchema.parse(input);
+        if (!token) throw new Error("请先诊断，再确认修复");
+        return this.enqueueOperation(async () => {
+            const plan = await this.sessionRepairPlan(sessionId);
+            const persistence = this.ctx.get("sessionPersistence");
+            if (typeof persistence.acquireLease !== "function") throw new Error("当前宿主缺少会话写锁，无法安全修复");
+            const lease = await persistence.acquireLease(sessionId, undefined, dirname(plan.source));
+            try { await plan.publish(token, () => this.ensureSessionRepairIdle(sessionId)); }
+            finally { await lease.release(); }
+            try { await this.readConversationEvents(sessionId); }
+            catch { return { sessionId, repairable: false, repaired: false, token: "", count: plan.count, code: "published-unreadable", reason: "新版日志已生成，但宿主复读未通过", advice: "旧日志仍保留，请重启 DSH 后重新诊断；不要反复修复或删除日志。" }; }
+            return { sessionId, repairable: false, repaired: true, token: "", count: plan.count, code: "repaired", reason: "修复完成，宿主已能正常读取", advice: "旧日志保留，归档状态不变；可以重新预览或打开会话。" };
+        });
+    }
+    /** 已归档与未归档共用正文检索；只读已知会话，不激活或改变归档状态。 */
+    async searchSessionContent(input) {
+        const { sessionIds, query } = searchInputSchema.parse(input);
+        const items = [], failures = [];
+        for (const sessionId of sessionIds) {
+            try {
+                if (!(await this.sessionKnown(sessionId))) throw new Error("会话不存在，请刷新列表");
+                const messages = extractConversation(await this.readConversationEvents(sessionId));
+                if (!(await this.sessionKnown(sessionId))) throw new Error("会话已移除，请刷新列表");
+                const match = findContentMatch(messages, query);
+                if (match) items.push({ sessionId, ...match });
+            } catch (error) { failures.push({ sessionId, message: String(error?.message ?? error).slice(0, 500) }); }
+        }
+        return { items, failures };
+    }
+    /** 输入为限定批次的归档 ID 和关键词，逐条返回命中或失败。 */
+    async searchArchivedContent(input) {
 		const { sessionIds, query } = searchInputSchema.parse(input);
 		const items = [], failures = [];
 		for (const sessionId of sessionIds) {
