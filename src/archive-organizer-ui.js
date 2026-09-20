@@ -3,7 +3,7 @@ export function createOrganizerPanel(React) {
   const h = React.createElement;
   return function OrganizerPanel({ t, archived, busy, ready, days, onDays, count, onPreview, progress, result, onRetry, undoCount, onUndo, onReload }) {
     return h(React.Fragment, null,
-      h("style", null, ".dsham_organizer,.dsham_batchFeedback{display:grid;gap:12px;margin:0 0 16px;padding:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px}.dsham_organizerControls{display:flex;align-items:center;flex-wrap:wrap;gap:10px}.dsham_organizer label{display:inline-flex;align-items:center;gap:6px}.dsham_organizer input[type=number]{width:76px;padding:5px;color:inherit;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l2);border-radius:5px}.dsham_organizer p,.dsham_batchFeedback p{margin:0;font-size:12px;color:var(--dsw-alias-label-secondary)}.dsham_batchFeedback progress{width:100%}.dsham_batchFeedback details{font-size:12px;overflow-wrap:anywhere}.dsham_archivePreview{max-height:260px;overflow:auto;display:grid;gap:8px;padding:8px 0}.dsham_archivePreview label{display:flex;gap:8px;align-items:center;overflow-wrap:anywhere}.dsham_favorite[aria-pressed=true]{color:#eab308}.dsham_favorite,.dsham_restoreIcon{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;border:0;background:transparent;border-radius:6px;color:var(--dsw-alias-label-secondary);cursor:pointer}.dsham_favorite{font-size:22px}.dsham_favorite:hover,.dsham_restoreIcon:hover{background:var(--dsw-alias-interactive-bg-hover)}.dsham_favorite:disabled,.dsham_restoreIcon:disabled{opacity:.5;cursor:not-allowed}.dsham_favoritesFilter{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;font-size:13px}.dsham_settingsToolbar{flex-wrap:wrap}@container(max-width:620px){.dsham_settingsRow{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:8px}.dsham_settingsRow>.dsham_settingsActions{grid-column:1/-1;justify-content:flex-end;flex-wrap:wrap}.dsham_favorite{white-space:nowrap}}"),
+      h("style", null, ".dsham_organizer,.dsham_batchFeedback{display:grid;gap:12px;margin:0 0 16px;padding:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px}.dsham_organizerControls{display:flex;align-items:center;flex-wrap:wrap;gap:10px}.dsham_organizer label{display:inline-flex;align-items:center;gap:6px}.dsham_organizer input[type=number]{width:76px;padding:5px;color:inherit;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l2);border-radius:5px}.dsham_organizer p,.dsham_batchFeedback p{margin:0;font-size:12px;color:var(--dsw-alias-label-secondary)}.dsham_batchFeedback progress{width:100%}.dsham_batchFeedback details{font-size:12px;overflow-wrap:anywhere}.dsham_archivePreview{max-height:260px;overflow:auto;display:grid;gap:8px;padding:8px 0}.dsham_archivePreview label{display:flex;gap:8px;align-items:center;overflow-wrap:anywhere}"),
       (!archived || !ready) && h("div", { className: "dsham_organizer" }, h("div", { className: "dsham_organizerControls" },
         !ready && h("button", { type: "button", className: "dsham_settingsAction", disabled: busy, onClick: onReload }, t("organizer.reloadFavorites")),
         !archived && h(React.Fragment, null,
@@ -28,6 +28,7 @@ export function createOrganizerPanel(React) {
 
 export const organizerZh = {
   "organizer.feedback": "操作反馈",
+  "organizer.allSessions": "全部会话", "organizer.favoriteFilter": "收藏筛选",
   "organizer.archiveResult": "归档结果", "organizer.restoreResult": "恢复结果", "organizer.deleteResult": "删除结果", "organizer.undoResult": "撤回结果",
   "organizer.favorite": "收藏", "organizer.unfavorite": "取消收藏", "organizer.favoritesOnly": "只看收藏",
   "organizer.reloadFavorites": "重新加载收藏", "organizer.idleDays": "闲置天数", "organizer.preview": "预览闲置归档（{n}）",
@@ -43,6 +44,7 @@ export const organizerZh = {
 
 export const organizerEn = {
   "organizer.feedback": "Operation feedback",
+  "organizer.allSessions": "All sessions", "organizer.favoriteFilter": "Favorites filter",
   "organizer.archiveResult": "Archive results", "organizer.restoreResult": "Restore results", "organizer.deleteResult": "Delete results", "organizer.undoResult": "Undo results",
   "organizer.favorite": "Favorite", "organizer.unfavorite": "Unfavorite", "organizer.favoritesOnly": "Favorites only",
   "organizer.reloadFavorites": "Reload favorites", "organizer.idleDays": "Idle days", "organizer.preview": "Preview idle archives ({n})",
