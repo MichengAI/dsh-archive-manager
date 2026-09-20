@@ -6,6 +6,8 @@ Published release notes are retained below; new versions are added without remov
 
 ## Unreleased
 
+- Preserve missing-file, permission, and corruption classifications when repair is unavailable. Translate local detail errors at render time without repeating reads when the translator changes. Remove obsolete page-wide action strings and add page-level coverage for switching tabs with an open preview.
+
 - Add host-persisted favorites and a Favorites only dropdown on both tabs, idle cleanup preview with favorite/activity protection, and batch progress, partial-failure retry, and temporary archive undo.
 - Introduce compact collapsible project groups, clickable session titles, star/action icons, and a More menu for restore-and-open and deletion. Remove redundant page-wide restore/delete buttons; retain filtered selection and project actions.
 - Add title/content search with snippets and highlights on both tabs, project/favorites/date filters, and a date popover with outside-click dismissal. Search has no persistent index: batches contain up to 20 sequential reads, and an in-flight batch cannot be cancelled. Large logs can be slow; narrow filters first.

@@ -43,7 +43,7 @@ export function createDiscoveryTools(React) {
           try {
             const result = detailsResultSchema.parse(await call({ sessionIds: batch }));
             const found = new Map(result.items.map(row => [row.sessionId, row]));
-            items.push(...batch.map(sessionId => found.get(sessionId) ?? { sessionId, turnCount: null, path: null, error: t ? t("details.notReturned") : "details.notReturned" }));
+            items.push(...batch.map(sessionId => found.get(sessionId) ?? { sessionId, turnCount: null, path: null, error: "", errorKey: "details.notReturned" }));
           } catch (error) {
             items.push(...batch.map(sessionId => ({ sessionId, turnCount: null, path: null, error: String(error?.message ?? error) })));
           }
@@ -52,9 +52,11 @@ export function createDiscoveryTools(React) {
       };
       load();
       return () => { active = false; };
-    }, [key, call, revision, t]);
+    }, [key, call, revision]);
     const current = call && state.key === key ? state : { items: [], pending: Boolean(call && sessions.length) };
-    return { ...current, byId: Object.fromEntries(current.items.map(row => [row.sessionId, row])), retry: () => setRevision(value => value + 1) };
+    // 只缓存读取结果和本地错误键；语言切换在渲染时生效，不触发重复读取。
+    const items = current.items.map(row => row.errorKey ? { ...row, error: t ? t(row.errorKey) : row.errorKey } : row);
+    return { ...current, items, byId: Object.fromEntries(items.map(row => [row.sessionId, row])), retry: () => setRevision(value => value + 1) };
   }  function useArchivePreview(call, eligibleIds) {
     const [target, setTarget] = React.useState(null);
     const [state, setState] = React.useState({ status: "idle" });

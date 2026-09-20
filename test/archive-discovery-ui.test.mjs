@@ -14,6 +14,27 @@ function harness() {
 }
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
+test("详情读取不依赖翻译函数身份，切换语言只重译本地提示", async () => {
+  const env = harness();
+  let calls = 0;
+  const call = async () => { calls++; return { items: [] }; };
+  const render = label => env.render(() => env.tools.useSessionDetails([{ id: "a", updatedAt: 1 }], call, () => label));
+  try {
+    render("缺少详情"); await tick();
+    for (let i = 0; i < 5; i++) {
+      assert.equal(render("缺少详情").byId.a.error, "缺少详情");
+      await tick();
+    }
+    assert.equal(calls, 1);
+    const translated = render("Details unavailable");
+    assert.equal(translated.byId.a.error, "Details unavailable");
+    assert.equal(translated.items[0].error, "Details unavailable");
+    assert.equal(calls, 1, "切换语言不能触发磁盘读取");
+    translated.retry(); render("Details unavailable"); await tick();
+    assert.equal(calls, 2, "手动重试仍能重新读取");
+  } finally { env.dispose(); }
+});
+
 test("离开预览页签后清除目标，返回时不复开且丢弃迟到响应", async () => {
   const env = harness();
   let ids = ["a"], resolve;

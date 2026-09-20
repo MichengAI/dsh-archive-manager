@@ -585,6 +585,13 @@ test("归档发现入口提供组合日期筛选及只读预览", async () => {
   assert.equal(nodes(tree).find(n => n.props.role === "alert").props.children, "copy.unavailable");
   menu.props.onSelect("preview"); tree = render();
   assert.ok(nodes(tree).some(n => n.props.open && n.props.title === "九月"), "预览弹窗应打开且仍保持归档列表");
+  nodes(tree).find(n => n.props.id === "dsham-tab-unarchived").props.onClick(); tree = render();
+  assert.equal(nodes(tree).some(n => n.props.open), false, "未主动关闭预览，切页签也应关闭");
+  nodes(tree).find(n => n.props.id === "dsham-tab-archived").props.onClick(); tree = render();
+  assert.equal(nodes(tree).some(n => n.props.open), false, "切回已归档不能重新打开预览");
+  const reopenedMenu = nodes(tree).find(n => n.type?.name === "ArchivedSessionMenu");
+  reopenedMenu.type(reopenedMenu.props).props.onSelect("preview"); tree = render();
+  assert.ok(nodes(tree).some(n => n.props.open), "用户主动打开仍然可用");
   nodes(tree).find(n => n.props.open).props.onClose(); tree = render();
   assert.equal(nodes(tree).some(n => n.props.open), false);
   nodes(tree).find(n => n.type?.name === "DiscoveryFilters").props.onClear(); tree = render();

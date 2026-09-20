@@ -2516,12 +2516,28 @@ test("会话路径定位旧代际目录，当前代际未生成时不复制虚�
   assert.equal(readFileSync(join(directory, "session.jsonl.zstd"), "utf8"), "stub");
 });
 
+for (const [code, message] of [["missing", "ENOENT"], ["permission", "EACCES"], ["corrupt", "corrupt JSON"]]) {
+  test(`诊断计划不可用时保留原始分类：${code}`, async () => {
+    const env = buildRoot({ headers: [header(s1)], archived: [s1] });
+    const registry = await mountWorkspaceRegistry(env);
+    registry.readConversationEvents = async () => { throw new Error(message); };
+    registry.sessionRepairPlan = async () => { throw new Error("测试修复限制"); };
+    const result = await registry.diagnoseSession({ sessionId: s1 });
+    assert.equal(result.code, code);
+    assert.equal(result.repairable, false);
+    assert.equal(result.repaired, false);
+    assert.match(result.advice, /测试修复限制/);
+    assert.deepEqual(env.persistence.prepared, []);
+  });
+}
+
 test('诊断未知会话及修复令牌校验，不对未知错误写文件', async () => {
   const env = buildRoot({ headers: [header(s1)], archived: [s1] });
   const registry = await mountWorkspaceRegistry(env);
   env.persistence.readFrom = async () => { throw new Error('ENOENT'); };
   const report = await registry.diagnoseSession({ sessionId: s1 });
   assert.equal(report.repairable, false);
+  assert.equal(report.code, "missing");
   assert.match(report.reason, /不存在/);
   await assert.rejects(registry.repairSession({ sessionId: s1 }), /先诊断/);
   await assert.rejects(registry.repairSession({ sessionId: s1, token: '错误' }), /凭据/);

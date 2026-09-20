@@ -582,9 +582,9 @@ window.__ModuleLoader__.load({
 				}
 			};
 			const batchScope = deleteTarget?.kind === "batch" ? deleteTarget.target.scope : null;
-			const deleteDialogTitle = batchScope === "all" ? t("archives.deleteAllTitle") : batchScope === "ungrouped" ? t("archives.deleteUngroupedTitle") : batchScope === "workspace" ? t("archives.deleteProjectTitle", { name: deleteTarget.title }) : batchScope === "sessions" ? t("archives.deleteSelectedTitle") : t("deleteSession.title");
-			const deleteDialogDescription = deleteTarget === null ? void 0 : batchScope === "all" ? t("archives.deleteAllDesc", { n: deleteTarget.count }) : batchScope === "ungrouped" ? t("archives.deleteUngroupedDesc", { n: deleteTarget.count }) : batchScope === "workspace" ? t("archives.deleteProjectDesc", { name: deleteTarget.title, n: deleteTarget.count }) : batchScope === "sessions" ? t("archives.deleteSelectedDesc", { n: deleteTarget.count }) : t("deleteSession.desc", { name: displayTitle(deleteTarget.session, t) });
-			const deleteConfirmLabel = batchScope === "all" ? t("archives.deleteAll") : batchScope === "ungrouped" ? t("archives.deleteUngroupedConfirm") : batchScope === "workspace" ? t("archives.deleteProjectConfirm") : batchScope === "sessions" ? t("archives.deleteSelectedConfirm") : t("deleteSession.title");
+			const deleteDialogTitle = batchScope === "ungrouped" ? t("archives.deleteUngroupedTitle") : batchScope === "workspace" ? t("archives.deleteProjectTitle", { name: deleteTarget.title }) : batchScope === "sessions" ? t("archives.deleteSelectedTitle") : t("deleteSession.title");
+			const deleteDialogDescription = deleteTarget === null ? void 0 : batchScope === "ungrouped" ? t("archives.deleteUngroupedDesc", { n: deleteTarget.count }) : batchScope === "workspace" ? t("archives.deleteProjectDesc", { name: deleteTarget.title, n: deleteTarget.count }) : batchScope === "sessions" ? t("archives.deleteSelectedDesc", { n: deleteTarget.count }) : t("deleteSession.desc", { name: displayTitle(deleteTarget.session, t) });
+			const deleteConfirmLabel = batchScope === "ungrouped" ? t("archives.deleteUngroupedConfirm") : batchScope === "workspace" ? t("archives.deleteProjectConfirm") : batchScope === "sessions" ? t("archives.deleteSelectedConfirm") : t("deleteSession.title");
 			return (0, react_jsx_runtime.jsxs)("section", {
 				className: "dsham_settings",
 				"aria-label": t("archives.title"),
@@ -3683,7 +3683,6 @@ window.__ModuleLoader__.load({
 			"archives.restoreSelected": "恢复所选",
 			"archives.deleteSelected": "删除所选",
 			"archives.timestamp": "{date}，{time}",
-			"archives.restoreAll": "全部恢复",
 			"archives.restoreProject": "恢复项目全部聊天",
 			"archives.restoreUngrouped": "全部恢复",
 			"archives.deleteProject": "删除项目全部聊天",
@@ -3692,9 +3691,6 @@ window.__ModuleLoader__.load({
 			"archives.ungroupedActions": "未分组聊天的归档操作",
 			"archives.restoreSuccess": "已恢复 {n} 个已归档聊天。",
 			"archives.restoreBatchFailed": "批量恢复失败：{detail}",
-			"archives.deleteAll": "全部删除",
-			"archives.deleteAllTitle": "删除全部已归档聊天",
-			"archives.deleteAllDesc": "将永久删除全部 {n} 个已归档聊天及其子代理（含正在运行的）和记录，此操作不可恢复。",
 			"archives.deleteSelectedTitle": "删除所选已归档聊天",
 			"archives.deleteSelectedDesc": "将永久删除所选的 {n} 个已归档聊天及其子代理（含正在运行的）和记录。其他聊天不会受影响，此操作不可恢复。",
 			"archives.deleteSelectedConfirm": "删除所选聊天",
@@ -3838,7 +3834,6 @@ window.__ModuleLoader__.load({
 			"archives.restoreSelected": "Restore selected",
 			"archives.deleteSelected": "Delete selected",
 			"archives.timestamp": "{date}, {time}",
-			"archives.restoreAll": "Restore all",
 			"archives.restoreProject": "Restore all chats in this project",
 			"archives.restoreUngrouped": "Restore all",
 			"archives.deleteProject": "Delete all chats in this project",
@@ -3847,9 +3842,6 @@ window.__ModuleLoader__.load({
 			"archives.ungroupedActions": "Archive actions for ungrouped chats",
 			"archives.restoreSuccess": "Restored {n} archived chats.",
 			"archives.restoreBatchFailed": "Could not restore the archived chats: {detail}",
-			"archives.deleteAll": "Delete all",
-			"archives.deleteAllTitle": "Delete all archived chats",
-			"archives.deleteAllDesc": "This permanently deletes all {n} archived chats, their child agents (including any that are still running), and their records. This cannot be undone.",
 			"archives.deleteSelectedTitle": "Delete selected archived chats",
 			"archives.deleteSelectedDesc": "This permanently deletes the selected {n} archived chats, their child agents (including any that are still running), and their records. Other chats are not affected. This cannot be undone.",
 			"archives.deleteSelectedConfirm": "Delete selected chats",

@@ -466,7 +466,11 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
             return { ...result, code: plan.correctingFrame ? "ready-frame" : "ready", repairable: true, token: plan.token, count: plan.count,
                 reason: plan.correctingFrame ? "发现旧版修复的压缩帧问题，已通过宿主读取校验" : `发现 ${plan.count} 处旧自动化来源，已通过宿主格式转换校验`,
                 advice: "将来源转换为 dsh-automation 插件归属，保留任务信息与正文，生成新版日志；旧日志原样保留。请确保其他 DSH 进程未打开该会话。" };
-        } catch (error) { return { ...result, code: "blocked", advice: "暂不能自动修复：" + String(error?.message ?? error).slice(0, 850) }; }
+        } catch (error) {
+            // 不能修复不等于原因未知：保留已识别分类，限制详情追加在建议中。
+            return { ...result, code: result.code === "unknown" ? "blocked" : result.code,
+                advice: (result.advice + " 暂不能自动修复：" + String(error?.message ?? error)).slice(0, 1000) };
+        }
     }
     async repairSession(input) {
         const { sessionId, token } = repairInputSchema.parse(input);
