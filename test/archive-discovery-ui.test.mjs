@@ -14,6 +14,27 @@ function harness() {
 }
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
+test("离开预览页签后清除目标，返回时不复开且丢弃迟到响应", async () => {
+  const env = harness();
+  let ids = ["a"], resolve;
+  const call = () => new Promise(done => { resolve = done; });
+  const render = () => env.render(() => env.tools.useArchivePreview(call, ids));
+  try {
+    render().open({ id: "a" }); render(); await tick();
+    ids = []; assert.equal(render().target, null);
+    resolve({ sessionId: "a" }); await tick();
+    ids = ["a"]; assert.equal(render().target, null);
+  } finally { env.dispose(); }
+});
+
+test("高亮使用原文区间，不因大小写展开吞字或错位", () => {
+  const { tools } = harness();
+  const tree = tools.HighlightedText({ text: "İ订单退款尾", query: "订单退款" });
+  assert.equal(tree.children[0], "İ");
+  assert.deepEqual(tree.children[1].children, ["订单退款"]);
+  assert.equal(tree.children[2], "尾");
+});
+
 test("预览切换与关闭会忽略迟到响应，错误可重试", async () => {
   const env = harness(), requests = [];
   const call = input => new Promise((resolve, reject) => requests.push({ input, resolve, reject }));

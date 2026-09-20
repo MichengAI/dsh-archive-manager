@@ -17,7 +17,7 @@ export function createOrganizerPanel(React) {
       result && h("div", { role: "status" },
         h("strong", null, t(`organizer.${result.kind ?? "archive"}Result`)),
         h("p", null, t("organizer.result", { succeeded: result.succeeded.length, skipped: result.skipped.length, failed: result.failures.length, remaining: result.unprocessed.length })),
-        result.failures.length > 0 && h("details", null, h("summary", null, t("organizer.failureDetails")), h("ul", null, result.failures.map((failure) => h("li", { key: failure.sessionId }, failure.sessionId, "：", failure.message)))),
+        result.failures.length > 0 && h("details", null, h("summary", null, t("organizer.failureDetails")), h("ul", null, result.failures.map((failure) => h("li", { key: failure.sessionId }, failure.sessionId, t("common.separator"), failure.message)))),
         result.refreshError && h("p", { role: "alert" }, t("organizer.refreshError", { detail: result.refreshError })),
         result.remaining.length > 0 && h("button", { type: "button", className: "dsham_settingsAction", disabled: busy, onClick: onRetry }, t("organizer.retry", { n: result.remaining.length }))),
       undoCount > 0 && h("div", { className: "dsham_organizerControls" },

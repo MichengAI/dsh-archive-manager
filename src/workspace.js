@@ -457,10 +457,9 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
             await this.readConversationEvents(sessionId);
             return { ...result, code: "healthy", reason: "会话已可正常读取", advice: "刷新会话详情即可，无需修复。" };
         } catch (error) {
-            const message = String(error?.message ?? error);
-            const diagnostic = classifySessionError(message);
+            const diagnostic = classifySessionError(error);
             result.code = diagnostic.code; result.reason = diagnostic.reason; result.advice = diagnostic.advice;
-            if (!["legacy-source", "repair-frame"].includes(diagnostic.code)) return result;
+            // 文案仅用于说明；工件结构和宿主验证才决定是否可修复。
         }
         try {
             const plan = await this.sessionRepairPlan(sessionId);
@@ -532,7 +531,10 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 			const domain = await this.favoriteDomain();
 			const state = favoriteStateSchema.parse(domain.global.get());
 			const kept = [];
-			for (const id of state.favoriteSessionIds) if (await this.sessionKnown(id)) kept.push(id);
+			for (const id of state.favoriteSessionIds) {
+				// 实时会话可能尚未落盘；索引未知或读取失败都不能作为永久删除依据。
+				if (this.ctx.get("sessions")?.get(id) !== undefined || !(await this.sessionArtifactMissing(id))) kept.push(id);
+			}
 			if (kept.length !== state.favoriteSessionIds.length) await domain.global.set({ favoriteSessionIds: kept });
 			return { favoriteSessionIds: kept };
 		});

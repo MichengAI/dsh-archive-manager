@@ -295,6 +295,36 @@ test("收藏拒绝未知会话和非法请求，写入失败不返回假成功",
 	assert.deepEqual(env.favoriteDomain.global.get().favoriteSessionIds, []);
 });
 
+test("收藏读取只清理确证缺失工件，未知索引和权限错误不丢收藏", async () => {
+	const env = buildRoot({ headers: [] });
+	const registry = await mountWorkspaceRegistry(env);
+	await env.favoriteDomain.global.set({ favoriteSessionIds: [s1, s2, s3] });
+	env.persistence.stat = async id => {
+		if (id === s1) return { size: 1 };
+		if (id === s2) throw Object.assign(new Error("权限不足"), { code: "EACCES" });
+		return undefined;
+	};
+	assert.deepEqual((await registry.favoriteSessions()).favoriteSessionIds, [s1, s2]);
+	assert.deepEqual(env.favoriteDomain.global.get().favoriteSessionIds, [s1, s2]);
+	env.sessions.live.push({ id: s3 });
+	await env.favoriteDomain.global.set({ favoriteSessionIds: [s1, s2, s3] });
+	assert.deepEqual((await registry.favoriteSessions()).favoriteSessionIds, [s1, s2, s3], "尚未落盘的实时会话也要保留收藏");
+	env.sessions.live = [];
+	await env.favoriteDomain.global.set({ favoriteSessionIds: [s1, s2] });
+	delete env.persistence.stat;
+	assert.deepEqual((await registry.favoriteSessions()).favoriteSessionIds, [s1, s2]);
+});
+
+test("诊断不依赖宿主错误措辞，由工件验证决定可修复性", async () => {
+	const env = buildRoot({ headers: [header(s1)], archived: [s1] });
+	const registry = await mountWorkspaceRegistry(env);
+	registry.readConversationEvents = async () => { throw new Error("新版宿主更换了错误文案"); };
+	let checked = 0;
+	registry.sessionRepairPlan = async () => { checked++; return { token: "a".repeat(64), count: 1 }; };
+	assert.equal((await registry.diagnoseSession({ sessionId: s1 })).repairable, true);
+	assert.equal(checked, 1);
+});
+
 test("收藏经真实宿主存储域落盘并关闭重开，含特殊字符 ID", async () => {
 	const id = "im:sample:会话";
 	const env = buildRoot({ headers: [header(s1, cwdA)] });

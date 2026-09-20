@@ -44,6 +44,27 @@ const archive = await load("@michengai/dsh-archive-manager", fileURLToPath(new U
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 const source = (state) => ({ getSnapshot: () => state, subscribe: () => () => {} });
 
+test("归档诊断读取没有列表摘要的 ID", async () => {
+  const effects = [], calls = [];
+  const hooks = { ...statics.react,
+    useSyncExternalStore: (_subscribe, get) => get(),
+    useState: initial => [typeof initial === "function" ? initial() : initial, () => {}],
+    useRef: initial => ({ current: initial }), useMemo: fn => fn(),
+    useEffect: fn => effects.push(fn)
+  };
+  const client = factories.get("@michengai/dsh-archive-manager")(name => name === "react" ? hooks : statics[name]);
+  client.__test.ArchivedSessionsSection({
+    sessionStore: source({ byId: {} }),
+    workspaceStore: source({ items: [], archivedSessionIds: ["missing-header"] }),
+    archivedSessionMetadata: async () => ({ items: [] }),
+    sessionDetails: async input => { calls.push(input); return { items: [] }; }, t: key => key
+  });
+  const cleanups = effects.map(fn => fn());
+  await tick();
+  assert.deepEqual(calls, [{ sessionIds: ["missing-header"] }]);
+  cleanups.forEach(fn => fn?.());
+});
+
 test("真实官方导航监听器：显式查看归档不再被清空，切换和卸载恢复默认策略", async (t) => {
   const observable = (state) => {
     const listeners = new Set();
@@ -512,13 +533,13 @@ test("整理页收藏、闲置预览、部分失败重试及撤回形成完整�
   const rowActions = nodes(tree).find(node => node.props.className === "dsham_settingsActions").props.children;
   assert.deepEqual(rowActions.filter(Boolean).map(node => node.props.title), ["organizer.favorite", "archives.archiveSelected"]);
   assert.ok(rowActions.filter(Boolean).every(node => typeof node.props.children !== "string"), "右侧只显示图标");
-  const favorite = nodes(tree).find(node => node.type === "button" && node.props["aria-label"] === "organizer.favorite：a");
+  const favorite = nodes(tree).find(node => node.type === "button" && node.props["aria-label"] === "organizer.favoritecommon.separatora");
   await favorite.props.onClick(); render();
   assert.equal(panel().props.count, 2);
   nodes(tree).find(node => node.props.id === "dsham-favorite-filter").props.onChange("favorites"); render();
   assert.equal(nodes(tree).filter(node => node.type === "article").length, 2);
   nodes(tree).find(node => node.props.id === "dsham-favorite-filter").props.onChange("all"); render();
-  await nodes(tree).find(node => node.type === "button" && node.props["aria-label"] === "organizer.unfavorite：a").props.onClick(); render();
+  await nodes(tree).find(node => node.type === "button" && node.props["aria-label"] === "organizer.unfavoritecommon.separatora").props.onClick(); render();
   panel().props.onPreview(); render();
   const dialog = nodes(tree).find(node => node.props.open === true);
   assert.equal(nodes(dialog.props.children).filter(node => node.type === "input" && node.props.type === "checkbox").length, 3);

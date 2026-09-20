@@ -1,8 +1,34 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { extractConversation, findContentMatch, previewConversation, matchesUpdatedRange, searchArchiveBatches, searchInputSchema } from "../src/archive-discovery.js";
+import { extractConversation, findContentMatch, previewConversation, matchesUpdatedRange, searchArchiveBatches, searchInputSchema, sessionDetailCandidates } from "../src/archive-discovery.js";
 const user = (seq, text) => ({ type: "user/message", seq, data: { role: "user", content: [{ type: "text", text }] } });
 const assistant = (seq, text) => ({ type: "assistant/message", seq, data: { message: { role: "assistant", content: [{ type: "text", text }] } } });
+
+test("诊断候选保留缺摘要会话且去重，不改变现有摘要", () => {
+  const a = { id: "a", updatedAt: 1 };
+  assert.deepEqual(sessionDetailCandidates(["a", "missing", "a"], { a }), [a, { id: "missing" }]);
+});
+
+test("大小写展开后的命中映射回原文，截断不拆开代理对", () => {
+  for (const count of [100, 2500]) {
+    const messages = [{ seq: 0, role: "user", text: "İ".repeat(count) + "订单退款" }];
+    assert.ok(findContentMatch(messages, "订单退款").snippet.includes("订单退款"));
+    assert.ok(previewConversation(messages, "订单退款").messages[0].text.includes("订单退款"));
+  }
+  const messages = [{ seq: 0, role: "user", text: "a".repeat(1999) + "😀尾部" }];
+  assert.ok(previewConversation(messages, "").messages[0].text.isWellFormed());
+  assert.ok(findContentMatch([{ seq: 0, text: "a".repeat(299) + "😀" }], "a").snippet.isWellFormed());
+});
+
+test("跨批次会话 ID 去重且命中片段保留正文", async () => {
+  const calls = [];
+  const result = await searchArchiveBatches(["a", "a", "b"], "订单", async input => {
+    calls.push(input.sessionIds);
+    return { items: input.sessionIds.map(sessionId => ({ sessionId, seq: 0, snippet: "订单正文" })), failures: [] };
+  });
+  assert.deepEqual(calls, [["a", "b"]]);
+  assert.deepEqual(result.items.map(row => row.snippet), ["订单正文", "订单正文"]);
+});
 test("正文只收录用户和助手的文本，不混入工具、系统、推理或图片数据", () => {
   const events = [user(0, "查找订单"), { type: "system/message", data: { content: "内部系统" } }, assistant(2, "结果 <script>alert(1)</script>"), { type: "tool/result", data: { message: { content: "工具" } } }, assistant(4, "")];
   const messages = extractConversation(events);

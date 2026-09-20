@@ -24,8 +24,29 @@ Put inactive conversations away and find them again when needed, keeping everyda
 
 - **Archive conversations**: put away one chat or all unarchived chats in a workspace.
 - **Find past work**: search titles, filter by project, and sort by time or title.
-- **Restore tasks**: restore one chat, selected chats, a project group, or all archives.
+- **Restore tasks**: restore one chat, selected chats, or a project group; select all filtered results for bulk actions.
 - **Clean up records**: permanently delete unwanted archived conversations after confirmation.
+
+> The additions below describe the unreleased source candidate. The current npm release remains 0.1.44.
+
+## Source candidate: session diagnosis and repair
+
+The archive page collects read failures, including archived IDs with missing summaries. Expand **Diagnosis and repair**, choose **Diagnose session**, then **Confirm repair** only when eligible. Repair converts supported legacy automation message sources while retaining the original log, conversation text, and automation attribution. Sessions must be archived and closed in every DSH process. Missing files, permission failures, and unsupported corruption are reported; messages are never truncated or deleted to force recovery. Eligibility is verified from artifacts and the host format, not solely from error wording.
+
+## Source candidate: search and preview
+
+- Archived and Unarchived share title/content search, project, favorites, updated-date filters, and creation-time sorting. Star or unstar conversations on either tab.
+- Choose **Titles and content** to search user and assistant text; the default remains titles only. Date filters include the entire local end date and combine with project and favorites.
+- Matches show snippets and highlights. On Archived, click a snippet or **More → Quick preview** to inspect context without restoring. On Unarchived, a snippet opens the full conversation.
+- Preview renders Markdown tables, quotes, and code blocks with role labels; switch to source text for highlights. It shows up to eight recent messages, or context around the first match. Each message is limited to 2,000 UTF-16 code units without splitting Unicode characters.
+- Search accepts up to 200 query characters and reads batches of at most 20 sessions, sequentially within each batch. Tools, attachments, reasoning, system messages, and plugin injections are excluded. Read failures remain visible and can be retried. Stored text is not the model's current context.
+- There is no persistent full-text index. Large or long conversations can be slow; narrow project, dates, or favorites first. No session-count or latency guarantee has been established. Changing filters prevents later batches and stale results, but cannot interrupt the batch already reading.
+
+## Source candidate: turn counts and location
+
+- Both tabs show user submission counts, including image submissions; assistant replies, tool calls, and injected messages do not count as turns.
+- Sort by most or fewest turns; unknown counts remain last. Failed details can be retried.
+- **More** provides session ID and path copying when the host exposes a readable location. Clipboard operations require browser permission and HTTPS or localhost.
 
 ## Screenshots
 
@@ -74,25 +95,41 @@ Restart DSH Web, then hard-refresh your browser with `Ctrl+Shift+R`. Open **Sett
 | --- | --- |
 | Archive one chat | Open its sidebar menu and choose **Archive session** |
 | Archive a workspace | Open the workspace menu and choose the option to archive its chats |
-| Find an archive | Open **Settings → Archived sessions**, then search titles or filter by project |
+| Find an archive | Open **Settings → Archived sessions**, then choose title/content search or filter by project, favorites, and dates (source candidate) |
 | Change the order | Sort by update time, creation time, or title |
 | Restore one chat | Click **Restore** beside the session |
 | Archive a project or ungrouped chats | On **Unarchived**, open the group’s **…** menu and confirm archiving all chats in that group, regardless of search filters |
 | Archive across projects | Switch to **Unarchived**, select sessions across projects, then click **Archive** and confirm |
-| Restore or delete in bulk | Select chats and use the bulk actions, or use the project menu or page-wide actions |
+| Restore or delete in bulk | Select chats and use the bulk actions, or use the project menu; there are no separate Restore all / Delete all buttons in the source candidate |
 
 The page opens on **Archived**, with **Unarchived** on the right. Switching tabs clears selections; changing search or project filters preserves them. Check the hidden selection count before applying bulk actions, or clear your selection first.
 
-**Restore all / Delete all** remain on the Archived tab and apply to archived sessions across all projects, regardless of filters. Unarchived excludes subagents and blank placeholders and supports sorting by update time or title.
+**Select all filtered results** selects matching sessions, including collapsed groups. Project-wide actions still apply to the whole project regardless of search filters. Unarchived excludes subagents and blank placeholders.
 
 Settings and sidebar batch archive/restore call the single-session APIs serially: official `ctx.workspaces.archiveSession` on every supported host, official `ctx.workspaces.unarchiveSession` on DSH 0.1.6+, and this plugin's `workspaceRegistry.unarchiveSession` on older hosts.
 
+### Favorites and idle cleanup (source candidate)
+
+Compact project groups can be collapsed. Stars and restore/archive icons appear on the right; archived session menus include restore-and-open and deletion.
+
+- Use the star on either tab and the **Favorites only** dropdown to find important chats. Favorites persist on the host across archive, restore, and browser changes. Reopen management to see changes made in other pages. Unknown or unreadable sessions retain their stored favorite IDs; cleanup requires confirmed artifact absence.
+- On Unarchived, enter 1–36,500 whole idle days and preview candidates under the current filters. Deselect individual candidates before confirmation. Favorites, the current chat, running sessions (including subagents), and pending interactions are protected; sessions without a valid activity time are excluded.
+- Archive rechecks favorites and activity. Batch archive, restore, and delete report successful, skipped, failed, and remaining items; the first failure stops the batch. Retry only the remainder. Delete retries still require confirmation.
+- **Undo this archive** restores sessions archived by the current batch, including successful retries. It is available only while the current management page remains open; refreshing or closing clears it. Permanent deletion cannot be undone.
+- Favorites can still be archived manually. Protection applies to idle cleanup only. There is no scheduled or automatic background cleanup.
+
 ### View and continue archived conversations
 
-Available starting with `0.1.40`:
+Native conversation navigation has been available since `0.1.40`; the source candidate uses these entry points:
 
-- **Open session**: open the native DSH session to view messages, attachments, and tool details. Continue chatting while keeping the session archived.
-- **Restore and open**: unarchive the session and open it to resume work.
+- **Click the session title**: open the native DSH session to view messages, attachments, and tool details. Continue chatting while keeping the session archived.
+- **More → Restore and open**: unarchive the session and open it to resume work.
+
+## Search API compatibility (integrators)
+
+The canonical API is `workspaceRegistry.searchSessionContent({ sessionIds, query })`, covering archived and unarchived sessions. Supply 1–20 session IDs and a nonempty query of 1–200 characters; IDs are deduplicated. Results have the shape `{ items: [{ sessionId, seq, snippet }], failures: [{ sessionId, message }] }`. Individual read failures appear in `failures`; invalid input rejects the call.
+
+`searchArchivedContent` remains the legacy, archived-only entry point. Both use the existing host Typert connection and authorization boundary; no HTTP endpoint or authentication setting is added. Keep the legacy descriptor throughout the currently supported host range, including patch releases. Removal requires an explicit compatibility-range change, client migration, and deprecation notice. New clients prefer the canonical API and use the old one only as a version fallback, never dispatching the same search to both.
 
 ## Updates
 

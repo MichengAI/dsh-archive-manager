@@ -1,7 +1,7 @@
 // 使用真实新版 JSONL 和查询服务验证删除持久结果；所有工件仅写入临时目录。
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile, access } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile, access, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { registerHooks } from "node:module";
@@ -118,6 +118,59 @@ async function setup(t, compression = "none") {
 		create,
 	};
 }
+
+test("真实宿主旧自动化诊断修复使用写锁、代际编码和压缩复读", async t => {
+	const env = await setup(t, "zstd");
+	if (env.persistence.generationFormat?.currentVersion !== 3) {
+		t.skip("此宿主不使用第三代日志修复协议");
+		return;
+	}
+	const id = "repair-legacy";
+	const meta = { type: "session", version: 0, id, createdAt: 1700000000000, cwd: env.cwd, delegationDepth: 0 };
+	const target = env.persistence.locate(meta).path;
+	const directory = dirname(target);
+	await mkdir(directory, { recursive: true });
+	const source = join(directory, "session.jsonl.zstd");
+	const events = [
+		["turn/start", { turn: 1 }],
+		["step/start", { turn: 1, step: 1 }],
+		["user/message", { id: "legacy-user", role: "user", content: [{ type: "text", text: "旧自动化正文必须保留" }], source: { kind: "automation", automationId: "a", runId: "r", scheduledFor: "2026-09-01T00:00:00Z" } }],
+		["step/end", { turn: 1, step: 1 }],
+		["turn/end", { turn: 1, reason: { kind: "completed" } }]
+	].map(([type, data], seq) => ({ type, data, seq, time: 1700000000000, ...(type === "user/message" ? { surfaceOp: "append" } : {}) }));
+	const { zstdCompressSync } = await import("node:zlib");
+	const original = Buffer.concat([meta, ...events].map(row => zstdCompressSync(Buffer.from(JSON.stringify(row) + "\n", "utf8"))));
+	await writeFile(source, original);
+	env.state.archivedSessionIds = [id];
+	let leases = 0, releases = 0, validations = 0;
+	const acquire = env.persistence.acquireLease.bind(env.persistence);
+	env.persistence.acquireLease = async (...args) => {
+		const lease = await acquire(...args); leases++;
+		const release = lease.release.bind(lease);
+		lease.release = async () => { await release(); releases++; };
+		return lease;
+	};
+	const readPrefix = env.persistence.readZstdPrefix.bind(env.persistence);
+	env.persistence.readZstdPrefix = async bytes => { validations++; return readPrefix(bytes); };
+	const diagnosis = await env.registry.diagnoseSession({ sessionId: id });
+	assert.equal(diagnosis.repairable, true, JSON.stringify(diagnosis));
+	assert.ok(validations > 0);
+	// 篡改校验器读到的身份，发布前必须拒绝，且不能生成目标工件。
+	env.persistence.readZstdPrefix = async bytes => {
+		const parsed = await readPrefix(bytes);
+		return { ...parsed, meta: { ...parsed.meta, id: "wrong" } };
+	};
+	await assert.rejects(env.registry.repairSession({ sessionId: id, token: diagnosis.token }), /校验/);
+	await assert.rejects(access(target), { code: "ENOENT" });
+	env.persistence.readZstdPrefix = readPrefix;
+	const result = await env.registry.repairSession({ sessionId: id, token: diagnosis.token });
+	assert.equal(result.repaired, true, JSON.stringify(result));
+	assert.equal(leases, 1); assert.equal(releases, 1);
+	assert.deepEqual(await readFile(source), original);
+	const reader = await env.persistence.open(id, "read");
+	try { assert.match(JSON.stringify((await reader.read(0)).events), /旧自动化正文必须保留/); }
+	finally { await reader.close(); }
+});
 
 for (const compression of ["none", "zstd"]) {
 	test(`最新宿主实时会话落盘并释放写句柄后删除，重开存储不复活 (${compression})`, async (t) => {

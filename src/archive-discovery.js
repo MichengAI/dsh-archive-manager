@@ -93,26 +93,53 @@ export function extractConversation(events) {
   return messages;
 }
 export function findContentMatch(messages, query) {
-  const needle = query.trim().toLocaleLowerCase();
+  const needle = query.trim();
   if (!needle) return null;
   for (const message of messages) {
-    const position = message.text.toLocaleLowerCase().indexOf(needle);
-    if (position < 0) continue;
-    const start = Math.max(0, position - 70);
-    return { seq: message.seq, snippet: (start ? "…" : "") + message.text.slice(start, start + 300) + (message.text.length > start + 300 ? "…" : "") };
+    const match = findTextRange(message.text, needle);
+    if (!match) continue;
+    const start = Math.max(0, match.start - 70);
+    return { seq: message.seq, snippet: (start ? "…" : "") + sliceWholeCharacters(message.text, start, start + 300) + (message.text.length > start + 300 ? "…" : "") };
   }
   return null;
 }
 /** 最近八条；有命中时展示其附近上下文，正文超长时从命中附近截取。 */
 export function previewConversation(messages, query) {
-  const needle = query.trim().toLocaleLowerCase();
-  const hit = needle ? messages.findIndex(row => row.text.toLocaleLowerCase().includes(needle)) : -1;
+  const needle = query.trim();
+  const hit = needle ? messages.findIndex(row => findTextRange(row.text, needle)) : -1;
   const start = hit >= 0 ? Math.max(0, hit - 2) : Math.max(0, messages.length - 8);
   return { hasEarlier: start > 0, hasLater: start + 8 < messages.length, messages: messages.slice(start, start + 8).map(row => {
-    const match = needle ? row.text.toLocaleLowerCase().indexOf(needle) : -1;
+    const match = findTextRange(row.text, needle)?.start ?? -1;
     const offset = match >= 2000 ? Math.max(0, match - 300) : 0;
-    return { ...row, text: row.text.slice(offset, offset + 2000), truncated: row.text.length > 2000 };
+    return { ...row, text: sliceWholeCharacters(row.text, offset, offset + 2000), truncated: row.text.length > 2000 };
   }) };
+}
+/** 不受系统语言影响；大小写展开的码元区间映射回原文，供片段和高亮共用。 */
+export function findTextRange(text, query) {
+  const needle = query?.trim().toLowerCase();
+  if (!needle) return null;
+  const position = text.toLowerCase().indexOf(needle);
+  if (position < 0) return null;
+  let original = 0, folded = 0, start;
+  for (const character of text) {
+    const next = folded + character.toLowerCase().length;
+    if (start === undefined && next > position) start = original;
+    original += character.length;
+    if (next >= position + needle.length) return { start, end: original };
+    folded = next;
+  }
+  return null;
+}
+/** 收缩截取边界以保留完整 Unicode 字符，并保持协议的码元长度上限。 */
+function sliceWholeCharacters(text, start, end) {
+  const splitsPair = index => index > 0 && /[\uD800-\uDBFF]/.test(text[index - 1]) && /[\uDC00-\uDFFF]/.test(text[index] ?? "");
+  if (splitsPair(start)) start++;
+  if (splitsPair(end)) end--;
+  return text.slice(start, end);
+}
+/** 诊断按注册表 ID 覆盖，摘要缺失不应导致异常会话漏检。 */
+export function sessionDetailCandidates(ids, byId) {
+  return [...new Set(ids)].map(id => byId[id] ?? { id });
 }
 /** 用户本地日期边界；结束日期包含当天，避免 UTC 转换导致跨日遗漏。 */
 function dayBoundary(value, nextDay = false) {
@@ -147,13 +174,28 @@ export async function searchArchiveBatches(ids, query, call, { signal, onProgres
 }
 
 /** 错误分类只决定说明和入口，是否可修复必须由服务端读取工件后判断。 */
-export function classifySessionError(message) {
-  if (/first frame is not exactly one header line/.test(message)) return { code: 'repair-frame', reason: '旧版修复生成的压缩格式不符合宿主要求', advice: '重新诊断可纠正压缩帧格式，原始日志保持不变。' };
-  if (/unclassified message source/.test(message)) return { code: 'legacy-source', reason: '旧版消息来源不受新版 DSH 支持', advice: '运行诊断，检查是否为可转换的旧自动化来源。' };
-  if (/ENOENT|不存在|not found/i.test(message)) return { code: 'missing', reason: '会话日志或附件路径不存在', advice: '检查原目录或磁盘是否可用；缺失正文不能通过重建缓存恢复。' };
-  if (/EACCES|EPERM|permission/i.test(message)) return { code: 'permission', reason: '没有权限读取会话文件', advice: '检查目录访问权限、文件占用与安全软件限制，再重试。' };
-  if (/corrupt|JSON|incomplete|truncat|损坏/i.test(message)) return { code: 'corrupt', reason: '会话日志可能损坏或未完整写入', advice: '保留现有日志，检查磁盘和原始文件；不自动截断或删除消息。' };
-  return { code: 'unknown', reason: '会话暂时无法读取', advice: '先重试；仍失败时展开技术详情，按具体错误检查宿主兼容性。' };
+export function classifySessionError(error) {
+  const message = String(error?.message ?? error);
+  const descriptions = {
+    'repair-frame': ['旧版修复生成的压缩格式不符合宿主要求', '重新诊断可纠正压缩帧格式，原始日志保持不变。'],
+    'legacy-source': ['旧版消息来源不受新版 DSH 支持', '运行诊断，检查是否为可转换的旧自动化来源。'],
+    missing: ['会话日志或附件路径不存在', '检查原目录或磁盘是否可用；缺失正文不能通过重建缓存恢复。'],
+    permission: ['没有权限读取会话文件', '检查目录访问权限、文件占用与安全软件限制，再重试。'],
+    corrupt: ['会话日志可能损坏或未完整写入', '保留现有日志，检查磁盘和原始文件；不自动截断或删除消息。'],
+    unknown: ['会话暂时无法读取', '先重试；仍失败时展开技术详情，按具体错误检查宿主兼容性。']
+  };
+  const codes = { ENOENT: 'missing', EACCES: 'permission', EPERM: 'permission' };
+  const patterns = [
+    ['repair-frame', /first frame is not exactly one header line/],
+    ['legacy-source', /unclassified message source/],
+    ['missing', /ENOENT|不存在|not found/i],
+    ['permission', /EACCES|EPERM|permission/i],
+    ['corrupt', /corrupt|JSON|incomplete|truncat|损坏/i]
+  ];
+  const explicit = Object.hasOwn(codes, error?.code) ? codes[error.code] : error?.code;
+  const code = Object.hasOwn(descriptions, explicit) ? explicit : patterns.find(([, pattern]) => pattern.test(message))?.[0] ?? 'unknown';
+  const [reason, advice] = descriptions[code];
+  return { code, reason, advice };
 }
 export const repairInputSchema = { parse(value) {
   const sessionId = id(value?.sessionId);

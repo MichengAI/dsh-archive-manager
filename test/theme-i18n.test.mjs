@@ -1,10 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as health from '../src/session-health-ui.js';
-import { repairResultSchema } from '../src/archive-discovery.js';
+import { repairResultSchema, classifySessionError } from '../src/archive-discovery.js';
 import { discoveryZh, discoveryEn } from '../src/archive-discovery-ui.js';
 import { organizerZh, organizerEn } from '../src/archive-organizer-ui.js';
 import { ZH, EN } from '../src/plugin-update-ui.js';
+
+test('错误分类优先稳定代码，未知宿主代码才回退文案', () => {
+  assert.equal(classifySessionError({ code: 'EACCES', message: 'not found' }).code, 'permission');
+  assert.equal(classifySessionError({ code: 'legacy-source', message: '完全不同的说明' }).code, 'legacy-source');
+  assert.equal(classifySessionError({ code: 'NEW_HOST_CODE', message: 'unclassified message source' }).code, 'legacy-source');
+});
 
 test('中英文词条及动态占位符一致', () => {
   for (const [zh, en] of [[health.healthZh, health.healthEn], [discoveryZh, discoveryEn], [organizerZh, organizerEn], [ZH, EN]]) {

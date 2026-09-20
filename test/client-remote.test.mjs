@@ -70,6 +70,10 @@ root.provide("connection", {
 		async call(channel, endpoint, payload, signal) {
 			calls.push({ channel, endpoint, payload, signal });
 			const value = endpoint === "workspaceRegistry/deleteSession" ? { deleted: true }
+				: /workspaceRegistry\/search(?:Session|Archived)Content$/.test(endpoint) ? { items: [{ sessionId: "s1", seq: 0, snippet: "正文" }], failures: [] }
+				: endpoint === "workspaceRegistry/sessionDetails" ? { items: [{ sessionId: "s1", turnCount: 1, path: null, error: "" }] }
+				: endpoint === "workspaceRegistry/previewArchivedSession" ? { sessionId: "s1", messages: [], hasEarlier: false, hasLater: false }
+				: /workspaceRegistry\/(?:diagnose|repair)Session$/.test(endpoint) ? { sessionId: "s1", repairable: false, repaired: false, reason: "", advice: "", code: "healthy" }
 				: endpoint === "workspaceRegistry/favoriteSessions" || endpoint === "workspaceRegistry/setSessionFavorite" ? { favoriteSessionIds: ["s1"] }
 				: endpoint === "workspaceRegistry/deleteArchivedSessions" ? { requestedSessionIds: ["s1"], deletedSessionIds: ["s1"], skippedSessionIds: [], failures: [] }
 				: endpoint === "workspaceRegistry/archivedSessionMetadata" ? { items: [{ sessionId: "s1", createdAt: 1700000000000 }], repairedSessionIds: ["s1"] }
@@ -115,6 +119,20 @@ test("$mount registers the namespace; ctx.get resolves it and dispatches through
 		assert.equal(calls[4].endpoint, "workspaceRegistry/favoriteSessions");
 		assert.deepEqual(await registry.setSessionFavorite({ sessionId: "s1", favorite: true }), { ok: true, value: { favoriteSessionIds: ["s1"] } });
 		assert.deepEqual(JSON.parse(JSON.stringify(calls[5].payload)), { args: { input: { sessionId: "s1", favorite: true } } });
+		for (const [method, input, expectedKey] of [
+			["searchSessionContent", { sessionIds: ["s1"], query: "正文" }, "items"],
+			["searchArchivedContent", { sessionIds: ["s1"], query: "正文" }, "items"],
+			["sessionDetails", { sessionIds: ["s1"] }, "items"],
+			["previewArchivedSession", { sessionId: "s1", query: "正文" }, "messages"],
+			["diagnoseSession", { sessionId: "s1" }, "repairable"],
+			["repairSession", { sessionId: "s1", token: "a".repeat(64) }, "repaired"],
+		]) {
+			const response = await registry[method](input);
+			assert.equal(response.ok, true);
+			assert.ok(Object.hasOwn(response.value, expectedKey));
+			assert.equal(calls.at(-1).endpoint, `workspaceRegistry/${method}`);
+			assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1).payload)), { args: { input } });
+		}
 	} finally {
 		await fiber.dispose();
 	}

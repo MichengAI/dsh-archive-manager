@@ -6,6 +6,18 @@ Published release notes are retained below; new versions are added without remov
 
 ## Unreleased
 
+- Add host-persisted favorites and a Favorites only dropdown on both tabs, idle cleanup preview with favorite/activity protection, and batch progress, partial-failure retry, and temporary archive undo.
+- Introduce compact collapsible project groups, clickable session titles, star/action icons, and a More menu for restore-and-open and deletion. Remove redundant page-wide restore/delete buttons; retain filtered selection and project actions.
+- Add title/content search with snippets and highlights on both tabs, project/favorites/date filters, and a date popover with outside-click dismissal. Search has no persistent index: batches contain up to 20 sequential reads, and an in-flight batch cannot be cancelled. Large logs can be slow; narrow filters first.
+- Add read-only Markdown previews with tables, code, role labels, and a source/highlight mode; show recent messages or context around the first match.
+- Display user turn counts with ascending/descending sorting and unknown values last. Add session ID/path copying and retryable detail failures.
+- Add collapsed session diagnostics and narrowly validated legacy automation repair. Retain original logs and generate a host-validated new generation while holding the host write lease.
+- Align selection, checkboxes, focus, warning, update buttons, and highlights with official theme tokens; localize diagnosis, preview, update controls, and copy errors.
+- Fix preview Escape propagation, filtered group counts, unarchived empty states, and copy-error localization, verified in an isolated real DSH instance.
+- Preserve favorites when indexing or reads are unavailable; only confirmed missing artifacts are pruned. Clear preview targets when leaving the tab, map case-folded matches back to original Unicode text, and avoid splitting surrogate pairs.
+- Include archived IDs without summaries in diagnostics, remove the error-wording prerequisite for artifact validation, and create repair files with private permissions. Keep fail-safe no-overwrite publication when hard links are unavailable.
+- Add regression coverage for Unicode, missing summaries, favorites retention, remote discovery/repair calls, repair permissions/failures, and real host generation validation and locking. Keep this work unreleased; no version bump.
+
 ## 0.1.44 - 2026-09-18
 
 - Opening an archived session from Settings no longer falsely reports that the host did not keep the conversation.

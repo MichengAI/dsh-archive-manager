@@ -96,7 +96,7 @@ export async function prepareAutomationRepair({ directory, target, sessionId, fo
     const temp = join(directory, '.archive-repair-' + randomUUID());
     let handle;
     try {
-      handle = await open(temp, 'wx'); await handle.writeFile(output); await handle.sync(); await handle.close(); handle = undefined;
+      handle = await open(temp, 'wx', 0o600); await handle.writeFile(output); await handle.sync(); await handle.close(); handle = undefined;
       await ensureIdle();
       await unchanged();
       // 调用方持有宿主跨进程写锁；仅已确认的错误产物可原子替换，正常代际仍禁止覆盖。
