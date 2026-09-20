@@ -9,6 +9,7 @@ import {
 	mkdtempSync,
 	mkdirSync,
 	writeFileSync,
+	readFileSync,
 	realpathSync,
 	existsSync,
 	renameSync,
@@ -21,6 +22,7 @@ import { Context, Service } from "@deepseek-ai/cordis";
 import { TypertRegistry } from "@deepseek-ai/dsh-typert-registry";
 import { TypertGatewayService } from "@deepseek-ai/dsh-api-gateway";
 import { remoteMethods } from "@deepseek-ai/dsh-typert-protocol";
+import { DomainFacility } from "@deepseek-ai/dsh-storage-domain";
 import { sessionDir } from "@deepseek-ai/dsh-spill-local";
 import { projectionCacheDomainSpec } from "@deepseek-ai/dsh-session-projection-cache";
 import { ArchiveWorkspaceRegistry } from "../lib/workspace.js";
@@ -216,7 +218,8 @@ function buildRoot({
 		detached: [],
 		announced: [],
 	};
-	ctx.provide("storageDomain", { open: async (spec) => domain });
+	const favoriteDomain = new FakeDomain({}, { favoriteSessionIds: [] });
+	ctx.provide("storageDomain", { open: async (spec) => spec.name === "archive_manager_favorites" ? favoriteDomain : domain });
 	ctx.provide("sessionPersistence", persistence);
 	ctx.provide("sessionProjectionCache", projCache);
 	ctx.provide("sessions", sessions);
@@ -232,6 +235,7 @@ function buildRoot({
 		cacheCalls,
 		sessions,
 		located,
+		favoriteDomain,
 	};
 }
 
@@ -267,6 +271,53 @@ const s1 = SID(1),
 	sUnknown = SID(99);
 const cwdA = "D:\\proj-a",
 	cwdB = "D:\\proj-b";
+
+test("收藏独立持久化，归档恢复保留收藏，重复设置幂等", async () => {
+	const env = buildRoot({ headers: [header(s1, cwdA), header(s2, cwdA)] });
+	const registry = await mountWorkspaceRegistry(env);
+	await Promise.all([registry.setSessionFavorite({ sessionId: s1, favorite: true }), registry.setSessionFavorite({ sessionId: s2, favorite: true })]);
+	await registry.setSessionFavorite({ sessionId: s1, favorite: true });
+	await registry.archiveSession(s1);
+	await registry.unarchiveSession(s1);
+	assert.deepEqual((await registry.favoriteSessions()).favoriteSessionIds, [s1, s2]);
+	assert.deepEqual(env.favoriteDomain.global.get().favoriteSessionIds, [s1, s2]);
+	await registry.setSessionFavorite({ sessionId: s1, favorite: false });
+	assert.deepEqual((await registry.favoriteSessions()).favoriteSessionIds, [s2]);
+});
+
+test("收藏拒绝未知会话和非法请求，写入失败不返回假成功", async () => {
+	const env = buildRoot({ headers: [header(s1, cwdA)] });
+	const registry = await mountWorkspaceRegistry(env);
+	await assert.rejects(registry.setSessionFavorite({ sessionId: sUnknown, favorite: true }));
+	await assert.rejects(registry.setSessionFavorite({ sessionId: s1, favorite: "true" }));
+	env.favoriteDomain.globalSetError = new Error("磁盘写入失败");
+	await assert.rejects(registry.setSessionFavorite({ sessionId: s1, favorite: true }), /磁盘写入失败/);
+	assert.deepEqual(env.favoriteDomain.global.get().favoriteSessionIds, []);
+});
+
+test("收藏经真实宿主存储域落盘并关闭重开，含特殊字符 ID", async () => {
+	const id = "im:sample:会话";
+	const env = buildRoot({ headers: [header(s1, cwdA)] });
+	// 会话 ID 保持原值；测试转录目录沿用安全的夹具路径。
+	env.persistence.headers[0].id = id;
+	const file = join(env.root, "favorites.json");
+	const storageContext = new Context();
+	storageContext.provide("storage", { backend: { get: () => ({ kv: { open: async descriptor => ({
+		loadAll: async () => existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : { version: descriptor.version, tables: {}, global: null },
+		setGlobal: async value => writeFileSync(file, JSON.stringify({ version: descriptor.version, tables: {}, global: value }), "utf8"),
+		close: async () => {},
+	}) } }) } });
+	const facility = new DomainFacility(storageContext, { backend: "test" });
+	const originalOpen = env.ctx.storageDomain.open;
+	env.ctx.storageDomain.open = spec => spec.name === "archive_manager_favorites" ? facility.open(spec) : originalOpen(spec);
+	const registry = await mountWorkspaceRegistry(env);
+	try {
+		await registry.setSessionFavorite({ sessionId: id, favorite: true });
+		await facility.closeAll();
+		registry.favoriteDomainPromise = undefined;
+		assert.deepEqual(await registry.favoriteSessions(), { favoriteSessionIds: [id] });
+	} finally { await facility.closeAll(); }
+});
 
 test("workspace registry init with the fakes", async () => {
 	const env = buildRoot({
@@ -2208,6 +2259,14 @@ test("typert gateway SRC: claims + dispatch single and batch archive methods end
 		"late typert still receives the host contribution",
 	);
 	assert.equal(captured.channel, "/api");
+	assert.equal(captured.matches("workspaceRegistry/setSessionFavorite"), true);
+	const favorite = await captured.handler("workspaceRegistry/setSessionFavorite", { args: { input: { sessionId: s1, favorite: true } } }, void 0);
+	assert.equal(favorite.ok, true);
+	assert.deepEqual(favorite.value.favoriteSessionIds, [s1]);
+	const favorites = await captured.handler("workspaceRegistry/favoriteSessions", { args: {} }, void 0);
+	assert.deepEqual(favorites.value.favoriteSessionIds, [s1]);
+	const malformedFavorite = await captured.handler("workspaceRegistry/setSessionFavorite", { args: { input: { sessionId: s1, favorite: "true" } } }, void 0);
+	assert.equal(malformedFavorite.ok, false);
 	// SRC claims for the new endpoints
 	assert.equal(captured.matches("workspaceRegistry/unarchiveSession"), true);
 	assert.equal(captured.matches("workspaceRegistry/deleteSession"), true);
@@ -2344,4 +2403,3 @@ test("legacy workspaceRegistry API surface is intact", async () => {
 	await registry.archiveSession(s3);
 	assert.deepEqual(env.global.archivedSessionIds, [s3]);
 });
-

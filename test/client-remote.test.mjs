@@ -70,6 +70,7 @@ root.provide("connection", {
 		async call(channel, endpoint, payload, signal) {
 			calls.push({ channel, endpoint, payload, signal });
 			const value = endpoint === "workspaceRegistry/deleteSession" ? { deleted: true }
+				: endpoint === "workspaceRegistry/favoriteSessions" || endpoint === "workspaceRegistry/setSessionFavorite" ? { favoriteSessionIds: ["s1"] }
 				: endpoint === "workspaceRegistry/deleteArchivedSessions" ? { requestedSessionIds: ["s1"], deletedSessionIds: ["s1"], skippedSessionIds: [], failures: [] }
 				: endpoint === "workspaceRegistry/archivedSessionMetadata" ? { items: [{ sessionId: "s1", createdAt: 1700000000000 }], repairedSessionIds: ["s1"] }
 				: { archivedSessionIds: ["s2"] };
@@ -110,6 +111,10 @@ test("$mount registers the namespace; ctx.get resolves it and dispatches through
 		assert.deepEqual(result4, { ok: true, value: { items: [{ sessionId: "s1", createdAt: 1700000000000 }], repairedSessionIds: ["s1"] } });
 		assert.equal(calls[3].endpoint, "workspaceRegistry/archivedSessionMetadata");
 		assert.deepEqual(JSON.parse(JSON.stringify(calls[3].payload)), { args: {} });
+		assert.deepEqual(await registry.favoriteSessions(), { ok: true, value: { favoriteSessionIds: ["s1"] } });
+		assert.equal(calls[4].endpoint, "workspaceRegistry/favoriteSessions");
+		assert.deepEqual(await registry.setSessionFavorite({ sessionId: "s1", favorite: true }), { ok: true, value: { favoriteSessionIds: ["s1"] } });
+		assert.deepEqual(JSON.parse(JSON.stringify(calls[5].payload)), { args: { input: { sessionId: "s1", favorite: true } } });
 	} finally {
 		await fiber.dispose();
 	}

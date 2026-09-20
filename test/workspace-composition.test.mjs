@@ -9,6 +9,7 @@ import { Context } from "@deepseek-ai/cordis";
 import { loadClientStore } from "./helpers/client-store.mjs";
 import { mirrorDirectoryFlow } from "../src/directory-flow-slot.js";
 import { allowArchivedNavigation, currentSessionId } from "../src/archive-experience.js";
+import { createSessionOrganizer } from "../src/archive-organizer.js";
 
 const require = createRequire(import.meta.url);
 const statics = {};
@@ -398,7 +399,7 @@ test("归档 TAB 默认与切换、多项目选择、确认提交和状态刷新
  tab("unarchived").props.onClick();tree=render();
  assert.equal(tab("unarchived").props["aria-selected"],true);
  assert.equal(nodes(tree).some(n=>n.props.children==="archives.restoreAll"),false);
- for(const row of nodes(tree).filter(n=>n.type==="article")) row.props.children[0].props.onChange({target:{checked:true}});
+ for(const row of nodes(tree).filter(n=>n.type==="article")) nodes(row).find(n=>n.props.label && n.props.onChange).props.onChange({target:{checked:true}});
  tree=render();
  let toolbar=nodes(tree).find(n=>n.props.onToggle);
  assert.equal(toolbar.props.selectedCount,2);
@@ -428,7 +429,7 @@ test("归档 TAB 默认与切换、多项目选择、确认提交和状态刷新
  state.archivedSessionIds=["old"];
  tab("unarchived").props.onClick();tree=render();
  assert.equal(nodes(tree).some(n=>n.props.role==="status" && n.props.children==="archives.archiveSuccess"),false,"切换页签清除上次成功提示");
- nodes(tree).find(n=>n.type==="button" && n.props.children==="archives.archiveSelected").props.onClick();tree=render();
+ nodes(tree).find(n=>n.type==="button" && n.props["aria-label"]==="archives.archiveSelected").props.onClick();tree=render();
  assert.equal(nodes(tree).some(n=>n.props.role==="status" && n.props.children==="archives.archiveSuccess"),false,"新归档清除上次成功提示");
  const freshDialog=nodes(tree).find(n=>n.props.open===true && n.props.description==="archives.archiveSelectedDesc");
  freshDialog.props.onClose();tree=render();
@@ -456,4 +457,65 @@ test("归档 TAB 默认与切换、多项目选择、确认提交和状态刷新
   tree=render();tab("archived").props.onClick();tree=render();
  }
 
+});
+
+test("整理页收藏、闲置预览、部分失败重试及撤回形成完整闭环", async () => {
+  const values = []; let cursor = 0;
+  const hooks = { ...statics.react,
+    useSyncExternalStore: (_subscribe, snapshot) => snapshot(),
+    useState: initial => { const i = cursor++; if (!(i in values)) values[i] = typeof initial === "function" ? initial() : initial; return [values[i], next => { values[i] = typeof next === "function" ? next(values[i]) : next; }]; },
+    useRef: initial => { const i = cursor++; return values[i] ??= { current: initial }; },
+    useMemo: fn => fn(), useEffect: () => {}
+  };
+  const client = factories.get("@michengai/dsh-archive-manager")(name => name === "react" ? hooks : statics[name]);
+  const state = { items: [], archivedSessionIds: ["previous"] };
+  const sessionState = { byId: Object.fromEntries(["a", "b", "c", "protected", "previous"].map(id => [id, { id, title: id, updatedAt: 1 }])) };
+  const favorites = new Set(["protected"]), calls = [];
+  let failOnce = true;
+  const favoriteSessions = async () => ({ favoriteSessionIds: [...favorites] });
+  const props = {
+    sessionStore: source(sessionState), workspaceStore: source(state), archivedSessionMetadata: async () => ({ items: [] }),
+    favoriteSessions, setSessionFavorite: async ({ sessionId, favorite }) => { if (favorite) favorites.add(sessionId); else favorites.delete(sessionId); return favoriteSessions(); },
+    organizeBatch: createSessionOrganizer({
+      workspaces: source(state), sessions: source(sessionState), getFavorites: favoriteSessions, currentSessionId,
+      archive: async id => { calls.push(id); if (id === "b" && failOnce) { failOnce = false; throw new Error("测试写入失败"); } state.archivedSessionIds = [...state.archivedSessionIds, id]; },
+      restore: async id => { state.archivedSessionIds = state.archivedSessionIds.filter(value => value !== id); return state; }
+    }), t: key => key
+  };
+  const nodes = node => Array.isArray(node) ? node.flatMap(nodes) : node?.props ? [node, ...nodes(node.props.children)] : [];
+  let tree;
+  const render = () => { cursor = 0; tree = client.__test.ArchivedSessionsSection(props); };
+  const panel = () => nodes(tree).find(node => node.type?.name === "OrganizerPanel");
+  const tab = name => nodes(tree).find(node => node.props.role === "tab" && node.props.children === `archives.tab.${name}`);
+  render();
+  await panel().props.onReload(); render();
+  assert.equal(panel().props.ready, true);
+  tab("unarchived").props.onClick(); render();
+  assert.equal(panel().props.count, 3, "收藏不参与闲置归档");
+  const rowActions = nodes(tree).find(node => node.props.className === "dsham_settingsActions").props.children;
+  assert.deepEqual(rowActions.map(node => node.props.title), ["archives.openSession", "archives.archiveSelected"]);
+  assert.ok(rowActions.every(node => typeof node.props.children !== "string"), "未归档操作使用图标");
+  const favorite = nodes(tree).find(node => node.type === "button" && node.props["aria-label"] === "organizer.favorite：a");
+  await favorite.props.onClick(); render();
+  assert.equal(panel().props.count, 2);
+  nodes(tree).find(node => node.props.className === "dsham_favoritesFilter").props.children[0].props.onChange({ target: { checked: true } }); render();
+  assert.equal(nodes(tree).filter(node => node.type === "article").length, 2);
+  nodes(tree).find(node => node.props.className === "dsham_favoritesFilter").props.children[0].props.onChange({ target: { checked: false } }); render();
+  await nodes(tree).find(node => node.type === "button" && node.props["aria-label"] === "organizer.unfavorite：a").props.onClick(); render();
+  panel().props.onPreview(); render();
+  const dialog = nodes(tree).find(node => node.props.open === true);
+  assert.equal(nodes(dialog.props.children).filter(node => node.type === "input" && node.props.type === "checkbox").length, 3);
+  const confirm = nodes(dialog.props.footer).find(node => node.props.children === "archives.archiveSelected");
+  await Promise.all([confirm.props.onClick(), confirm.props.onClick()]); render();
+  assert.deepEqual(calls, ["a", "b"]);
+  assert.deepEqual(panel().props.result.succeeded, ["a"]);
+  assert.deepEqual(panel().props.result.remaining, ["b", "c"]);
+  assert.equal(panel().props.undoCount, 1);
+  await panel().props.onRetry(); await tick(); render();
+  assert.deepEqual(calls, ["a", "b", "b", "c"]);
+  assert.equal(panel().props.undoCount, 3);
+  await panel().props.onUndo(); render();
+  assert.deepEqual(state.archivedSessionIds, ["previous"]);
+  assert.equal(panel().props.undoCount, 0);
+  assert.deepEqual([...favorites], ["protected"]);
 });

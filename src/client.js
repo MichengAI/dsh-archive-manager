@@ -1,6 +1,8 @@
 import { allowArchivedNavigation, openArchivedConversation, formatArchiveNavigationError, ArchiveNavigationError, currentSessionId } from "./archive-experience.js";
 import { mirrorDirectoryFlow } from "./directory-flow-slot.js";
 import { observePluginUpdate } from "./plugin-update-ui.js";
+import { favoriteInvocations, idleArchiveCandidate, createSessionOrganizer } from "./archive-organizer.js";
+import { createOrganizerPanel, organizerZh, organizerEn } from "./archive-organizer-ui.js";
 
 window.__ModuleLoader__.load({
 	id: "@michengai/dsh-archive-manager",
@@ -20,6 +22,7 @@ window.__ModuleLoader__.load({
 		}
 		let react_jsx_runtime = require("react/jsx-runtime");
 		let react = require("react");
+		const OrganizerPanel = createOrganizerPanel(react);
 		let _deepseek_ai_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
 		const UPDATE_ICON_PATHS = {
 			refresh: ["M13.5 5.5V2.5m0 0h-3m3 0-2.1 2.1A5.5 5.5 0 1 0 13.2 12"],
@@ -112,6 +115,7 @@ window.__ModuleLoader__.load({
 		const ARCHIVE_MANAGER_REMOTE = {
 			package: "@michengai/dsh-archive-manager",
 			descriptors: [
+				...favoriteInvocations(),
 				{
 					id: "@michengai/dsh-archive-manager#workspaceRegistry/unarchiveSession",
 					service: "workspaceRegistry",
@@ -299,14 +303,14 @@ window.__ModuleLoader__.load({
 		/**
 		* 归档管理设置页：集中处理筛选、多选、恢复、删除和原生会话导航。
 		*/
-		function ArchivedSessionsSection({ archiveSessions, sessionStore, workspaceStore, unarchiveSession, deleteSession, unarchiveSessions, deleteArchivedSessions, archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState, close, t }) {
+		function ArchivedSessionsSection({ archiveSessions, sessionStore, workspaceStore, unarchiveSession, deleteSession, unarchiveSessions, deleteArchivedSessions, archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState, close, t, favoriteSessions, setSessionFavorite, organizeBatch, useSessionPendingInteraction, useSessionStatus }) {
 			const sessions = (0, react.useSyncExternalStore)(sessionStore.subscribe, sessionStore.getSnapshot);
 			const workspaceState = (0, react.useSyncExternalStore)(workspaceStore.subscribe, workspaceStore.getSnapshot);
 			const [archiveTab, setArchiveTab] = (0, react.useState)("archived");
 			const isArchived = archiveTab === "archived";
 			const [archiveTarget, setArchiveTarget] = (0, react.useState)(null);
 			const [archiveGroup, setArchiveGroup] = (0, react.useState)(null);
-			const requestArchive = (ids, group = null) => { setError(null); setNotice(null); setArchiveGroup(group); setArchiveTarget(ids); };
+			const requestArchive = (ids, group = null) => { setError(null); setNotice(null); setIdleRequest(false); setArchiveGroup(group); setArchiveTarget(ids); };
 			const closeArchive = () => { if (!busy) { setArchiveTarget(null); setArchiveGroup(null); setError(null); } };
 			const archiveBusy = (0, react.useRef)(false);
 			const [deleteTarget, setDeleteTarget] = (0, react.useState)(null);
@@ -320,6 +324,51 @@ window.__ModuleLoader__.load({
 			const [unarchivingSessionIds, setUnarchivingSessionIds] = (0, react.useState)(() => /* @__PURE__ */ new Set());
 			const unarchivingSessionIdsRef = (0, react.useRef)(/* @__PURE__ */ new Set());
 			const [selectedSessionIds, setSelectedSessionIds] = (0, react.useState)([]);
+			const [favoriteIds, setFavoriteIds] = (0, react.useState)([]);
+			const [favoritesReady, setFavoritesReady] = (0, react.useState)(false);
+			const [favoriteBusy, setFavoriteBusy] = (0, react.useState)(false);
+			const favoriteLock = (0, react.useRef)(false);
+			const [favoritesOnly, setFavoritesOnly] = (0, react.useState)(false);
+			const [idleDays, setIdleDays] = (0, react.useState)("30");
+			const [idleRequest, setIdleRequest] = (0, react.useState)(false);
+			const [batchProgress, setBatchProgress] = (0, react.useState)(null);
+			const [batchResult, setBatchResult] = (0, react.useState)(null);
+			const [lastArchive, setLastArchive] = (0, react.useState)([]);
+			const batchLock = (0, react.useRef)(false);
+			const retryBatch = (0, react.useRef)(null);
+			const uiFacts = useSessionUiFacts(useSessionPendingInteraction ?? useEmptySessionPendingInteraction, useSessionStatus ?? useEmptySessionStatus, typeof useSessionStatus === "function");
+			const pendingRef = (0, react.useRef)(uiFacts.pending);
+			pendingRef.current = uiFacts.pending;
+			const favoriteSet = new Set(favoriteIds);
+			const loadFavorites = async () => {
+				if (!favoriteSessions) return;
+				try { const result = await favoriteSessions(); setFavoriteIds(result.favoriteSessionIds); setFavoritesReady(true); }
+				catch (reason) { setFavoritesReady(false); setError(String(reason?.message ?? reason)); }
+			};
+			(0, react.useEffect)(() => { let active = true; if (favoriteSessions) favoriteSessions().then((value) => { if (active) { setFavoriteIds(value.favoriteSessionIds); setFavoritesReady(true); } }).catch((reason) => { if (active) setError(String(reason?.message ?? reason)); }); return () => { active = false; }; }, [favoriteSessions]);
+			const toggleFavorite = async (sessionId) => {
+				if (favoriteLock.current || busy || !favoritesReady) return;
+				favoriteLock.current = true; setFavoriteBusy(true); setError(null);
+				try { const value = await setSessionFavorite({ sessionId, favorite: !favoriteSet.has(sessionId) }); setFavoriteIds(value.favoriteSessionIds); }
+				catch (reason) { setError(String(reason?.message ?? reason)); }
+				finally { favoriteLock.current = false; setFavoriteBusy(false); }
+			};
+			const executeBatch = async (kind, ids, { idle = false, retry = false } = {}) => {
+				if (batchLock.current || favoriteLock.current || unarchivingSessionIdsRef.current.size > 0 || !organizeBatch) return;
+				batchLock.current = true; setBusy(true); setError(null); setNotice(null); setBatchResult(null);
+				if (kind === "archive" && !retry) setLastArchive([]);
+				try {
+					const result = await organizeBatch(kind, ids, { idleDays: idle ? Number(idleDays) : undefined, getPending: () => pendingRef.current, onProgress: setBatchProgress });
+					setBatchResult({ ...result, kind });
+					retryBatch.current = result.remaining.length ? { kind, ids: result.remaining, idle } : null;
+					if (kind === "archive") setLastArchive((previous) => [...new Set([...previous, ...result.succeeded])]);
+					if (kind === "undo" || kind === "restore" || kind === "delete") setLastArchive((previous) => previous.filter((id) => !result.succeeded.includes(id) && !result.skipped.includes(id)));
+					setSelectedSessionIds((previous) => previous.filter((id) => !result.succeeded.includes(id) && !result.skipped.includes(id)));
+					if (kind === "delete") setFavoriteIds((previous) => previous.filter((id) => !result.succeeded.includes(id)));
+					return result;
+				} catch (reason) { setError(String(reason?.message ?? reason)); }
+				finally { batchLock.current = false; setBusy(false); setBatchProgress(null); }
+			};
 			const navigationActive = (0, react.useRef)(true);
 			const navigationPending = (0, react.useRef)(false);
 			(0, react.useEffect)(() => { navigationActive.current = true; return () => { navigationActive.current = false; }; }, []);
@@ -362,6 +411,14 @@ window.__ModuleLoader__.load({
 			};
 			const confirmArchive = async () => {
 				if (archiveBusy.current || busy || !archiveTarget?.length) return;
+				if (organizeBatch) {
+					archiveBusy.current = true;
+					try {
+						const result = await executeBatch("archive", archiveTarget, { idle: idleRequest });
+						if (result) { setArchiveTarget(null); setArchiveGroup(null); setIdleRequest(false); }
+					} finally { archiveBusy.current = false; }
+					return;
+				}
 				archiveBusy.current = true; setBusy(true); setError(null); setNotice(null);
 				try {
 					const result = await archiveSessions(archiveTarget);
@@ -393,9 +450,10 @@ window.__ModuleLoader__.load({
 				const normalizedQuery = query.trim().toLocaleLowerCase();
 				return sortedGroups.filter((group) => project === "all" || project === group.key).map((group) => ({
 					...group,
-					sessions: group.sessions.filter((session) => normalizedQuery === "" || displayTitle(session, t).toLocaleLowerCase().includes(normalizedQuery))
+					sessions: group.sessions.filter((session) => (normalizedQuery === "" || displayTitle(session, t).toLocaleLowerCase().includes(normalizedQuery)) && (!favoritesOnly || favoriteIds.includes(session.id)))
 				})).filter((group) => group.sessions.length > 0);
-			}, [sortedGroups, project, query, t]);
+			}, [sortedGroups, project, query, t, favoritesOnly, favoriteIds]);
+			const idleCandidates = favoritesReady ? filteredGroups.flatMap((group) => group.sessions).filter((session) => idleArchiveCandidate(session, { days: Number(idleDays), favorites: favoriteSet, currentId: currentSessionId(sessions), pending: uiFacts.pending })).map((session) => session.id) : [];
 			const visibleSessionIds = (0, react.useMemo)(() => archivedSessionIdsInGroups(filteredGroups), [filteredGroups]);
 			const selectedSessionIdSet = (0, react.useMemo)(() => new Set(selectedSessionIds), [selectedSessionIds]);
 			const selectedVisibleCount = visibleSessionIds.filter((sessionId) => selectedSessionIdSet.has(sessionId)).length;
@@ -426,6 +484,11 @@ window.__ModuleLoader__.load({
 			};
 			const onBatchUnarchive = async (target) => {
 				if (busy) return;
+				if (organizeBatch) {
+					const ids = deriveArchivedBatchIds(workspaceState.archivedSessionIds, workspaceState.items, target);
+					const result = await executeBatch("restore", ids);
+					return result && { unarchivedSessionIds: result.succeeded };
+				}
 				setBusy(true);
 				setError(null);
 				setNotice(null);
@@ -464,6 +527,12 @@ window.__ModuleLoader__.load({
 			}, [deleteTarget, busy]);
 			const confirmDelete = async () => {
 				if (busy || deleteTarget === null) return;
+				if (organizeBatch && deleteTarget.kind === "batch") {
+					const ids = deriveArchivedBatchIds(workspaceState.archivedSessionIds, workspaceState.items, deleteTarget.target);
+					const result = await executeBatch("delete", ids);
+					if (result) setDeleteTarget(null);
+					return;
+				}
 				setBusy(true);
 				setError(null);
 				setNotice(null);
@@ -520,7 +589,15 @@ window.__ModuleLoader__.load({
 					children: [(0, react_jsx_runtime.jsxs)("label", {
 						className: "dsham_settingsSearch",
 						children: [(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconSearchOutline16, {}), (0, react_jsx_runtime.jsx)("input", { type: "search", value: query, onChange: (event) => setQuery(event.target.value), placeholder: t(isArchived ? "archives.searchPlaceholder" : "archives.searchUnarchived"), "aria-label": t(isArchived ? "archives.searchPlaceholder" : "archives.searchUnarchived") })]
-					}), (0, react_jsx_runtime.jsx)(ArchiveProjectSelect, { id: "dsham-sort-filter", value: sortBy, options: [{ value: "updated", label: t("archives.sortUpdated") }, ...isArchived ? [{ value: "created", label: t("archives.sortCreated") }] : [], { value: "alphabetical", label: t("archives.sortAlphabetical") }], onChange: setSortBy, "aria-label": t("archives.sortBy") }), (0, react_jsx_runtime.jsx)(ArchiveProjectSelect, { id: "dsham-project-filter", value: project, options: [{ value: "all", label: t("archives.allProjects") }, ...sortedGroups.map((group) => ({ value: group.key, label: group.title }))], onChange: setProject, "aria-label": t("archives.projectFilter") })]
+					}), (0, react_jsx_runtime.jsx)(ArchiveProjectSelect, { id: "dsham-sort-filter", value: sortBy, options: [{ value: "updated", label: t("archives.sortUpdated") }, ...isArchived ? [{ value: "created", label: t("archives.sortCreated") }] : [], { value: "alphabetical", label: t("archives.sortAlphabetical") }], onChange: setSortBy, "aria-label": t("archives.sortBy") }), (0, react_jsx_runtime.jsx)(ArchiveProjectSelect, { id: "dsham-project-filter", value: project, options: [{ value: "all", label: t("archives.allProjects") }, ...sortedGroups.map((group) => ({ value: group.key, label: group.title }))], onChange: setProject, "aria-label": t("archives.projectFilter") }), setSessionFavorite && (0, react_jsx_runtime.jsxs)("label", { className: "dsham_favoritesFilter", children: [(0, react_jsx_runtime.jsx)("input", { type: "checkbox", checked: favoritesOnly, disabled: busy || favoriteBusy || !favoritesReady, onChange: (event) => setFavoritesOnly(event.target.checked) }), t("organizer.favoritesOnly")] })]
+				}), organizeBatch && (0, react_jsx_runtime.jsx)(OrganizerPanel, {
+					t, archived: isArchived, busy: busy || favoriteBusy || unarchivingSessionIds.size > 0, ready: favoritesReady,
+					days: idleDays, onDays: setIdleDays, count: idleCandidates.length,
+					onPreview: () => { requestArchive(idleCandidates); setIdleRequest(true); },
+					progress: batchProgress, result: batchResult,
+					onRetry: () => { const retry = retryBatch.current; if (retry) { if (retry.kind === "delete") setDeleteTarget({ kind: "batch", target: { scope: "sessions", sessionIds: retry.ids }, count: retry.ids.length }); else executeBatch(retry.kind, retry.ids, { idle: retry.idle, retry: true }); } },
+					undoCount: lastArchive.filter((id) => workspaceState.archivedSessionIds.includes(id)).length,
+					onUndo: () => executeBatch("undo", lastArchive, { retry: true }), onReload: loadFavorites
 				}), groups.length > 0 && (0, react_jsx_runtime.jsx)(ArchiveSelectionToolbar, {
 					selectedCount: selectedSessionIds.length,
 					hiddenCount: selectedSessionIds.length - selectedVisibleCount,
@@ -543,9 +620,9 @@ window.__ModuleLoader__.load({
 							className: "dsham_settingsList",
 							children: group.sessions.map((session) => (0, react_jsx_runtime.jsxs)("article", {
 								className: "dsham_settingsRow",
-								children: [(0, react_jsx_runtime.jsx)(ArchiveSelectionCheckbox, { checked: selectedSessionIdSet.has(session.id), disabled: busy, label: t("archives.selectSession", { name: displayTitle(session, t) }), onChange: (event) => toggleSessionSelection(session.id, event.target.checked) }), (0, react_jsx_runtime.jsxs)("div", { className: "dsham_settingsContent", children: [(0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsTitle", children: displayTitle(session, t) }), (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsMeta", children: archiveTimeLabel(session.updatedAt, t) })] }), (0, react_jsx_runtime.jsxs)("div", {
+								children: [setSessionFavorite && (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_favorite", title: t(favoriteSet.has(session.id) ? "organizer.unfavorite" : "organizer.favorite"), "aria-pressed": favoriteSet.has(session.id), "aria-label": t(favoriteSet.has(session.id) ? "organizer.unfavorite" : "organizer.favorite") + "：" + displayTitle(session, t), disabled: busy || favoriteBusy || !favoritesReady, onClick: () => toggleFavorite(session.id), children: (0, react_jsx_runtime.jsx)("span", { "aria-hidden": true, children: favoriteSet.has(session.id) ? "★" : "☆" }) }), (0, react_jsx_runtime.jsx)(ArchiveSelectionCheckbox, { checked: selectedSessionIdSet.has(session.id), disabled: busy, label: t("archives.selectSession", { name: displayTitle(session, t) }), onChange: (event) => toggleSessionSelection(session.id, event.target.checked) }), (0, react_jsx_runtime.jsxs)("div", { className: "dsham_settingsContent", children: [(0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsTitle", children: displayTitle(session, t) }), (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsMeta", children: archiveTimeLabel(session.updatedAt, t) })] }), (0, react_jsx_runtime.jsxs)("div", {
 									className: "dsham_settingsActions",
-									children: !isArchived ? [(0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsAction", disabled: busy, onClick: () => viewConversation(session), children: t("archives.openSession") }), (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsAction", disabled: busy, onClick: () => requestArchive([session.id]), children: t("archives.archiveSelected") })] : [(0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsAction", disabled: busy || unarchivingSessionIds.has(session.id), onClick: () => viewConversation(session), children: t("archives.openSession") }), (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsAction", disabled: busy || unarchivingSessionIds.has(session.id), onClick: () => viewConversation(session, true), children: t("archives.restoreOpen") }), (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsAction", disabled: busy || unarchivingSessionIds.has(session.id), onClick: () => onUnarchive(session.id), children: t("archives.restore") }), (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsDelete", disabled: busy || unarchivingSessionIds.has(session.id), "aria-label": t("menu.deleteSession"), onClick: () => setDeleteTarget({ kind: "session", session }), children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconTrashOutline16, {}) })]
+									children: !isArchived ? [(0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_restoreIcon", title: t("archives.openSession"), "aria-label": t("archives.openSession"), disabled: busy, onClick: () => viewConversation(session), children: (0, react_jsx_runtime.jsx)("svg", { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true, children: (0, react_jsx_runtime.jsx)("path", { d: "M14 3h7v7M21 3 10 14M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5" }) }) }), (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_restoreIcon", title: t("archives.archiveSelected"), "aria-label": t("archives.archiveSelected"), disabled: busy, onClick: () => requestArchive([session.id]), children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconArchiveOutline20, { size: 16 }) })] : [(0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsAction", disabled: busy || unarchivingSessionIds.has(session.id), onClick: () => viewConversation(session, true), children: t("archives.restoreOpen") }), (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsAction", disabled: busy || unarchivingSessionIds.has(session.id), onClick: () => viewConversation(session), children: t("archives.openSession") }), (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_restoreIcon", title: t("archives.restore"), "aria-label": t("archives.restore"), disabled: busy || unarchivingSessionIds.has(session.id), onClick: () => onUnarchive(session.id), children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconRefreshOutline16, {}) }), (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsDelete", disabled: busy || unarchivingSessionIds.has(session.id), "aria-label": t("menu.deleteSession"), title: t("menu.deleteSession"), onClick: () => setDeleteTarget({ kind: "session", session }), children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconTrashOutline16, {}) })]
 								})]
 							}, session.id))
 						})]
@@ -556,8 +633,13 @@ window.__ModuleLoader__.load({
 					title: t("archives.archiveTitle", { n: archiveTarget?.length ?? 0 }), description: archiveGroup === null ? t("archives.archiveSelectedDesc") : t(archiveGroup.key === ARCHIVE_UNGROUPED_KEY ? "archives.archiveUngroupedDesc" : "archives.archiveProjectDesc", { name: archiveGroup.title, n: archiveTarget?.length ?? 0 }),
 					footer: (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
 						(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, { variant: "outline", disabled: busy, onClick: closeArchive, children: t("cancel") }),
-						(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, { variant: "outline", className: "dsham_archiveWorkspaceConfirm", disabled: busy, onClick: confirmArchive, children: t("archives.archiveSelected") })
-					] }), children: error !== null ? (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsError", role: "alert", children: error }) : busy ? t("archiveWorkspace.pending") : null
+						(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, { variant: "outline", className: "dsham_archiveWorkspaceConfirm", disabled: busy || !archiveTarget?.length, onClick: confirmArchive, children: t("archives.archiveSelected") })
+					] }), children: (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
+						organizeBatch && (0, react_jsx_runtime.jsx)("p", { children: t(idleRequest ? "organizer.idleConfirm" : "organizer.manualConfirm") }),
+						organizeBatch && (0, react_jsx_runtime.jsx)("div", { className: "dsham_archivePreview", children: (archiveTarget ?? []).map((id) => (0, react_jsx_runtime.jsxs)("label", { children: [(0, react_jsx_runtime.jsx)("input", { type: "checkbox", checked: true, disabled: busy, onChange: () => setArchiveTarget((current) => current.filter((value) => value !== id)) }), displayTitle(sessions.byId[id] ?? { id }, t)] }, id)) }),
+						batchProgress && (0, react_jsx_runtime.jsxs)("div", { role: "status", children: [(0, react_jsx_runtime.jsx)("progress", { value: batchProgress.done, max: Math.max(1, batchProgress.total) }), t("organizer.progressCount", { done: batchProgress.done, total: batchProgress.total })] }),
+						error !== null && (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsError", role: "alert", children: error })
+					] })
 					}), (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Modal, {
 					open: deleteTarget !== null,
 					onClose: closeDelete,
@@ -565,7 +647,7 @@ window.__ModuleLoader__.load({
 					title: deleteDialogTitle,
 					...deleteDialogDescription === void 0 ? {} : { description: deleteDialogDescription },
 					footer: (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, { variant: "outline", disabled: busy, onClick: closeDelete, children: t("cancel") }), (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, { variant: "outline", className: "dsham_settingsDeleteConfirm", disabled: busy, onClick: confirmDelete, children: deleteConfirmLabel })] }),
-					children: busy && (0, react_jsx_runtime.jsx)("div", { role: "status", children: deleteTarget?.kind === "batch" ? t("archives.deleteBatchPending") : t("deleteSession.pending") })
+					children: busy && (0, react_jsx_runtime.jsxs)("div", { role: "status", children: [deleteTarget?.kind === "batch" ? t("archives.deleteBatchPending") : t("deleteSession.pending"), batchProgress && (0, react_jsx_runtime.jsx)("progress", { value: batchProgress.done, max: Math.max(1, batchProgress.total), "aria-label": t("organizer.progress") }), batchProgress && t("organizer.progressCount", { done: batchProgress.done, total: batchProgress.total })] })
 				})] })]
 			});
 		}
@@ -3465,6 +3547,7 @@ window.__ModuleLoader__.load({
 		}
 
 		const zh = {
+			...organizerZh,
 			"archives.archiveProject": "归档该项目的全部聊天",
 			"archives.archiveUngrouped": "归档全部未分组聊天",
 			"archives.archiveProjectDesc": "将“{name}”中全部 {n} 条未归档会话归档，不受当前搜索筛选影响。之后可在“已归档”中恢复。",
@@ -3475,14 +3558,14 @@ window.__ModuleLoader__.load({
 			"archives.searchUnarchived": "搜索未归档聊天",
 			"archives.emptyUnarchived": "暂无未归档会话。",
 			"archives.archiveSelected": "归档",
-			"archives.openSession": "打开会话",
+			"archives.openSession": "打开",
 			"archives.archiveSelectedDesc": "将选中的会话归档，包含当前筛选隐藏的已选项。之后可在“已归档”中查看和恢复。",
 			"archives.archiveSuccess": "已归档 {n} 条会话。",
 			"archives.archiveBatchFailed": "批量归档失败：{detail}",
 
 			"archives.navigationUnavailable": "当前宿主无法保持归档对话，请使用“恢复并打开”。",
 			"archives.sessionNotRetained": "宿主未保留目标会话，请重新打开或恢复后再试。",
-			"archives.restoreOpen": "恢复并打开",
+			"archives.restoreOpen": "恢复打开",
 			"archives.selectedCount": "已选 {n} 条",
 			"archives.selectionHiddenHint": "含当前未显示的 {hidden} 条，也将参与操作",
 			"archives.clearSelectionShort": "清空",
@@ -3539,9 +3622,9 @@ window.__ModuleLoader__.load({
 			"archives.deleteSelected": "删除所选",
 			"archives.timestamp": "{date}，{time}",
 			"archives.restoreAll": "全部恢复",
-			"archives.restoreProject": "恢复该项目的全部聊天",
+			"archives.restoreProject": "恢复项目全部聊天",
 			"archives.restoreUngrouped": "全部恢复",
-			"archives.deleteProject": "删除该项目的全部聊天",
+			"archives.deleteProject": "删除项目全部聊天",
 			"archives.deleteUngrouped": "全部删除",
 			"archives.projectActions": "项目“{name}”的归档操作",
 			"archives.ungroupedActions": "未分组聊天的归档操作",
@@ -3555,7 +3638,7 @@ window.__ModuleLoader__.load({
 			"archives.deleteSelectedConfirm": "删除所选聊天",
 			"archives.deleteProjectTitle": "删除“{name}”中的已归档聊天",
 			"archives.deleteProjectDesc": "将永久删除“{name}”中的 {n} 个已归档聊天及其子代理和记录。项目目录和未归档聊天不会受影响，此操作不可恢复。",
-			"archives.deleteProjectConfirm": "删除该项目的全部聊天",
+			"archives.deleteProjectConfirm": "删除项目全部聊天",
 			"archives.deleteUngroupedTitle": "删除未分组的已归档聊天",
 			"archives.deleteUngroupedDesc": "将永久删除未分组中的 {n} 个已归档聊天及其子代理和记录。其他项目和未归档聊天不会受影响，此操作不可恢复。",
 			"archives.deleteUngroupedConfirm": "删除未分组的全部聊天",
@@ -3617,6 +3700,7 @@ window.__ModuleLoader__.load({
 		};
 		/** English dictionary, checked complete against the zh key set. */
 		const en = {
+			...organizerEn,
 			"archives.archiveProject": "Archive all chats in this project",
 			"archives.archiveUngrouped": "Archive all ungrouped chats",
 			"archives.archiveProjectDesc": "Archive all {n} unarchived sessions in “{name}”, regardless of the current search filter. You can restore them in Archived.",
@@ -3921,6 +4005,26 @@ window.__ModuleLoader__.load({
 				}
 			};
 			const unarchiveOne = createUnarchiveSession(ctx.workspaces, () => ctx.get("remote.workspaceRegistry"));
+			const favoriteCall = async (method, input) => {
+				const registry = ctx.get("remote.workspaceRegistry");
+				if (!registry || typeof registry[method] !== "function") throw new Error("收藏服务尚未就绪，请重试");
+				const result = input === undefined ? await registry[method]() : await registry[method](input);
+				if (!result.ok) throw new Error(result.error.message);
+				return result.value;
+			};
+			const favoriteSessions = () => favoriteCall("favoriteSessions");
+			const setSessionFavorite = (input) => favoriteCall("setSessionFavorite", input);
+			const organizeBatch = createSessionOrganizer({
+				workspaces: ctx.workspaces.list, sessions: ctx.sessions.list,
+				archive: (id) => ctx.workspaces.archiveSession(id), restore: unarchiveOne,
+				deleteOne: async (id) => {
+					const registry = ctx.get("remote.workspaceRegistry");
+					if (!registry) throw new Error("归档服务尚未就绪，请重试");
+					const result = await registry.deleteSession(id);
+					if (!result.ok) throw new Error(result.error.message);
+				},
+				getFavorites: favoriteSessions, refresh: () => ctx.sessions.refresh?.(), currentSessionId
+			});
 			const unarchiveSession = async (sessionId) => {
 				await unarchiveOne(sessionId);
 				await refreshSessionList();
@@ -4061,6 +4165,7 @@ window.__ModuleLoader__.load({
 					unarchiveSessions,
 					deleteArchivedSessions,
 					archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState: archiveViewState,
+					favoriteSessions, setSessionFavorite, organizeBatch,
 					t: ctx.locale.bind(NS)
 				})
 			}, ArchivedSessionsSection));

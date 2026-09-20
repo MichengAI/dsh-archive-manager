@@ -4,6 +4,13 @@ import { WorkspaceRegistry } from "@deepseek-ai/dsh-workspace";
 import { bindTypertRemote, Remote } from "@deepseek-ai/dsh-typert-protocol";
 import { sessionDir } from "@deepseek-ai/dsh-spill-local";
 import { trackTombstone } from "./tombstone.js";
+import { defineDomain } from "@deepseek-ai/dsh-storage-domain";
+import { favoriteInputSchema, favoriteStateSchema, favoriteInvocations } from "./archive-organizer.js";
+
+const favoriteDomainSpec = defineDomain({
+	name: "archive_manager_favorites", version: 1, tables: {},
+	global: { schema: favoriteStateSchema, initial: { favoriteSessionIds: [] } },
+});
 //#region lib/types/index.js
 /**
  * dsh-archive-manager 宿主侧归档会话管理。
@@ -227,6 +234,7 @@ const archivedSessionMetadataSchema = {
  * 或协议包双份导致 /api/workspaceRegistry/deleteSession 在生产环境 404。
  */
 const ARCHIVE_MANAGER_INVOCATIONS = [
+	...favoriteInvocations(),
 	{
 		id: "@michengai/dsh-archive-manager#workspaceRegistry/unarchiveSession",
 		service: "workspaceRegistry",
@@ -359,7 +367,44 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		markRemoteMethod(this, "deleteSession");
 		markRemoteMethod(this, "deleteArchivedSessions");
 		markRemoteMethod(this, "archivedSessionMetadata");
+		markRemoteMethod(this, "favoriteSessions");
+		markRemoteMethod(this, "setSessionFavorite");
 		registerHostRemote(this.ctx);
+	}
+	/** 独立收藏域不改变官方工作区数据结构；旧版本回退时可保留收藏。 */
+	async favoriteDomain() {
+		if (!this.favoriteDomainPromise) {
+			this.favoriteDomainPromise = this.ctx.storageDomain.open(favoriteDomainSpec).then((domain) => {
+				this.ctx.effect(() => () => domain.close(), "archive-manager: 收藏存储关闭");
+				return domain;
+			}).catch((error) => { this.favoriteDomainPromise = undefined; throw error; });
+		}
+		return this.favoriteDomainPromise;
+	}
+	/** 返回宿主保存的收藏；读取时清理已确认不存在的会话。 */
+	async favoriteSessions() {
+		return this.enqueueOperation(async () => {
+			const domain = await this.favoriteDomain();
+			const state = favoriteStateSchema.parse(domain.global.get());
+			const kept = [];
+			for (const id of state.favoriteSessionIds) if (await this.sessionKnown(id)) kept.push(id);
+			if (kept.length !== state.favoriteSessionIds.length) await domain.global.set({ favoriteSessionIds: kept });
+			return { favoriteSessionIds: kept };
+		});
+	}
+	/** 设置单条收藏，串行写入避免不同浏览器相互覆盖。 */
+	async setSessionFavorite(input) {
+		const { sessionId, favorite } = favoriteInputSchema.parse(input);
+		return this.enqueueOperation(async () => {
+			if (favorite && !(await this.sessionKnown(sessionId))) throw new Error("会话不存在，无法收藏");
+			const domain = await this.favoriteDomain();
+			const state = favoriteStateSchema.parse(domain.global.get());
+			const ids = new Set(state.favoriteSessionIds);
+			if (favorite) ids.add(sessionId); else ids.delete(sessionId);
+			const next = favoriteStateSchema.parse({ favoriteSessionIds: [...ids] });
+			await domain.global.set(next);
+			return next;
+		});
 	}
 	/** 归档集合未变时复用反查表，避免每次 sessionPath 都扫全部工作区记账。 */
 	archivedWorkspacePath(sessionId) {
