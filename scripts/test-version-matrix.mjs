@@ -13,6 +13,8 @@ const profiles = [
 	{ version: "0.1.1-rc.2", cordis: "4.0.1", runtime: true },
 	{ version: "0.1.2-rc.1", cordis: "4.0.2" },
 	{ version: "0.1.5-rc.1", cordis: "4.0.2", latest: true },
+	{ version: "0.1.5-rc.2", cordis: "4.0.2", latest: true },
+	{ version: "0.1.6-alpha.1", cordis: "4.0.2", latest: true },
 	{ version: manifest.devDependencies["@deepseek-ai/dsh-session"], cordis: "4.0.2", latest: true }
 ];
 const npm = process.platform === "win32" ? process.execPath : "npm";
@@ -59,11 +61,11 @@ for (const profile of profiles) {
 			await cp(join(root, directory), join(isolated, directory), { recursive: true, filter: (source) => basename(source) !== "node_modules" });
 		}
 		// 安装清单只用于装载宿主；测试仍审查真实插件清单，不伪造发布依赖。
-		for (const file of ["package.json", ".gitattributes", "README.md", "README.zh-CN.md", "CHANGELOG.md", "CHANGELOG.zh-CN.md", "LICENSE", "cordis.patch.yml"]) {
+		for (const file of ["package.json", "tsconfig.json", ".gitattributes", "README.md", "README.zh-CN.md", "CHANGELOG.md", "CHANGELOG.zh-CN.md", "LICENSE", "cordis.patch.yml"]) {
 			await cp(join(root, file), join(isolated, file));
 		}
 		const fixture = profile.latest ? "latest-host.mjs" : "legacy-host.mjs";
-		const output = await run(process.execPath, ["--test", "--test-reporter=spec", ...testNames.map((name) => join("test", name)), join("test", "fixtures", fixture)], isolated, { ...process.env, DSH_ARCHIVE_TEST_HOST_VERSION: profile.version });
+		const output = await run(process.execPath, ["--import", "tsx", "--test", "--test-reporter=spec", ...testNames.map((name) => join("test", name)), join("test", "fixtures", fixture)], isolated, { ...process.env, DSH_ARCHIVE_TEST_HOST_VERSION: profile.version });
 		console.log(output.trim().split(/\r?\n/).slice(-8).join("\n"));
 	} catch (error) {
 		console.error(`DSH ${profile.version} 回归失败：${String(error)}`);

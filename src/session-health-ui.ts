@@ -1,6 +1,15 @@
+import { errorMessage } from "./contracts.js";
+import type { Translate, SessionDetail, SessionSummary } from "./contracts.js";
+type HealthResult = Partial<ReturnType<typeof import("./archive-discovery.js").repairResultSchema.parse>> & { repairable: boolean };
+interface HealthProps {
+ items: SessionDetail[]; sessions: (SessionSummary & { displayTitle?: string })[]; t?: Translate; isArchived?: boolean;
+ diagnoseSession?: (input: {sessionId: string}) => Promise<HealthResult>;
+ repairSession?: (input: {sessionId: string; token?: string}) => Promise<HealthResult>;
+ retry(): void; pending: boolean;
+}
 import { healthZh, healthEn } from "./session-health-locales.js";
 export { healthZh, healthEn };
-const defaultT = (key, args = {}) => Object.entries(args).reduce((text, [name, value]) => text.replaceAll("{" + name + "}", String(value)), healthZh[key] ?? key);
+const defaultT: Translate = (key, args = {}) => Object.entries(args).reduce((text, [name, value]) => text.replaceAll("{" + name + "}", String(value)), (healthZh as Record<string, string>)[key] ?? key);
 
 import { classifySessionError } from "./archive-discovery.js";
 
@@ -28,23 +37,23 @@ export const sessionHealthCss = `
 `;
 
 /** 异常默认折叠；只在服务端完成诊断后提供确认修复。 */
-export function createSessionHealthPanel(React, icons = {}) {
+export function createSessionHealthPanel(React: typeof import("react"), icons: Record<string, import("react").ComponentType<{ size?: number; className?: string; width?: number; height?: number }>> = {}) {
   const h = React.createElement;
-  const icon = (name, className) => icons[name] ? h('span', { className, 'aria-hidden': true }, h(icons[name], { width: 16, height: 16 })) : null;
-  return function SessionHealthPanel({ items, sessions, t = defaultT, isArchived = true, diagnoseSession, repairSession, retry, pending }) {
-    const [results, setResults] = React.useState({});
+  const icon = (name: string, className?: string) => icons[name] ? h('span', { className, 'aria-hidden': true }, h(icons[name], { width: 16, height: 16 })) : null;
+  return function SessionHealthPanel({ items, sessions, t = defaultT, isArchived = true, diagnoseSession, repairSession, retry, pending }: HealthProps) {
+    const [results, setResults] = React.useState<Record<string, HealthResult>>({});
     const [busyId, setBusyId] = React.useState('');
-    const [notice, setNotice] = React.useState('');
+    const [notice, setNotice] = React.useState<string | boolean>("");
     const errors = items.filter(row => row.error);
-    const run = async (row, repair) => {
+    const run = async (row: SessionDetail, repair: boolean) => {
       if (busyId) return;
       setBusyId(row.sessionId); setNotice('');
       try {
-        const result = await (repair ? repairSession({ sessionId: row.sessionId, token: results[row.sessionId].token }) : diagnoseSession({ sessionId: row.sessionId }));
+        const result = await (repair && repairSession ? repairSession({ sessionId: row.sessionId, token: results[row.sessionId].token }) : diagnoseSession!({ sessionId: row.sessionId }));
         setResults(previous => ({ ...previous, [row.sessionId]: result }));
         if (result.repaired) { setNotice(true); retry(); }
       } catch (error) {
-        setResults(previous => ({ ...previous, [row.sessionId]: { repairable: false, code: 'failed', reason: '', advice: String(error?.message ?? error).slice(0,1000) } }));
+        setResults(previous => ({ ...previous, [row.sessionId]: { repairable: false, code: 'failed', reason: '', advice: errorMessage(error).slice(0,1000) } }));
       } finally { setBusyId(''); }
     };
     return h('div', { className: 'dsham_health' }, h('style', null, sessionHealthCss),

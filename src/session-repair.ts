@@ -1,51 +1,67 @@
+import { record } from "./contracts.js";
+import type { SessionHeader, SessionEvent, SessionLogOffset } from "@deepseek-ai/dsh-session";
+export interface RepairArtifact { header: SessionHeader; events: SessionEvent[]; inheritedEventCount: SessionLogOffset }
+export interface RepairFormat { currentVersion: number; createRestore(header: unknown): { decodeRow(row: unknown): void; finish(): RepairArtifact }; encodeHeader(header: SessionHeader, inheritedEventCount: SessionLogOffset): unknown; encodeEvent(event: SessionEvent): unknown; validate?(artifact: RepairArtifact): unknown; validateBytes?(bytes: Buffer): unknown }
 import { createHash, randomUUID } from 'node:crypto';
 import { lstat, readFile, readdir, open, link, unlink, realpath, rename } from 'node:fs/promises';
 import { join, resolve, basename } from 'node:path';
 import * as zlib from 'node:zlib';
 export { classifySessionError } from './archive-discovery.js';
 const LIMIT = 32 * 1024 * 1024;
-const digest = bytes => createHash('sha256').update(bytes).digest('hex');
+/** Node 22 声明遗漏 info: true 的返回重载；按实际返回值验证后使用。 */
+function decompressFrame(bytes: Buffer, maxOutputLength: number) {
+  const result = record(zlib.zstdDecompressSync(bytes, { info: true, maxOutputLength }));
+  const engine = record(result.engine);
+  if (!Buffer.isBuffer(result.buffer) || typeof engine.bytesWritten !== 'number') throw new Error('压缩帧返回格式无效');
+  return { buffer: result.buffer, engine: { bytesWritten: engine.bytesWritten } };
+}
+const digest = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
 /** 严格读取所有独立压缩帧；拒绝残缺末尾，避免把截断误当修复。 */
-export function decodeRepairLog(bytes, compressed) {
+export function decodeRepairLog(bytes: Buffer, compressed: boolean) {
   if (bytes.length > LIMIT) throw new Error('日志超过 32 MB，需离线处理');
   const chunks = []; let offset = 0, size = 0;
   if (compressed && typeof zlib.zstdDecompressSync !== 'function') throw new Error('当前 Node.js 不支持压缩日志诊断');
   while (compressed && offset < bytes.length) {
-    const result = zlib.zstdDecompressSync(bytes.subarray(offset), { info: true, maxOutputLength: LIMIT - size });
+    const result = decompressFrame(bytes.subarray(offset), LIMIT - size);
     if (!result.engine.bytesWritten) throw new Error('压缩日志没有完整帧');
     offset += result.engine.bytesWritten; size += result.buffer.length; chunks.push(result.buffer);
     if (size > LIMIT) throw new Error('解压日志超过 32 MB，需离线处理');
   }
   const text = new TextDecoder('utf-8', { fatal: true }).decode(compressed ? Buffer.concat(chunks) : bytes);
   if (!text.endsWith('\n')) throw new Error('日志末尾不完整，不能自动修复');
-  return text.trimEnd().split('\n').map(line => JSON.parse(line));
+  return text.trimEnd().split('\n').map(line => record(JSON.parse(line)));
 }
 /** 仅访问宿主定义的消息槽位，不递归改写正文或工具参数中的同名字段。 */
-export function normalizeAutomationSources(input) {
+export function normalizeAutomationSources(input: readonly Record<string, unknown>[]) {
   const rows = structuredClone(input); let count = 0;
-  const fix = message => {
-    const source = message?.source;
+  const fix = (value: unknown) => {
+    if (!value || typeof value !== 'object') return;
+    const message = record(value);
+    const candidate = message.source;
+    if (!candidate || typeof candidate !== 'object') return;
+    const source = record(candidate);
     if (source?.kind !== 'automation') return;
     if (Object.keys(source).some(key => !['kind','automationId','runId','scheduledFor'].includes(key)) ||
-        !['automationId','runId','scheduledFor'].every(key => typeof source[key] === 'string' && source[key].length > 0 && source[key].length < 512) || !Number.isFinite(Date.parse(source.scheduledFor))) {
+        !['automationId','runId','scheduledFor'].every(key => typeof source[key] === 'string' && source[key].length > 0 && source[key].length < 512) || !Number.isFinite(Date.parse(String(source.scheduledFor)))) {
       throw new Error('自动化归属信息不完整或存在未知字段，需人工检查');
     }
     message.source = { kind: 'plugin', plugin: 'dsh-automation', form: 'notice', summary: JSON.stringify(source) }; count++;
   };
   for (const row of rows.slice(1)) {
-    if (row.type === 'user/message') fix(row.data);
-    if (['assistant/message','tool/result'].includes(row.type)) fix(row.data?.message);
-    if (row.type === 'agent/inbox/spliced') row.data?.inserted?.forEach(fix);
-    if (row.type === 'session/title-llm-request') row.data?.messages?.forEach(fix);
+    const data = row.data && typeof row.data === 'object' ? record(row.data) : {};
+    if (row.type === 'user/message') fix(data);
+    if (typeof row.type === 'string' && ['assistant/message','tool/result'].includes(row.type)) fix(data.message);
+    if (row.type === 'agent/inbox/spliced') Array.isArray(data.inserted) && data.inserted.forEach(fix);
+    if (row.type === 'session/title-llm-request') Array.isArray(data.messages) && data.messages.forEach(fix);
   }
   return { rows, count };
 }
-async function regularFile(path) {
+async function regularFile(path: string) {
   const stat = await lstat(path);
   if (!stat.isFile() || stat.isSymbolicLink() || stat.size > LIMIT) throw new Error('工件不是可安全处理的常规日志文件');
 }
 /** 保留旧代际，只生成经宿主转换器校验的新代际；仅允许纠正内容完全匹配的旧版单帧错误产物。 */
-export async function prepareAutomationRepair({ directory, target, sessionId, format }) {
+export async function prepareAutomationRepair({ directory, target, sessionId, format }: { directory: string; target: string; sessionId: string; format: RepairFormat }) {
   if (!format || format.currentVersion !== 3 || typeof format.createRestore !== 'function') throw new Error('当前宿主不支持此修复，请升级 DSH 后重试');
   if (resolve(await realpath(directory)).toLowerCase() !== resolve(directory).toLowerCase()) throw new Error('会话目录存在链接重定向，需人工处理');
   const names = (await readdir(directory)).filter(name => /^session(?:\.v[1-9][0-9]*)?\.jsonl(?:\.zstd)?$/.test(name));
@@ -69,15 +85,15 @@ export async function prepareAutomationRepair({ directory, target, sessionId, fo
   const plain = Buffer.from(lines.map(row => JSON.stringify(row)).join('\n') + '\n', 'utf8');
   if (plain.length > LIMIT) throw new Error('修复结果超过处理上限');
   // 宿主要求第一帧恰好一行头部，后续帧才允许包含事件。
-  const compress = value => zlib.zstdCompressSync(value, { params: { [zlib.constants.ZSTD_c_checksumFlag]: 1 } });
+  const compress = (value: Buffer) => zlib.zstdCompressSync(value, { params: { [zlib.constants.ZSTD_c_checksumFlag]: 1 } });
   const headerBytes = Buffer.from(JSON.stringify(lines[0]) + '\n', 'utf8');
   const output = target.endsWith('.zstd') ? Buffer.concat([compress(headerBytes), ...(lines.length > 1 ? [compress(plain.subarray(headerBytes.length))] : [])]) : plain;
   await format.validateBytes?.(output);
-  let previousTarget;
+  let previousTarget: Buffer | undefined;
   if (names.includes(basename(target))) {
     await regularFile(target); previousTarget = await readFile(target);
     if (!target.endsWith('.zstd')) throw new Error('已有新版日志，不能覆盖');
-    const first = zlib.zstdDecompressSync(previousTarget, { info: true, maxOutputLength: LIMIT });
+    const first = decompressFrame(previousTarget, LIMIT);
     // 只纠正本插件旧实现产生的整文件单帧，且内容必须逐字匹配从原日志重新生成的结果。
     if (first.engine.bytesWritten !== previousTarget.length || !first.buffer.equals(plain) || first.buffer.indexOf(10) === first.buffer.length - 1) throw new Error('已有日志与旧版修复产物不匹配，不能覆盖');
   }
@@ -89,7 +105,7 @@ export async function prepareAutomationRepair({ directory, target, sessionId, fo
       if (digest(await readFile(target)) !== digest(previousTarget)) throw new Error('修复产物已变化，请重新诊断');
     }
   };
-  return { token, correctingFrame: Boolean(previousTarget), count: normalized.count, source, async publish(expectedToken, ensureIdle) {
+  return { token, correctingFrame: Boolean(previousTarget), count: normalized.count, source, async publish(expectedToken: string, ensureIdle: () => Promise<unknown>) {
     if (expectedToken !== token) throw new Error('日志已变化，请重新诊断');
     await ensureIdle(); await regularFile(source);
     await unchanged();

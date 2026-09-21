@@ -9,6 +9,7 @@ const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const required = [
   "package.json",
   "lib/index.js",
+  "lib/contracts.js",
   "cordis.patch.yml",
   "lib/workspace.js",
   "lib/projcache.js",

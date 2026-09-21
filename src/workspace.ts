@@ -1,3 +1,11 @@
+import type { Context } from "@deepseek-ai/cordis";
+import type { Domain, DomainGlobalSpec } from "@deepseek-ai/dsh-storage-domain";
+import type { TypertContribution } from "@deepseek-ai/dsh-typert-registry";
+import type { Header, HostContext, PersistenceCompat, SessionsCompat, WorkspaceConstructor } from "./host-compat.js";
+import { record, errorMessage, errorCode } from "./contracts.js";
+import type { Schema, SessionDetail } from "./contracts.js";
+import type { TypertGatewayBinding } from "@deepseek-ai/dsh-typert-protocol";
+type BatchTarget = { scope: "all" | "ungrouped" } | { scope: "workspace"; workspaceId: string } | { scope: "sessions"; sessionIds: string[] };
 import * as SessionRuntime from "@deepseek-ai/dsh-session";
 import { prepareAutomationRepair } from "./session-repair.js";
 import { repairInputSchema, classifySessionError, detailsInputSchema, countConversationTurns, discoveryInvocations, searchInputSchema, previewInputSchema, extractConversation, findContentMatch, previewConversation } from "./archive-discovery.js";
@@ -12,7 +20,8 @@ import { favoriteInputSchema, favoriteStateSchema, favoriteInvocations } from ".
 
 const favoriteDomainSpec = defineDomain({
 	name: "archive_manager_favorites", version: 1, tables: {},
-	global: { schema: favoriteStateSchema, initial: { favoriteSessionIds: [] } },
+	// 宿主运行时仅调用 parse/safeParse；兼容早期同构 schema，不新增 Zod 运行依赖。
+	global: { schema: favoriteStateSchema as unknown as DomainGlobalSpec<{ favoriteSessionIds: string[] }>["schema"], initial: { favoriteSessionIds: [] as string[] } },
 });
 //#region lib/types/index.js
 /**
@@ -42,7 +51,7 @@ const favoriteDomainSpec = defineDomain({
  * A generic locate() path does NOT grant ownership of its parent directory.
  * Unknown backends/layouts keep artifact-only deletion. Do not prune ancestors.
  */
-function jsonlSessionDirectory(persistence, header, location) {
+function jsonlSessionDirectory(persistence: PersistenceCompat, header: Header, location: { kind: string; path: string }) {
 	if (
 		persistence.name !== "session-persistence-jsonl" ||
 		location.kind !== "jsonl"
@@ -67,7 +76,7 @@ function jsonlSessionDirectory(persistence, header, location) {
 		return;
 	if (typeof header.id !== "string" || header.id.length === 0) return;
 	// Upstream encodes UTF-16 code units as ~XXXX (including lone surrogates).
-	const encode = (text) =>
+	const encode = (text: string) =>
 		text.replace(
 			/[^A-Za-z0-9._-]/g,
 			(ch) => `~${ch.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`,
@@ -91,37 +100,38 @@ function jsonlSessionDirectory(persistence, header, location) {
 }
 
 /** alpha.1 读 schema.parse；alpha.2 只接受 create()。两套字段一起带上。 */
-function strictCodec(typeSymbol, schema) {
+function strictCodec(typeSymbol: string, schema: Schema<unknown>) {
 	return {
-		mode: "strict",
+		mode: "strict" as const,
 		typeSymbol,
 		create: () => schema,
 		schema,
 	};
 }
 
-function markRemoteMethod(instance, method) {
+function markRemoteMethod(instance: object, method: string) {
 	// 模拟 TS 装饰器管线 `@Remote(method)`：`Remote` 返回标准方法装饰器，
 	// 这里构造一个 addInitializer 立即以 `this` = instance 执行的装饰器上下文。
 	const context = {
 		private: false,
 		static: false,
 		name: method,
-		addInitializer(fn) {
+		addInitializer(fn: (this: object) => void) {
 			fn.call(instance);
 		},
 	};
-	Remote(method)(void 0, context);
+	// 装饰器只消费初始化上下文；保持原有注册语义并补齐标准上下文。
+	Remote(method)(function () {}, { ...context, kind: "method", access: { has: (value: object) => method in value, get: (value: object) => Reflect.get(value, method) }, metadata: undefined });
 }
 /** 头部投影到“日志身份”字段（与投影缓存的 identity 语义一致）。cwd 缺失统一归一为 null，避免一侧带键一侧不带键时的比较歧义。 */
-function headerIdentity(header) {
+function headerIdentity(header: Header) {
 	return {
 		createdAt: header.createdAt,
 		cwd: header.cwd ?? null,
 	};
 }
 const sessionIdSchema = {
-	parse(value) {
+	parse(value: unknown) {
 		if (typeof value !== "string" || value.length === 0)
 			throw new TypeError(
 				`sessionId must be a non-empty string, got ${String(value)}`,
@@ -130,7 +140,8 @@ const sessionIdSchema = {
 	},
 };
 const archivedSetSchema = {
-	parse(value) {
+	parse(input: unknown) {
+		const value = record(input);
 		if (typeof value !== "object" || value === null || Array.isArray(value))
 			throw new TypeError("result must be an object");
 		const ids = value.archivedSessionIds;
@@ -140,7 +151,8 @@ const archivedSetSchema = {
 	},
 };
 const deletedSchema = {
-	parse(value) {
+	parse(input: unknown) {
+		const value = record(input);
 		if (
 			typeof value !== "object" ||
 			value === null ||
@@ -151,31 +163,33 @@ const deletedSchema = {
 		return value;
 	},
 };
-const archivedBatchTargetSchema = {
-	parse(value) {
+const archivedBatchTargetSchema: Schema<BatchTarget> = {
+	parse(input: unknown) {
+		const value = record(input);
 		if (typeof value !== "object" || value === null || Array.isArray(value))
 			throw new TypeError("target must be an object");
-		if (value.scope === "all" || value.scope === "ungrouped") return value;
+		if (value.scope === "all" || value.scope === "ungrouped") return value as BatchTarget;
 		if (
 			value.scope === "workspace" &&
 			typeof value.workspaceId === "string" &&
 			value.workspaceId.length > 0
 		)
-			return value;
+			return value as BatchTarget;
 		if (
 			value.scope === "sessions" &&
 			Array.isArray(value.sessionIds) &&
 			value.sessionIds.length > 0 &&
 			value.sessionIds.every((id) => typeof id === "string" && id.length > 0)
 		)
-			return value;
+			return value as BatchTarget;
 		throw new TypeError(
 			"target.scope must be all, ungrouped, workspace with a non-empty workspaceId, or sessions with non-empty sessionIds",
 		);
 	},
 };
 const deletedBatchSchema = {
-	parse(value) {
+	parse(input: unknown) {
+		const value = record(input);
 		if (typeof value !== "object" || value === null || Array.isArray(value))
 			throw new TypeError("result must be an object");
 		for (const key of [
@@ -185,7 +199,7 @@ const deletedBatchSchema = {
 		]) {
 			if (
 				!Array.isArray(value[key]) ||
-				value[key].some((id) => typeof id !== "string")
+				(value[key] as unknown[]).some((id) => typeof id !== "string")
 			)
 				throw new TypeError(`${key} must be a string array`);
 		}
@@ -204,7 +218,8 @@ const deletedBatchSchema = {
 	},
 };
 const archivedSessionMetadataSchema = {
-	parse(value) {
+	parse(input: unknown) {
+		const value = record(input);
 		if (
 			typeof value !== "object" ||
 			value === null ||
@@ -324,17 +339,17 @@ const ARCHIVE_MANAGER_TYPERT = {
 	model: { services: [], events: [], objects: [] },
 	invocations: ARCHIVE_MANAGER_INVOCATIONS,
 };
-function registerHostRemote(ctx) {
+function registerHostRemote(ctx: HostContext) {
 	const existing = ctx.get("typert");
 	if (existing !== undefined) {
-		existing.register(ARCHIVE_MANAGER_TYPERT);
+		existing.register(ARCHIVE_MANAGER_TYPERT as TypertContribution);
 		return;
 	}
 	ctx.inject(["typert"], (typertCtx) => {
-		typertCtx.typert.register(ARCHIVE_MANAGER_TYPERT);
+		typertCtx.typert.register(ARCHIVE_MANAGER_TYPERT as TypertContribution);
 	});
 }
-var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
+var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as WorkspaceConstructor) {
 	static inject = [
 		"storageDomain",
 		"sessionPersistence",
@@ -342,16 +357,18 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		"typert",
 	];
 	/** 本进程内已物理删除的会话；阻止父类把 stale list() 重新编入索引。 */
-	deletedSessionIds = /* @__PURE__ */ new Set();
+	deletedSessionIds = /* @__PURE__ */ new Set<string>();
 	/** 墓碑插入顺序，用于在上限处淘汰最旧项。 */
-	deletedSessionOrder = [];
+	deletedSessionOrder: string[] = [];
 	/** 墓碑上限：足够挡住 stale list()，又避免长驻进程无限增长。 */
 	deletedSessionTombstoneLimit = 4096;
 	/** 被删生命周期的日志身份（createdAt/cwd）：冷复用探针区分“同 id 新会话”与 stale list() 的依据。 */
-	deletedIdentities = /* @__PURE__ */ new Map();
-	archivedSessionPathIndex = new Map();
-	archivedSessionPathIndexKey;
-	constructor(ctx) {
+	deletedIdentities = new Map<string, ReturnType<typeof headerIdentity>>();
+	archivedSessionPathIndex = new Map<string, string>();
+	archivedSessionPathIndexKey: string[] | undefined;
+	declare typertRemote: TypertGatewayBinding<this>;
+	declare favoriteDomainPromise: Promise<Domain<typeof favoriteDomainSpec>> | undefined;
+	constructor(ctx: Context) {
 		super(ctx);
 		const indexedPath = this.host.sessionPath;
 		this.host.sessionPath = (id) => {
@@ -382,7 +399,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		registerHostRemote(this.ctx);
 	}
 	/** 只读取归档日志；已有实时实例读取快照，不调用 prepare、enter 或恢复接口。 */
-	async readArchivedConversation(sessionId) {
+	async readArchivedConversation(sessionId: string) {
 		const ensureArchived = () => {
 			if (!this.requireState().archivedSessionIds.includes(sessionId)) throw new Error("会话已不在归档中，请刷新列表");
 		};
@@ -392,7 +409,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		return extractConversation(events);
 	}
 	/** 复用宿主只读接口读取事件，不激活会话。 */
-	async readConversationEvents(sessionId) {
+	async readConversationEvents(sessionId: string) {
         const live = this.ctx.get("sessions")?.get(sessionId);
         if (typeof live?.snapshotEvents === "function") return live.snapshotEvents();
         const persistence = this.ctx.get("sessionPersistence");
@@ -400,11 +417,11 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
         return (await this.readStoredProjectionSource(persistence, sessionId)).events;
     }
     /** 只读取当前宿主已知会话；路径由宿主定位，不根据错误文本或 ID 拼接。 */
-    async sessionDetails(input) {
+    async sessionDetails(input: unknown) {
         const { sessionIds } = detailsInputSchema.parse(input);
         const items = [];
         for (const sessionId of sessionIds) {
-            const item = { sessionId, turnCount: null, path: null, error: "" };
+            const item: SessionDetail = { sessionId, turnCount: null, path: null, error: "" };
             try {
                 if (!(await this.sessionKnown(sessionId))) throw new Error("会话不存在，请刷新列表");
                 const header = await this.readSessionHeader(sessionId);
@@ -418,15 +435,15 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
                         await lstat(path);
                         item.path = path;
                     }
-                } catch (error) { item.error = "路径不可用：" + String(error?.message ?? error).slice(0, 350); }
+                } catch (error) { item.error = "路径不可用：" + errorMessage(error).slice(0, 350); }
                 item.turnCount = countConversationTurns(await this.readConversationEvents(sessionId));
-            } catch (error) { item.error = String(error?.message ?? error).slice(0, 500); }
+            } catch (error) { item.error = errorMessage(error).slice(0, 500); }
             items.push(item);
         }
         return { items };
     }
     /** 诊断与执行共用同一工件校验；客户端不能提供文件路径。 */
-    async sessionRepairPlan(sessionId) {
+    async sessionRepairPlan(sessionId: string) {
         if (!(await this.sessionKnown(sessionId))) throw new Error("会话不存在，请刷新列表");
         await this.ensureSessionRepairIdle(sessionId);
         const persistence = this.ctx.get("sessionPersistence");
@@ -445,13 +462,13 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
             SessionRuntime.Session.fromRestore(artifact.header.id, artifact.events, artifact.header, artifact.inheritedEventCount, "detached");
         } } });
     }
-    async ensureSessionRepairIdle(sessionId) {
+    async ensureSessionRepairIdle(sessionId: string) {
         if (!this.requireState().archivedSessionIds.includes(sessionId)) throw new Error("请先归档会话，再进行修复");
         if (this.ctx.get("sessions")?.get(sessionId)) throw new Error("会话仍在宿主内打开，请关闭会话并重启 DSH 后修复");
     }
-    async diagnoseSession(input) {
+    async diagnoseSession(input: unknown) {
         const { sessionId } = repairInputSchema.parse(input);
-        const result = { sessionId, repairable: false, repaired: false, token: "", count: 0, reason: "", advice: "" };
+        const result = { code: "unknown", sessionId, repairable: false, repaired: false, token: "", count: 0, reason: "", advice: "" };
         try {
             if (!(await this.sessionKnown(sessionId))) throw new Error("会话不存在，请刷新列表");
             await this.readConversationEvents(sessionId);
@@ -469,10 +486,10 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
         } catch (error) {
             // 不能修复不等于原因未知：保留已识别分类，限制详情追加在建议中。
             return { ...result, code: result.code === "unknown" ? "blocked" : result.code,
-                advice: (result.advice + " 暂不能自动修复：" + String(error?.message ?? error)).slice(0, 1000) };
+                advice: (result.advice + " 暂不能自动修复：" + errorMessage(error)).slice(0, 1000) };
         }
     }
-    async repairSession(input) {
+    async repairSession(input: unknown) {
         const { sessionId, token } = repairInputSchema.parse(input);
         if (!token) throw new Error("请先诊断，再确认修复");
         return this.enqueueOperation(async () => {
@@ -488,7 +505,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
         });
     }
     /** 已归档与未归档共用正文检索；只读已知会话，不激活或改变归档状态。 */
-    async searchSessionContent(input) {
+    async searchSessionContent(input: unknown) {
         const { sessionIds, query } = searchInputSchema.parse(input);
         const items = [], failures = [];
         for (const sessionId of sessionIds) {
@@ -498,24 +515,24 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
                 if (!(await this.sessionKnown(sessionId))) throw new Error("会话已移除，请刷新列表");
                 const match = findContentMatch(messages, query);
                 if (match) items.push({ sessionId, ...match });
-            } catch (error) { failures.push({ sessionId, message: String(error?.message ?? error).slice(0, 500) }); }
+            } catch (error) { failures.push({ sessionId, message: errorMessage(error).slice(0, 500) }); }
         }
         return { items, failures };
     }
     /** 输入为限定批次的归档 ID 和关键词，逐条返回命中或失败。 */
-    async searchArchivedContent(input) {
+    async searchArchivedContent(input: unknown) {
 		const { sessionIds, query } = searchInputSchema.parse(input);
 		const items = [], failures = [];
 		for (const sessionId of sessionIds) {
 			try {
 				const match = findContentMatch(await this.readArchivedConversation(sessionId), query);
 				if (match) items.push({ sessionId, ...match });
-			} catch (error) { failures.push({ sessionId, message: String(error?.message ?? error).slice(0, 500) }); }
+			} catch (error) { failures.push({ sessionId, message: errorMessage(error).slice(0, 500) }); }
 		}
 		return { items, failures };
 	}
 	/** 返回最近八条对话或关键词附近的八条，单条最多 2000 字，不写入宿主数据。 */
-	async previewArchivedSession(input) {
+	async previewArchivedSession(input: unknown) {
 		const { sessionId, query } = previewInputSchema.parse(input);
 		return { sessionId, ...previewConversation(await this.readArchivedConversation(sessionId), query) };
 	}
@@ -544,7 +561,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		});
 	}
 	/** 设置单条收藏，串行写入避免不同浏览器相互覆盖。 */
-	async setSessionFavorite(input) {
+	async setSessionFavorite(input: unknown) {
 		const { sessionId, favorite } = favoriteInputSchema.parse(input);
 		return this.enqueueOperation(async () => {
 			if (favorite && !(await this.sessionKnown(sessionId))) throw new Error("会话不存在，无法收藏");
@@ -558,7 +575,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		});
 	}
 	/** 归档集合未变时复用反查表，避免每次 sessionPath 都扫全部工作区记账。 */
-	archivedWorkspacePath(sessionId) {
+	archivedWorkspacePath(sessionId: string) {
 		const state = this.requireState();
 		if (!state.archivedSessionIds.includes(sessionId)) return undefined;
 		if (this.archivedSessionPathIndexKey !== state.archivedSessionIds) {
@@ -581,7 +598,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 	 * 只有 persistence.stat 明确说文件不在时才从持久集合摘掉。
 	 * list/header 读不出不等于文件没了；没有 stat 时宁可不落盘删除。
 	 */
-	async sessionArtifactMissing(sessionId) {
+	async sessionArtifactMissing(sessionId: string) {
 		const persistence = this.ctx.get("sessionPersistence");
 		if (typeof persistence?.stat !== "function") return false;
 		try {
@@ -666,7 +683,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		};
 	}
 	/** 从会话原文补齐缺失的派生缓存；任何失败都只降级为原有无摘要列表。 */
-	async repairArchivedProjection(header) {
+	async repairArchivedProjection(header: Header) {
 		const cache = this.ctx.get("sessionProjectionCache");
 		const persistence = this.ctx.get("sessionPersistence");
 		const projections = this.ctx.get("sessionProjections");
@@ -738,7 +755,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		}
 	}
 	/** 新版读句柄必须关闭；旧版仍沿用 readFrom，避免激活 Agent 或写入会话日志。 */
-	async readStoredProjectionSource(persistence, sessionId) {
+	async readStoredProjectionSource(persistence: PersistenceCompat, sessionId: string) {
 		if (typeof persistence.readFrom === "function")
 			return persistence.readFrom(sessionId, 0);
 		const handle = await persistence.open(sessionId, "read");
@@ -758,7 +775,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 	 * 未知 id 直接跳过，不抛 `UNKNOWN_SESSION`，避免把幽灵 id 写进集合。
 	 * @param sessionId - 要归档的会话。
 	 */
-	async archiveSession(sessionId) {
+	async archiveSession(sessionId: string) {
 		return this.enqueueOperation(async () => {
 			if (this.requireState().archivedSessionIds.includes(sessionId)) return;
 			if (!(await this.sessionKnown(sessionId))) return;
@@ -777,7 +794,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 	 * @param sessionId - 要取消归档的会话。
 	 * @returns 更新后的完整归档集合。
 	 */
-	async unarchiveSession(sessionId) {
+	async unarchiveSession(sessionId: string) {
 		return this.enqueueOperation(async () => {
 			const state = this.requireState();
 			if (!state.archivedSessionIds.includes(sessionId))
@@ -797,7 +814,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 	 * 恢复后重新编入路径索引；若会话已不在任何工作区记账但 cwd 仍对应某工作区，
 	 * 则挂回去，避免「恢复并打开」时官方成员过滤把会话从原工作区抹掉。
 	 */
-	async restoreWorkspaceMembership(sessionId) {
+	async restoreWorkspaceMembership(sessionId: string) {
 		let header;
 		try {
 			header = await this.readSessionHeader(sessionId);
@@ -821,7 +838,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 	 * 按作用域永久删除归档会话。跨会话文件删除无法组成事务，因此继续处理
 	 * 后续目标并把成功、并发消失和失败分别返回给客户端。
 	 */
-	async deleteArchivedSessions(target) {
+	async deleteArchivedSessions(target: unknown) {
 		return this.enqueueOperation(async () => {
 			const requestedSessionIds = this.archivedSessionIdsForTarget(target);
 			const deletedSessionIds = [];
@@ -849,7 +866,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 	 * workspace 没有可记录的旧 header 身份，永久保留它会挡住未来的冷复用。
 	 * 归档标记最后清除，前序可失败步骤出错时批量入口仍能再次命中。
 	 */
-	async cleanupUnknownArchivedSession(sessionId) {
+	async cleanupUnknownArchivedSession(sessionId: string) {
 		const projCache = this.ctx.get("sessionProjectionCache");
 		await projCache?.whenIdle?.();
 		if (projCache !== void 0) {
@@ -872,8 +889,8 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		}
 	}
 	/** 以归档集合顺序解析批量目标，避免依赖浏览器尚未加载完整的摘要投影。 */
-	archivedSessionIdsForTarget(target) {
-		target = archivedBatchTargetSchema.parse(target);
+	archivedSessionIdsForTarget(input: unknown) {
+		const target = archivedBatchTargetSchema.parse(input);
 		const state = this.requireState();
 		const archivedSessionIds = [...new Set(state.archivedSessionIds)];
 		if (target.scope === "all") return archivedSessionIds;
@@ -902,14 +919,14 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 	 * @param sessionId - 要删除的会话。
 	 * @returns 持久化完成后的 `{ deleted: true }`。未知会话清掉残留痕迹后同样返回成功，不抛错。
 	 */
-	async deleteSession(sessionId) {
+	async deleteSession(sessionId: string) {
 		return this.enqueueOperation(async () => {
 			await this.deleteSessionCore(sessionId);
 			return { deleted: true };
 		});
 	}
 	/** 串行化后的删除主体（级联路径复用：它已持有操作链，绝不能再入队）。 */
-	async deleteSessionCore(sessionId) {
+	async deleteSessionCore(sessionId: string) {
 		if (!(await this.sessionKnown(sessionId))) {
 			await this.cleanupUnknownArchivedSession(sessionId);
 			return { deleted: true, skipped: true };
@@ -957,7 +974,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		return { deleted: true };
 	}
 	/** 删除完成后通知全部客户端；新版不再通过伪造冷会话生命周期触发通知。 */
-	publishDeletedSession(sessionId) {
+	publishDeletedSession(sessionId: string) {
 		try {
 			this.ctx.emit("api-session/removed", sessionId);
 		} catch (error) {
@@ -970,7 +987,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 	 * 从父类内存索引中遗忘已删除会话，并阻止后续 indexHeaders 把它加回。
 	 * 实时会话以同 id 重新出现时（自定义 id 复用）会撤掉墓碑。
 	 */
-	clearTombstone(sessionId) {
+	clearTombstone(sessionId: string) {
 		this.deletedSessionIds.delete(sessionId);
 		this.deletedIdentities.delete(sessionId);
 		const idx = this.deletedSessionOrder.indexOf(sessionId);
@@ -979,7 +996,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		// 被接纳时必须同步撤销两处墓碑，否则缓存写入仍会永久被拦截。
 		this.ctx.get("sessionProjectionCache")?.clearTombstone?.(sessionId);
 	}
-	forgetIndexedSession(sessionId) {
+	forgetIndexedSession(sessionId: string) {
 		for (const evicted of trackTombstone(
 			this.deletedSessionIds,
 			this.deletedSessionOrder,
@@ -995,7 +1012,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 	 * 已删除会话对归档/删除入口都视为未知。实时复用同一 id 时撤墓碑，
 	 * 避免挡住新会话。
 	 */
-	async sessionKnown(id) {
+	async sessionKnown(id: string) {
 		if (this.ctx.get("sessions")?.get(id) !== void 0) {
 			this.clearTombstone(id);
 			return true;
@@ -1008,7 +1025,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 	 * 不同）撤墓碑放行并重新编入索引；stale list() 里同生命周期的旧头部
 	 * 仍视为未知。身份不可考（删除时未取到头部）时保守维持未知。
 	 */
-	async coldReuseKnown(id) {
+	async coldReuseKnown(id: string) {
 		const deletedIdentity = this.deletedIdentities.get(id);
 		if (deletedIdentity === void 0) return false;
 		const persistence = this.ctx.get("sessionPersistence");
@@ -1038,21 +1055,21 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 	 * 父类 indexHeaders 只增不减；跳过墓碑 id，避免 stale persistence.list()
 	 * 把已删除会话重新编入 headers。
 	 */
-	async indexHeader(header) {
+	async indexHeader(header: Header) {
 		if (this.deletedSessionIds.has(header.id)) return;
 		return super.indexHeader(header);
 	}
 	/** 统一旧版头部数组与 0.1.3 的持久化快照，供父类索引和本插件枚举共用。 */
 	async listStoredHeaders() {
 		return (await this.ctx.sessionPersistence.list()).map(
-			(item) => item.header ?? item,
+			(item) => "header" in item && item.header ? item.header : item as Header,
 		);
 	}
-	async indexHeaders(items) {
-		for (const item of items) await this.indexHeader(item.header ?? item);
+	async indexHeaders(items: (Header | { header: Header })[]) {
+		for (const item of items) await this.indexHeader("header" in item && item.header ? item.header : item as Header);
 	}
 	/** 为未处于实时状态的持久化会话发布相同的移除事件。 */
-	async publishColdSessionRemoval(sessionId, sessions) {
+	async publishColdSessionRemoval(sessionId: string, sessions: SessionsCompat) {
 		const persistence = this.ctx.get("sessionPersistence");
 		if (persistence === void 0 || typeof persistence.prepare !== "function")
 			return;
@@ -1072,7 +1089,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		}
 	}
 	/** 官方 JSONL 已知布局清理会话专属目录；其他后端只删除定位到的工件。 */
-	async removeTranscriptDirectory(sessionId) {
+	async removeTranscriptDirectory(sessionId: string) {
 		const persistence = this.ctx.get("sessionPersistence");
 		if (persistence === void 0 || typeof persistence.locate !== "function") {
 			throw new Error(
@@ -1100,7 +1117,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 					try {
 						stat = await lstat(path);
 					} catch (error) {
-						if (error?.code === "ENOENT") continue; // Already removed on an earlier attempt.
+						if (errorCode(error) === "ENOENT") continue; // Already removed on an earlier attempt.
 						throw error;
 					}
 					if (stat.isSymbolicLink())
@@ -1132,7 +1149,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		}
 	}
 	/** 把 id 从每个工作区记录中移除，并刷新实体快照。 */
-	async removeFromWorkspaceAccounts(sessionId) {
+	async removeFromWorkspaceAccounts(sessionId: string) {
 		const table = this.requireTable();
 		const state = this.requireState();
 		for (const workspaceId of state.workspaceIds) {
@@ -1150,7 +1167,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 	/** 尽力而为的级联删除：删除 `sessionId` 的 SUBAGENT 子会话。
 	 * 仅头部标记 `origin: "subagent"` 的会话参与：单凭 `parentSession` 有歧义
 	 *（fork 分支也携带它），而 fork 分支是独立的用户会话，绝不能被级联删除。 */
-	async deleteDescendants(sessionId) {
+	async deleteDescendants(sessionId: string) {
 		try {
 			const descendants = [];
 			const sessions = this.ctx.get("sessions");
@@ -1187,7 +1204,7 @@ var ArchiveWorkspaceRegistry = class extends WorkspaceRegistry {
 		}
 	}
 	/** 尽力而为的 spill 清理：移除该会话作用域的 spill 目录。 */
-	async cleanSpill(sessionId) {
+	async cleanSpill(sessionId: string) {
 		try {
 			const spill = this.ctx.get("spillStore");
 			if (spill === void 0 || typeof spill.root !== "string") return;

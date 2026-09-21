@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { zstdCompressSync } from "node:zlib";
-import { decodeRepairLog, normalizeAutomationSources, classifySessionError } from "../src/session-repair.js";
+import { decodeRepairLog, normalizeAutomationSources, classifySessionError } from "../src/session-repair.ts";
 test("连续压缩帧完整读取，残缺日志拒绝修复", () => {
   const bytes = Buffer.concat([zstdCompressSync(Buffer.from('{"type":"session","version":0}\n')), zstdCompressSync(Buffer.from('{"seq":0}\n'))]);
   assert.equal(decodeRepairLog(bytes, true).length, 2);
@@ -24,7 +24,7 @@ test("仅转换已知自动化消息来源，保留正文和归属且不修改�
 import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { prepareAutomationRepair } from "../src/session-repair.js";
+import { prepareAutomationRepair } from "../src/session-repair.ts";
 const fakeFormat = {
   currentVersion: 3,
   createRestore(header) {
@@ -60,7 +60,7 @@ test("修复令牌绑定原文件，原文件保留且禁止覆盖已有代际",
     await rm(directory, { recursive: true, force: true });
   }
 });
-import { createSessionHealthPanel } from "../src/session-health-ui.js";
+import { createSessionHealthPanel } from "../src/session-health-ui.ts";
 test("异常默认折叠，先诊断再确认修复，修复后刷新详情", async () => {
   const slots = [];
   let cursor = 0, diagnoses = 0, repairs = 0, retries = 0;

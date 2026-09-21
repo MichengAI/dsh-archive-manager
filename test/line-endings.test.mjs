@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-test("JavaScript 源码和发布产物在所有平台固定使用 LF", async () => {
+test("TypeScript 源码、脚本和发布产物在所有平台固定使用 LF", async () => {
 	const attributes = await readFile(new URL("../.gitattributes", import.meta.url), "utf8");
 	assert.match(attributes, /^\*\.js text eol=lf$/m);
 	assert.match(attributes, /^\*\.mjs text eol=lf$/m);
+	assert.match(attributes, /^\*\.ts text eol=lf$/m);
 });

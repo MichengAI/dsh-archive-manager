@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createOrganizerPanel, organizerZh } from "../src/archive-organizer-ui.js";
+import { createOrganizerPanel, organizerZh } from "../src/archive-organizer-ui.ts";
 const Panel = createOrganizerPanel(React);
 const props = { t: key => organizerZh[key] ?? key, ready: true, busy: false, days: 30, count: 0, undoCount: 0 };
 test("已归档页没有空闲置整理框或重复的收藏筛选", () => {

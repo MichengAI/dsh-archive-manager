@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { idleArchiveCandidate, runSessionBatch, favoriteInputSchema, favoriteStateSchema, createSessionOrganizer } from "../src/archive-organizer.js";
+import { idleArchiveCandidate, runSessionBatch, favoriteInputSchema, favoriteStateSchema, createSessionOrganizer } from "../src/archive-organizer.ts";
 
 const now = Date.parse("2026-09-20T00:00:00Z");
 const old = { id: "a", updatedAt: now - 31 * 86400000 };

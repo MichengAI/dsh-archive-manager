@@ -1,3 +1,23 @@
+import type { Context } from "@deepseek-ai/cordis";
+import type { Session } from "@deepseek-ai/dsh-session";
+import type { CheckpointRecord, CheckpointIdentity, Config } from "@deepseek-ai/dsh-session-projection-cache";
+import type { DomainSpec, Domain, KvTable } from "@deepseek-ai/dsh-storage-domain";
+
+// 上游以 TypeScript private 声明的扩展点在 JS 运行时仍可访问。
+// 仅此处描述已由多版本回归覆盖的内部契约，避免把整个宿主退化为无类型对象。
+type CacheTable = Pick<KvTable<string, CheckpointRecord>, "get" | "entries" | "keys" | "put" | "delete" | "size"> & { has(id: string): boolean };
+interface CacheCompat extends Omit<SessionProjectionCache, "write"> {
+ ctx: Context;
+ write(session: Session): Promise<void>;
+ table?: CacheTable;
+ installWritePath(): void;
+ requireTable(): CacheTable;
+ put(id: string, identity: CheckpointIdentity, rows: CheckpointRecord["rows"]): Promise<void>;
+ putSoft?(id: string, identity: CheckpointIdentity, rows: CheckpointRecord["rows"], what: string): Promise<void>;
+ [Service.init](): Promise<void>;
+}
+const CacheBase = SessionProjectionCache as unknown as { new(ctx: Context, config: Config): CacheCompat; prototype: CacheCompat } & Pick<typeof SessionProjectionCache, "Config" | "inject">;
+type StoredCheckpoint = CheckpointRecord & { sessionId: string };
 import { createHash } from "node:crypto";
 import { Service } from "@deepseek-ai/cordis";
 import {
@@ -23,13 +43,13 @@ const safeDomainInput = {
 	name: "session_projcache_archive_manager_v2",
 	version: 2,
 	tables: { sessions: domainTable(storedCheckpointRecord) },
-	...(projectionCacheDomainSpec.layout === "per-record" ? { layout: "per-record" } : {})
+	...(projectionCacheDomainSpec.layout === "per-record" ? { layout: "per-record" as const } : {})
 };
 const safeProjectionCacheDomainSpec = defineDomain(safeDomainInput);
 
 /** The last official whole-file cache format used by DSH rc.2. */
-const legacyOptionalIdentityFields = {};
-for (const field of ["isSeeded", "inheritedEventCount"]) {
+const legacyOptionalIdentityFields: Partial<Record<"isSeeded" | "inheritedEventCount", true>> = {};
+for (const field of ["isSeeded", "inheritedEventCount"] as const) {
 	// rc.2 的身份 schema 尚未定义这些字段；向 Zod 传入不存在的字段会在
 	// 首次解析历史记录时抛错，因此只能按当前运行时实际的 schema 构造掩码。
 	if (Object.hasOwn(checkpointIdentity.shape, field)) legacyOptionalIdentityFields[field] = true;
@@ -45,14 +65,14 @@ const legacySafeV2ProjectionCacheDomainSpec = defineDomain({
 	name: "session_projcache_archive_manager",
 	version: 2,
 	tables: { sessions: domainTable(storedCheckpointRecord) },
-	...(projectionCacheDomainSpec.layout === "per-record" ? { layout: "per-record" } : {})
+	...(projectionCacheDomainSpec.layout === "per-record" ? { layout: "per-record" as const } : {})
 });
 /** v0.1.23 及以前归档管理器自身使用的安全缓存域。 */
 const legacySafeProjectionCacheDomainSpec = defineDomain({
 	name: "session_projcache_archive_manager",
 	version: 1,
 	tables: { sessions: domainTable(legacyStoredCheckpointRecord) },
-	...(projectionCacheDomainSpec.layout === "per-record" ? { layout: "per-record" } : {})
+	...(projectionCacheDomainSpec.layout === "per-record" ? { layout: "per-record" as const } : {})
 });
 const legacyProjectionCacheDomainSpec = defineDomain({
 	name: "session_projcache",
@@ -60,34 +80,35 @@ const legacyProjectionCacheDomainSpec = defineDomain({
 	tables: { sessions: domainTable(legacyCheckpointRecord) }
 });
 
-function projectionCacheStorageKey(sessionId) {
+function projectionCacheStorageKey(sessionId: string) {
 	return `session_${createHash("sha256").update(sessionId, "utf8").digest("base64url")}`;
 }
 
-function unwrapStoredCheckpoint(stored) {
+function unwrapStoredCheckpoint<T extends { identity: unknown; rows: unknown }>(stored: T): Pick<T, "identity" | "rows"> {
 	return { identity: stored.identity, rows: stored.rows };
 }
 
 /** Map the Session-id table contract onto path-safe physical keys. */
 class SafeSessionTable {
-	constructor(table) {
+	declare table: KvTable<string, StoredCheckpoint>;
+	constructor(table: KvTable<string, StoredCheckpoint>) {
 		this.table = table;
 	}
 	get size() {
 		return [...this.keys()].length;
 	}
-	get(sessionId) {
+	get(sessionId: string) {
 		const stored = this.table.get(projectionCacheStorageKey(sessionId));
 		if (stored === void 0 || stored.sessionId !== sessionId) return void 0;
 		return unwrapStoredCheckpoint(stored);
 	}
-	has(sessionId) {
+	has(sessionId: string) {
 		return this.get(sessionId) !== void 0;
 	}
 	*entries() {
 		for (const [key, stored] of this.table.entries()) {
 			if (projectionCacheStorageKey(stored.sessionId) !== key) continue;
-			yield [stored.sessionId, unwrapStoredCheckpoint(stored)];
+			yield [stored.sessionId, unwrapStoredCheckpoint(stored)] as [string, CheckpointRecord];
 		}
 	}
 	*keys() {
@@ -96,7 +117,7 @@ class SafeSessionTable {
 	*values() {
 		for (const [, value] of this.entries()) yield value;
 	}
-	async put(sessionId, record) {
+	async put(sessionId: string, record: CheckpointRecord) {
 		const key = projectionCacheStorageKey(sessionId);
 		const existing = this.table.get(key);
 		if (existing !== void 0 && existing.sessionId !== sessionId) {
@@ -104,7 +125,7 @@ class SafeSessionTable {
 		}
 		await this.table.put(key, { sessionId, identity: record.identity, rows: record.rows });
 	}
-	async delete(sessionId) {
+	async delete(sessionId: string) {
 		const key = projectionCacheStorageKey(sessionId);
 		const existing = this.table.get(key);
 		if (existing === void 0 || existing.sessionId !== sessionId) return false;
@@ -112,7 +133,7 @@ class SafeSessionTable {
 	}
 }
 
-async function readSourceRecords(ctx, spec, label) {
+async function readSourceRecords(ctx: Context, spec: DomainSpec, label: string): Promise<{ opened: boolean; records: [string, unknown][] }> {
 	let domain;
 	try {
 		domain = await ctx.storageDomain.open(spec);
@@ -129,11 +150,11 @@ async function readSourceRecords(ctx, spec, label) {
 	}
 }
 
-async function readLegacySafeRecords(ctx, spec, label) {
+async function readLegacySafeRecords(ctx: Context, spec: DomainSpec, label: string) {
 	const source = await readSourceRecords(ctx, spec, label);
-	const records = [];
+	const records: [string, unknown][] = [];
 	for (const [physicalKey, stored] of source.records) {
-		if (stored === null || typeof stored !== "object" || typeof stored.sessionId !== "string") {
+		if (stored === null || typeof stored !== "object" || !("sessionId" in stored) || typeof stored.sessionId !== "string") {
 			ctx.logger.warn(`archive-manager projcache: ${label} row "${physicalKey}" import skipped because its session id is invalid`);
 			continue;
 		}
@@ -141,7 +162,7 @@ async function readLegacySafeRecords(ctx, spec, label) {
 			ctx.logger.warn(`archive-manager projcache: ${label} row "${physicalKey}" import skipped because its storage key does not match the session id`);
 			continue;
 		}
-		records.push([stored.sessionId, unwrapStoredCheckpoint(stored)]);
+		records.push([stored.sessionId, { identity: "identity" in stored ? stored.identity : undefined, rows: "rows" in stored ? stored.rows : undefined }]);
 	}
 	return { ...source, records };
 }
@@ -150,18 +171,20 @@ async function readLegacySafeRecords(ctx, spec, label) {
  * 旧版记录没有完整身份时，只能安全补齐未播种会话的零继承切点。
  * 播种会话无法从头部反推出精确切点，宁可跳过并按需重建。
  */
-function normalizeLegacyRecord(record) {
-	if (record === null || typeof record !== "object" || record.identity === null || typeof record.identity !== "object") return void 0;
-	const identity = record.identity;
+function normalizeLegacyRecord(record: unknown): CheckpointRecord | undefined {
+	if (record === null || typeof record !== "object" || !("identity" in record) || record.identity === null || typeof record.identity !== "object") return void 0;
+	const identity = record.identity as Record<string, unknown>;
 	const inheritedEventCount = identity.inheritedEventCount;
-	const validOffset = Number.isSafeInteger(inheritedEventCount) && inheritedEventCount >= 0;
+	const validOffset = typeof inheritedEventCount === "number" && Number.isSafeInteger(inheritedEventCount) && inheritedEventCount >= 0;
 	if (identity.isSeeded === true) {
 		if (!validOffset) return void 0;
-		return record;
+		checkpointRecord.parse(record);
+// 旧宿主 schema 会剔除未知身份字段，校验后保留原记录。
+return record as CheckpointRecord;
 	}
 	if (identity.isSeeded !== void 0 && identity.isSeeded !== false) return void 0;
 	if (inheritedEventCount !== void 0 && inheritedEventCount !== 0) return void 0;
-	return {
+	const normalized = {
 		...record,
 		identity: {
 			...identity,
@@ -169,9 +192,11 @@ function normalizeLegacyRecord(record) {
 			inheritedEventCount: 0
 		}
 	};
+	checkpointRecord.parse(normalized);
+	return normalized as CheckpointRecord;
 }
 
-async function importMissingRecords(ctx, target, records, label) {
+async function importMissingRecords(ctx: Context, target: CacheTable, records: readonly (readonly [string, unknown])[], label: string) {
 	let imported = 0;
 	for (const [sessionId, record] of records) {
 		if (target.has(sessionId)) continue;
@@ -194,12 +219,12 @@ async function importMissingRecords(ctx, target, records, label) {
  * 合并归档管理器旧名 v2、旧名 v1、官方新版逐会话与旧版整文件缓存。目标域记录
  * 最高优先，随后按新旧顺序只补缺失记录；任一来源失败时仍继续尝试另一个来源。
  */
-async function importPreviousProjectionCache(ctx, target) {
+async function importPreviousProjectionCache(ctx: Context, target: CacheTable) {
 	const legacySafeV2 = await readLegacySafeRecords(ctx, legacySafeV2ProjectionCacheDomainSpec, "archive-manager v2");
 	const legacySafe = await readLegacySafeRecords(ctx, legacySafeProjectionCacheDomainSpec, "archive-manager v1");
 	const legacy = await readSourceRecords(ctx, legacyProjectionCacheDomainSpec, "legacy v3");
 	const sameSpec = projectionCacheDomainSpec.version === legacyProjectionCacheDomainSpec.version
-		&& projectionCacheDomainSpec.layout === legacyProjectionCacheDomainSpec.layout;
+		&& projectionCacheDomainSpec.layout === (legacyProjectionCacheDomainSpec as DomainSpec).layout;
 	let imported = 0;
 	if (legacySafeV2.opened) imported += await importMissingRecords(ctx, target, legacySafeV2.records, "archive-manager v2");
 	if (legacySafe.opened) imported += await importMissingRecords(ctx, target, legacySafe.records, "archive-manager v1");
@@ -233,15 +258,15 @@ async function importPreviousProjectionCache(ctx, target) {
  * 包同形），profile 补丁可直接替换 `session-projection-cache` 服务行，
  * 无需其他接线改动。
  */
-var ArchiveProjectionCache = class extends SessionProjectionCache {
+var ArchiveProjectionCache = class extends CacheBase {
 	/** 已永久删除的会话：其投影缓存行不再允许写入。 */
-	deletedSessionIds = /* @__PURE__ */ new Set();
+	deletedSessionIds = /* @__PURE__ */ new Set<string>();
 	/** 墓碑插入顺序，用于在上限处淘汰最旧项。 */
-	deletedSessionOrder = [];
+	deletedSessionOrder: string[] = [];
 	deletedSessionTombstoneLimit = 4096;
 	/** 在途写入的队尾（只含已落定的 promise）。 */
 	writeTail = Promise.resolve();
-	constructor(ctx, config) {
+	constructor(ctx: Context, config: Config) {
 		super(ctx, config);
 	}
 	/**
@@ -257,7 +282,7 @@ var ArchiveProjectionCache = class extends SessionProjectionCache {
 		this.installWritePath();
 	}
 	/** 跟踪公开写入路径，避免依赖上游私有 `flushSoft` 的实现细节。 */
-	write(session) {
+	write(session: Session) {
 		const task = this.writeCore(session);
 		this.writeTail = Promise.allSettled([this.writeTail, task]).then(() => void 0);
 		return task;
@@ -266,7 +291,7 @@ var ArchiveProjectionCache = class extends SessionProjectionCache {
 	 * 墓碑正确性依赖：super.write(session) 一次整体写入，返回后不再有后续异步落盘。
 	 * 若上游改成多阶段异步，(C) 补删会漏掉后续写入，deletedSessionIds 挡不住复活。
 	 */
-	async writeCore(session) {
+	async writeCore(session: Session) {
 		if (this.deletedSessionIds.has(session.id)) return;
 		await super.write(session);
 		if (this.deletedSessionIds.has(session.id)) await this.requireTable().delete(session.id);
@@ -275,7 +300,7 @@ var ArchiveProjectionCache = class extends SessionProjectionCache {
 	 * 守住所有底层写入。rc.2 的冷读经 `putSoft -> put`，alpha.2 则
 	 * 直接经 `put`；把墓碑与 whenIdle 跟踪放在这里可同时兼容两代实现。
 	 */
-	put(id, identity, rows) {
+	put(id: string, identity: CheckpointIdentity, rows: CheckpointRecord["rows"]) {
 		// alpha.2 coldSnapshot unconditionally chains `.catch()` onto put().
 		// A blocked write must therefore preserve the upstream Promise contract.
 		if (this.deletedSessionIds.has(id)) return Promise.resolve();
@@ -283,13 +308,13 @@ var ArchiveProjectionCache = class extends SessionProjectionCache {
 		this.writeTail = Promise.allSettled([this.writeTail, task]).then(() => void 0);
 		return task;
 	}
-	async putCore(id, identity, rows) {
+	async putCore(id: string, identity: CheckpointIdentity, rows: CheckpointRecord["rows"]) {
 		await super.put(id, identity, rows);
 		if (this.deletedSessionIds.has(id)) await this.requireTable().delete(id);
 	}
 	/** rc.2 公开的 fail-soft 辅助在 alpha.2 已移除；保留同形兼容入口。 */
-	async putSoft(id, identity, rows, what) {
-		const upstream = SessionProjectionCache.prototype.putSoft;
+	async putSoft(id: string, identity: CheckpointIdentity, rows: CheckpointRecord["rows"], what: string) {
+		const upstream = CacheBase.prototype.putSoft;
 		if (typeof upstream === "function") return upstream.call(this, id, identity, rows, what);
 		try {
 			await this.put(id, identity, rows);
@@ -309,12 +334,12 @@ var ArchiveProjectionCache = class extends SessionProjectionCache {
 	 * @param id - 要删除缓存行的会话。
 	 * @returns 行删除完成后的 resolution。
 	 */
-	async delete(id) {
+	async delete(id: string) {
 		trackTombstone(this.deletedSessionIds, this.deletedSessionOrder, id, this.deletedSessionTombstoneLimit);
 		await this.requireTable().delete(id);
 	}
 	/** 撤销墓碑（供测试与同 id 新生命周期复用路径使用）。 */
-	clearTombstone(id) {
+	clearTombstone(id: string) {
 		this.deletedSessionIds.delete(id);
 		const idx = this.deletedSessionOrder.indexOf(id);
 		if (idx !== -1) this.deletedSessionOrder.splice(idx, 1);

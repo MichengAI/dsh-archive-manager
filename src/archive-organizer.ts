@@ -1,22 +1,26 @@
+import { record } from "./contracts.js";
+import type { Schema, SessionSummary, BatchOptions, BatchResult, OrganizerServices, OrganizeKind, OrganizeOptions } from "./contracts.js";
 /** 收藏及批量整理共用的校验与业务规则；不依赖浏览器或宿主实例。 */
-function checkedId(value) {
+function checkedId(value: unknown) {
   if (typeof value !== "string" || value.length === 0 || value.length > 1024) throw new TypeError("会话 ID 长度须为 1～1024 个字符");
   return value;
 }
 
 export const favoriteInputSchema = {
-  parse(value) {
+  parse(input: unknown) {
+    const value = record(input);
     if (!value || typeof value !== "object" || typeof value.favorite !== "boolean") throw new TypeError("收藏状态必须为布尔值");
     return { sessionId: checkedId(value.sessionId), favorite: value.favorite };
   }
 };
 
 export const favoriteStateSchema = {
-  parse(value) {
+  parse(input: unknown) {
+    const value = record(input);
     if (!value || !Array.isArray(value.favoriteSessionIds) || value.favoriteSessionIds.length > 100000) throw new TypeError("收藏集合无效");
     return { favoriteSessionIds: [...new Set(value.favoriteSessionIds.map(checkedId))] };
   },
-  safeParse(value) {
+  safeParse(value: unknown) {
     try { return { success: true, data: this.parse(value) }; }
     catch (error) { return { success: false, error }; }
   }
@@ -24,7 +28,7 @@ export const favoriteStateSchema = {
 
 /** 宿主与客户端使用同一份描述符，防止两端接口漂移。 */
 export function favoriteInvocations() {
-  const codec = (name, schema) => ({ mode: "strict", typeSymbol: `@michengai/dsh-archive-manager/types#${name}`, create: () => schema, schema });
+  const codec = (name: string, schema: Schema<unknown>) => ({ mode: "strict", typeSymbol: `@michengai/dsh-archive-manager/types#${name}`, create: () => schema, schema });
   return ["favoriteSessions", "setSessionFavorite"].map((method) => ({
     id: `@michengai/dsh-archive-manager#workspaceRegistry/${method}`,
     service: "workspaceRegistry", namespace: "workspaceRegistry", method,
@@ -36,11 +40,11 @@ export function favoriteInvocations() {
 }
 
 /** 闲置归档只接受有效时间；执行前也复核此规则，避免归档刚恢复活动的会话。 */
-export function idleArchiveCandidate(session, { days, now = Date.now(), favorites = new Set(), currentId, pending = new Map() }) {
+export function idleArchiveCandidate(session: SessionSummary | undefined, { days, now = Date.now(), favorites = new Set(), currentId, pending = new Map() }: { days: number; now?: number; favorites?: ReadonlySet<string>; currentId?: string; pending?: ReadonlyMap<string, unknown> }) {
   if (!session || !Number.isInteger(days) || days < 1 || days > 36500) return false;
-  if (favorites.has(session.id) || session.id === currentId || session.retainedBy?.mainView > 0) return false;
-  if (session.running || session.runningSubagentCount > 0 || session.pendingInteraction != null || pending.has(session.id)) return false;
-  const updated = typeof session.updatedAt === "number" ? session.updatedAt : Date.parse(session.updatedAt);
+  if (favorites.has(session.id) || session.id === currentId || (session.retainedBy?.mainView ?? 0) > 0) return false;
+  if (session.running || (session.runningSubagentCount ?? 0) > 0 || session.pendingInteraction != null || pending.has(session.id)) return false;
+  const updated = typeof session.updatedAt === "number" ? session.updatedAt : Date.parse(session.updatedAt ?? "");
   return Number.isFinite(updated) && updated <= now - days * 86400000;
 }
 
@@ -50,9 +54,9 @@ export function idleArchiveCandidate(session, { days, now = Date.now(), favorite
  * @param operate 单条操作，返回 true 表示本次确实改变状态，false 表示跳过。
  * @param options 进度回调及结束后的列表刷新。
  */
-export async function runSessionBatch(ids, operate, { onProgress, refresh } = {}) {
+export async function runSessionBatch(ids: readonly string[], operate: (id: string) => Promise<boolean>, { onProgress, refresh }: BatchOptions = {}) {
   const requested = [...new Set(ids.map(checkedId))];
-  const result = { requested, succeeded: [], skipped: [], failures: [], unprocessed: [], remaining: [], refreshError: null };
+  const result: BatchResult = { requested, succeeded: [], skipped: [], failures: [], unprocessed: [], remaining: [], refreshError: null };
   const report = () => onProgress?.({ total: requested.length, done: result.succeeded.length + result.skipped.length + result.failures.length, succeeded: result.succeeded.length, skipped: result.skipped.length, failed: result.failures.length });
   report();
   for (const [index, id] of requested.entries()) {
@@ -73,8 +77,8 @@ export async function runSessionBatch(ids, operate, { onProgress, refresh } = {}
 }
 
 /** 把官方单条操作组合为可报告结果的批量任务，不并发改写宿主状态。 */
-export function createSessionOrganizer({ workspaces, sessions, archive, restore, deleteOne, getFavorites, refresh, currentSessionId }) {
-  return async (kind, ids, options = {}) => {
+export function createSessionOrganizer({ workspaces, sessions, archive, restore, deleteOne, getFavorites, refresh, currentSessionId }: OrganizerServices) {
+  return async (kind: OrganizeKind, ids: readonly string[], options: OrganizeOptions = {}) => {
     if (!["archive", "restore", "undo", "delete"].includes(kind)) throw new TypeError("未知批量操作");
     return runSessionBatch(ids, async (id) => {
       const before = workspaces.getSnapshot();

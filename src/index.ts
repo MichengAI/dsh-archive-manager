@@ -1,3 +1,4 @@
+import type { Context } from "@deepseek-ai/cordis";
 //#region lib/types/index.js
 /**
  * @michengai/dsh-archive-manager 根宿主入口。
@@ -15,7 +16,7 @@ import { registerPluginUpdater } from "./plugin-updater.js";
 
 const inject = ["webServer"];
 
-function apply(ctx) {
+function apply(ctx: Context) {
 	return registerPluginUpdater(ctx, {
 		endpoint: "/api/michengai/dsh-archive-manager/update",
 		packageName: "@michengai/dsh-archive-manager",

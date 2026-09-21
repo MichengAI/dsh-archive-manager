@@ -1,13 +1,14 @@
-// 检查 lib 的 Git 状态；本脚本本身不构建，也不直接比较 src。
-// pnpm verify 先重建再运行此检查，以发现构建产物与已提交版本的差异。
+// lib 只作为本地和发布包的构建产物，不纳入 Git。
+// verify 已执行构建和包结构检查，这里防止误提交生成物。
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 const run = promisify(execFile);
-const { stdout } = await run("git", ["status", "--porcelain", "--", "lib"]);
+const { stdout } = await run("git", ["ls-files", "--", "lib"]);
 
 if (stdout.trim()) {
-	process.stderr.write("lib 构建产物未同步，请先执行 pnpm build 并提交以下文件：\n");
+	process.stderr.write("lib 构建产物不应纳入 Git，请取消跟踪以下文件并保留本地副本：\n");
 	process.stderr.write(stdout);
 	process.exit(1);
 }
+console.log("生成物 Git 边界检查通过");

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createDiscoveryTools } from "../src/archive-discovery-ui.js";
+import { createDiscoveryTools } from "../src/archive-discovery-ui.ts";
 
 // 最小钩子驱动器保留依赖和清理，用可控请求验证异步竞争。
 function harness() {

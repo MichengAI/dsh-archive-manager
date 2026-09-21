@@ -100,6 +100,16 @@ const legacyBundle = materialize("@michengai/dsh-archive-manager", {
 
 const t = bundle.__test;
 
+test("分叉失败向列表提示回调报告错误，成功时不提示", async () => {
+  const messages = [];
+  const translate = (key, values) => `${key}: ${values?.detail ?? ""}`;
+  await t.forkWithFeedback("session-a", async () => { throw new Error("分叉失败"); }, message => messages.push(message), translate);
+  assert.equal(messages.length, 1);
+  assert.match(messages[0], /分叉失败/);
+  await t.forkWithFeedback("session-a", async () => {}, message => messages.push(message), translate);
+  assert.equal(messages.length, 1);
+});
+
 test("完整客户端中英文词条和占位符对应", () => {
   assert.deepEqual(Object.keys(t.zh).sort(), Object.keys(t.en).sort());
   for (const key of Object.keys(t.zh)) {

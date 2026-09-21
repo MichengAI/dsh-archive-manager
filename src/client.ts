@@ -1,3 +1,8 @@
+import type { ClientContext, Workspaces, Registry, RegistryCalls, DiscoveryMethod, SessionBinding, BrowserInjected } from "./client-compat.js";
+import type { BrowserProps, TreeProps, FlatProps, SearchProps, WorkspacePickProps, DirectoryFlowOwner, DropOver, SessionDrag, WorkspaceDrag, RowDrag, RemoteSearch, ArchiveDeleteTarget } from "./client-types.js";
+import { record, errorMessage, errorCode } from "./contracts.js";
+import type { Schema } from "./contracts.js";
+import type { ClientSession, ClientList, ClientWorkspace, WorkspaceSnapshot, Observable, WorkspaceView, UiFacts, PendingHook, StatusHook, StatusMap, BatchTarget, DeletedBatch, ArchivedGroup, ArchiveProps, ArchiveBatchResult, ArchiveRetry, Translate, BatchProgress, OrganizeKind, SessionDetail } from "./client-types.js";
 import { createSessionHealthPanel, healthZh, healthEn } from "./session-health-ui.js";
 import { createDiscoveryTools, discoveryCss, discoveryZh, discoveryEn } from "./archive-discovery-ui.js";
 import { compareTurnCounts, copySessionText, discoveryInvocations, matchesUpdatedRange, validUpdatedRange, sessionDetailCandidates } from "./archive-discovery.js";
@@ -10,10 +15,10 @@ import { createOrganizerPanel, organizerZh, organizerEn } from "./archive-organi
 window.__ModuleLoader__.load({
 	id: "@michengai/dsh-archive-manager",
 	factory: (require) => {
-		var module = { exports: {} };
+		var module: { exports: Record<string, unknown> } = { exports: {} };
 		var exports = module.exports;
 		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
-		let _deepseek_ai_dsh_client_store;
+		let _deepseek_ai_dsh_client_store: typeof import("@deepseek-ai/dsh-client-store");
 		let hasSplitClientStore = true;
 		try {
 			_deepseek_ai_dsh_client_store = require("@deepseek-ai/dsh-client-store");
@@ -29,13 +34,13 @@ window.__ModuleLoader__.load({
         const { HighlightedText, useSessionDetails, useArchiveSearch, useArchivePreview, DiscoveryFilters, SearchStatus, PreviewContent } = createDiscoveryTools(react);
 		let _deepseek_ai_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
         const SessionHealthPanel = createSessionHealthPanel(react, { warning: _deepseek_ai_dsh_client_ui_primitives.IconWarningOutline16, info: _deepseek_ai_dsh_client_ui_primitives.IconInfoOutline14, check: _deepseek_ai_dsh_client_ui_primitives.IconCheckOutline16, refresh: _deepseek_ai_dsh_client_ui_primitives.IconRefreshOutline16, search: _deepseek_ai_dsh_client_ui_primitives.IconSearchOutline16, chevron: _deepseek_ai_dsh_client_ui_primitives.IconChevronDownOutline14 });
-		const UPDATE_ICON_PATHS = {
+		const UPDATE_ICON_PATHS: Record<string, string[]> = {
 			refresh: ["M13.5 5.5V2.5m0 0h-3m3 0-2.1 2.1A5.5 5.5 0 1 0 13.2 12"],
 			download: ["M8 2v8m0 0 3-3m-3 3-3-3M3 13v2h10v-2"],
 			copy: ["M5 5h8v8H5z", "M3 3h8"],
 			close: ["m4 4 8 8M12 4 4 12"]
 		};
-		function createPluginUpdateIcon(name) {
+		function createPluginUpdateIcon(name: string) {
 			const element = document.createElement("span");
 			const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
 			svg.setAttribute("viewBox", "0 0 16 16");
@@ -63,13 +68,14 @@ window.__ModuleLoader__.load({
 		* without shipping a second zod copy into this bundle.
 		*/
 		const sessionIdSchema = {
-			parse(value) {
+			parse(value: unknown) {
 				if (typeof value !== "string" || value.length === 0) throw new TypeError(`sessionId must be a non-empty string, got ${String(value)}`);
 				return value;
 			}
 		};
 		const archivedSetSchema = {
-			parse(value) {
+			parse(input: unknown) {
+				const value = record(input);
 				if (typeof value !== "object" || value === null || Array.isArray(value)) throw new TypeError("result must be an object");
 				const ids = value.archivedSessionIds;
 				if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string")) throw new TypeError("archivedSessionIds must be a string array");
@@ -77,13 +83,15 @@ window.__ModuleLoader__.load({
 			}
 		};
 		const deletedSchema = {
-			parse(value) {
+			parse(input: unknown) {
+				const value = record(input);
 				if (typeof value !== "object" || value === null || Array.isArray(value) || value.deleted !== true) throw new TypeError("deleted must be true");
 				return value;
 			}
 		};
 		const archivedBatchTargetSchema = {
-			parse(value) {
+			parse(input: unknown) {
+				const value = record(input);
 				if (typeof value !== "object" || value === null || Array.isArray(value)) throw new TypeError("target must be an object");
 				if (value.scope === "all" || value.scope === "ungrouped") return value;
 				if (value.scope === "workspace" && typeof value.workspaceId === "string" && value.workspaceId.length > 0) return value;
@@ -92,17 +100,19 @@ window.__ModuleLoader__.load({
 			}
 		};
 		const deletedBatchSchema = {
-			parse(value) {
+			parse(input: unknown) {
+				const value = record(input);
 				if (typeof value !== "object" || value === null || Array.isArray(value)) throw new TypeError("result must be an object");
 				for (const key of ["requestedSessionIds", "deletedSessionIds", "skippedSessionIds"]) {
-					if (!Array.isArray(value[key]) || value[key].some((id) => typeof id !== "string")) throw new TypeError(`${key} must be a string array`);
+					if (!Array.isArray(value[key]) || (value[key] as unknown[]).some((id) => typeof id !== "string")) throw new TypeError(`${key} must be a string array`);
 				}
 				if (!Array.isArray(value.failures) || value.failures.some((failure) => typeof failure !== "object" || failure === null || typeof failure.sessionId !== "string" || typeof failure.message !== "string")) throw new TypeError("failures must contain sessionId/message objects");
 				return value;
 			}
 		};
 		const archivedSessionMetadataSchema = {
-			parse(value) {
+			parse(input: unknown) {
+				const value = record(input);
 				if (typeof value !== "object" || value === null || Array.isArray(value) || !Array.isArray(value.items)) throw new TypeError("result.items must be an array");
 				if (value.items.some((item) => typeof item !== "object" || item === null || typeof item.sessionId !== "string" || typeof item.createdAt !== "number" || !Number.isFinite(item.createdAt))) throw new TypeError("items must contain sessionId/createdAt objects");
 				if (value.repairedSessionIds !== void 0 && (!Array.isArray(value.repairedSessionIds) || value.repairedSessionIds.some((id) => typeof id !== "string"))) throw new TypeError("repairedSessionIds must be a string array");
@@ -110,7 +120,7 @@ window.__ModuleLoader__.load({
 			}
 		};
 		/** alpha.1 读 schema.parse；alpha.2 只接受 create()。 */
-		function strictCodec(typeSymbol, schema) {
+		function strictCodec(typeSymbol: string, schema: Schema<unknown>) {
 			return { mode: "strict", typeSymbol, create: () => schema, schema };
 		}
 		/**
@@ -208,11 +218,11 @@ window.__ModuleLoader__.load({
 		* @param summaries - Session summaries keyed by id.
 		* @returns descendant totals keyed by possible parent id.
 		*/
-		function indexSubagentDescendants(summaries) {
-			const indexed = /* @__PURE__ */ new Map();
+		function indexSubagentDescendants(summaries: Record<string, ClientSession>) {
+			const indexed = new Map<string, { count: number; runningCount: number }>();
 			for (const descendant of Object.values(summaries)) {
 				if (descendant.origin !== "subagent") continue;
-				const seen = /* @__PURE__ */ new Set();
+				const seen = /* @__PURE__ */ new Set<string>();
 				let current = descendant;
 				while (current?.origin === "subagent" && current.parentId !== void 0 && !seen.has(current.id)) {
 					seen.add(current.id);
@@ -248,7 +258,7 @@ window.__ModuleLoader__.load({
 		const WORKSPACE_VIEW_PERSIST_KEY = "dsh.archive-manager.workspace.view.v1";
 		const LEGACY_WORKSPACE_VIEW_PERSIST_KEY = "dsh.workspace.view.v5";
 		/** 换键后把官方同构的分组/展开/排序偏好拷到新键；新键已有值时不覆盖。 */
-		function migrateWorkspaceViewPersist(storage) {
+		function migrateWorkspaceViewPersist(storage?: Pick<Storage, "getItem" | "setItem">) {
 			const target = storage ?? globalThis.localStorage;
 			if (target == null || typeof target.getItem !== "function" || typeof target.setItem !== "function") return false;
 			try {
@@ -264,7 +274,7 @@ window.__ModuleLoader__.load({
 		function createWorkspaceViewStore() {
 			migrateWorkspaceViewPersist();
 			return (0, _deepseek_ai_dsh_client_store.defineStore)({
-				init: () => ({
+				init: (): WorkspaceView => ({
 					groupBy: "workspace",
 					orderBy: "updated",
 					showArchived: false,
@@ -274,29 +284,29 @@ window.__ModuleLoader__.load({
 				}),
 				persist: WORKSPACE_VIEW_PERSIST_KEY,
 				actions: {
-					setGroupBy: (d, mode) => {
+					setGroupBy: (d, mode: string) => {
 						d.groupBy = mode;
 					},
-					setOrderBy: (d, mode) => {
+					setOrderBy: (d, mode: string) => {
 						d.orderBy = mode;
 					},
-					setShowArchived: (d, value) => {
+					setShowArchived: (d, value: boolean) => {
 						d.showArchived = value === true;
 					},
-					setGroupExpanded: (d, key, expanded) => {
+					setGroupExpanded: (d, key: string, expanded: boolean) => {
 						d.groupExpansion[key] = expanded;
 					},
-					retainAccountKeys: (d, workspaceKeys) => {
+					retainAccountKeys: (d, workspaceKeys: string[]) => {
 						const retained = new Set(workspaceKeys);
 						d.groupExpansion = Object.fromEntries(Object.entries(d.groupExpansion).filter(([key]) => retained.has(key)));
 						d.sessionOrderByAccount = Object.fromEntries(Object.entries(d.sessionOrderByAccount).filter(([key]) => retained.has(key)));
 						d.sessionUpdatedAtByAccount = Object.fromEntries(Object.entries(d.sessionUpdatedAtByAccount).filter(([key]) => retained.has(key)));
 					},
-					syncSessionOrderAccount: (d, accountKey, order, updatedAt) => {
+					syncSessionOrderAccount: (d, accountKey: string, order: string[], updatedAt: Record<string, number>) => {
 						d.sessionOrderByAccount[accountKey] = order;
 						d.sessionUpdatedAtByAccount[accountKey] = updatedAt;
 					},
-					setSessionOrder: (d, accountKey, order) => {
+					setSessionOrder: (d, accountKey: string, order: string[]) => {
 						d.sessionOrderByAccount[accountKey] = order;
 					}
 				}
@@ -309,28 +319,28 @@ window.__ModuleLoader__.load({
 		/**
 		* 归档管理设置页：集中处理筛选、多选、恢复、删除和原生会话导航。
 		*/
-		function ArchivedSessionsSection({ archiveSessions, sessionStore, workspaceStore, unarchiveSession, deleteSession, unarchiveSessions, deleteArchivedSessions, archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState, close, t, diagnoseSession, repairSession, sessionDetails, searchSessionContent, searchArchivedContent, previewArchivedSession, favoriteSessions, setSessionFavorite, organizeBatch, useSessionPendingInteraction, useSessionStatus }) {
+		function ArchivedSessionsSection({ archiveSessions, sessionStore, workspaceStore, unarchiveSession, deleteSession, unarchiveSessions, deleteArchivedSessions, archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState, close, t, diagnoseSession, repairSession, sessionDetails, searchSessionContent, searchArchivedContent, previewArchivedSession, favoriteSessions, setSessionFavorite, organizeBatch, useSessionPendingInteraction, useSessionStatus }: ArchiveProps) {
 			const sessions = (0, react.useSyncExternalStore)(sessionStore.subscribe, sessionStore.getSnapshot);
 			const workspaceState = (0, react.useSyncExternalStore)(workspaceStore.subscribe, workspaceStore.getSnapshot);
 			const [archiveTab, setArchiveTab] = (0, react.useState)("archived");
 			const isArchived = archiveTab === "archived";
-			const [archiveTarget, setArchiveTarget] = (0, react.useState)(null);
-			const [archiveGroup, setArchiveGroup] = (0, react.useState)(null);
-			const requestArchive = (ids, group = null) => { setError(null); setNotice(null); setIdleRequest(false); setArchiveGroup(group); setArchiveTarget(ids); };
+			const [archiveTarget, setArchiveTarget] = (0, react.useState)<string[] | null>(null);
+			const [archiveGroup, setArchiveGroup] = (0, react.useState)<ArchivedGroup | null>(null);
+			const requestArchive = (ids: string[], group: ArchivedGroup | null = null) => { setError(null); setNotice(null); setIdleRequest(false); setArchiveGroup(group); setArchiveTarget(ids); };
 			const closeArchive = () => { if (!busy) { setArchiveTarget(null); setArchiveGroup(null); setError(null); } };
 			const archiveBusy = (0, react.useRef)(false);
-			const [deleteTarget, setDeleteTarget] = (0, react.useState)(null);
+			const [deleteTarget, setDeleteTarget] = (0, react.useState)<ArchiveDeleteTarget | null>(null);
 			const [busy, setBusy] = (0, react.useState)(false);
-			const [error, setError] = (0, react.useState)(null);
-			const [notice, setNotice] = (0, react.useState)(null);
+			const [error, setError] = (0, react.useState)<string | null>(null);
+			const [notice, setNotice] = (0, react.useState)<string | null>(null);
 			const [query, setQuery] = (0, react.useState)(viewState?.query ?? "");
 			const [project, setProject] = (0, react.useState)(viewState?.project ?? "all");
 			const [sortBy, setSortBy] = (0, react.useState)(viewState?.sortBy ?? "updated");
-			const [createdAtById, setCreatedAtById] = (0, react.useState)({});
-			const [unarchivingSessionIds, setUnarchivingSessionIds] = (0, react.useState)(() => /* @__PURE__ */ new Set());
-			const unarchivingSessionIdsRef = (0, react.useRef)(/* @__PURE__ */ new Set());
-			const [selectedSessionIds, setSelectedSessionIds] = (0, react.useState)([]);
-			const [favoriteIds, setFavoriteIds] = (0, react.useState)([]);
+			const [createdAtById, setCreatedAtById] = (0, react.useState)<Record<string, number>>({});
+			const [unarchivingSessionIds, setUnarchivingSessionIds] = (0, react.useState)(() => /* @__PURE__ */ new Set<string>());
+			const unarchivingSessionIdsRef = (0, react.useRef)(/* @__PURE__ */ new Set<string>());
+			const [selectedSessionIds, setSelectedSessionIds] = (0, react.useState)<string[]>([]);
+			const [favoriteIds, setFavoriteIds] = (0, react.useState)<string[]>([]);
 			const [favoritesReady, setFavoritesReady] = (0, react.useState)(false);
 			const [favoriteBusy, setFavoriteBusy] = (0, react.useState)(false);
 			const favoriteLock = (0, react.useRef)(false);
@@ -338,14 +348,14 @@ window.__ModuleLoader__.load({
 			const [searchScope, setSearchScope] = react.useState("title");
             const [dateFrom, setDateFrom] = react.useState("");
             const [dateTo, setDateTo] = react.useState("");
-            const [collapsedGroups, setCollapsedGroups] = (0, react.useState)(() => new Set());
+            const [collapsedGroups, setCollapsedGroups] = (0, react.useState)(() => new Set<string>());
 			const [idleDays, setIdleDays] = (0, react.useState)("30");
 			const [idleRequest, setIdleRequest] = (0, react.useState)(false);
-			const [batchProgress, setBatchProgress] = (0, react.useState)(null);
-			const [batchResult, setBatchResult] = (0, react.useState)(null);
-			const [lastArchive, setLastArchive] = (0, react.useState)([]);
+			const [batchProgress, setBatchProgress] = (0, react.useState)<BatchProgress | null>(null);
+			const [batchResult, setBatchResult] = (0, react.useState)<ArchiveBatchResult | null>(null);
+			const [lastArchive, setLastArchive] = (0, react.useState)<string[]>([]);
 			const batchLock = (0, react.useRef)(false);
-			const retryBatch = (0, react.useRef)(null);
+			const retryBatch = (0, react.useRef)<ArchiveRetry | null>(null);
 			const uiFacts = useSessionUiFacts(useSessionPendingInteraction ?? useEmptySessionPendingInteraction, useSessionStatus ?? useEmptySessionStatus, typeof useSessionStatus === "function");
 			const pendingRef = (0, react.useRef)(uiFacts.pending);
 			pendingRef.current = uiFacts.pending;
@@ -353,17 +363,17 @@ window.__ModuleLoader__.load({
 			const loadFavorites = async () => {
 				if (!favoriteSessions) return;
 				try { const result = await favoriteSessions(); setFavoriteIds(result.favoriteSessionIds); setFavoritesReady(true); }
-				catch (reason) { setFavoritesReady(false); setError(String(reason?.message ?? reason)); }
+				catch (reason) { setFavoritesReady(false); setError(errorMessage(reason)); }
 			};
-			(0, react.useEffect)(() => { let active = true; if (favoriteSessions) favoriteSessions().then((value) => { if (active) { setFavoriteIds(value.favoriteSessionIds); setFavoritesReady(true); } }).catch((reason) => { if (active) setError(String(reason?.message ?? reason)); }); return () => { active = false; }; }, [favoriteSessions]);
-			const toggleFavorite = async (sessionId) => {
+			(0, react.useEffect)(() => { let active = true; if (favoriteSessions) favoriteSessions().then((value) => { if (active) { setFavoriteIds(value.favoriteSessionIds); setFavoritesReady(true); } }).catch((reason) => { if (active) setError(errorMessage(reason)); }); return () => { active = false; }; }, [favoriteSessions]);
+			const toggleFavorite = async (sessionId: string) => {
 				if (favoriteLock.current || busy || !favoritesReady) return;
 				favoriteLock.current = true; setFavoriteBusy(true); setError(null);
 				try { const value = await setSessionFavorite({ sessionId, favorite: !favoriteSet.has(sessionId) }); setFavoriteIds(value.favoriteSessionIds); }
-				catch (reason) { setError(String(reason?.message ?? reason)); }
+				catch (reason) { setError(errorMessage(reason)); }
 				finally { favoriteLock.current = false; setFavoriteBusy(false); }
 			};
-			const executeBatch = async (kind, ids, { idle = false, retry = false } = {}) => {
+			const executeBatch = async (kind: OrganizeKind, ids: string[], { idle = false, retry = false } = {}) => {
 				if (batchLock.current || favoriteLock.current || unarchivingSessionIdsRef.current.size > 0 || !organizeBatch) return;
 				batchLock.current = true; setBusy(true); setError(null); setNotice(null); setBatchResult(null);
 				if (kind === "archive" && !retry) setLastArchive([]);
@@ -376,13 +386,13 @@ window.__ModuleLoader__.load({
 					setSelectedSessionIds((previous) => previous.filter((id) => !result.succeeded.includes(id) && !result.skipped.includes(id)));
 					if (kind === "delete") setFavoriteIds((previous) => previous.filter((id) => !result.succeeded.includes(id)));
 					return result;
-				} catch (reason) { setError(String(reason?.message ?? reason)); }
+				} catch (reason) { setError(errorMessage(reason)); }
 				finally { batchLock.current = false; setBusy(false); setBatchProgress(null); }
 			};
 			const navigationActive = (0, react.useRef)(true);
 			const navigationPending = (0, react.useRef)(false);
 			(0, react.useEffect)(() => { navigationActive.current = true; return () => { navigationActive.current = false; }; }, []);
-			const viewConversation = async (session, restore = false) => {
+			const viewConversation = async (session: { id: string }, restore = false) => {
 				if (busy || navigationPending.current) return;
 				navigationPending.current = true; setBusy(true); setError(null);
 				let restored = false;
@@ -414,7 +424,7 @@ window.__ModuleLoader__.load({
 			(0, react.useEffect)(() => { if (viewState) Object.assign(viewState, { query, project, sortBy }); }, [query, project, sortBy, viewState]);
 			const eligibleIds = (0, react.useMemo)(() => isArchived ? workspaceState.archivedSessionIds : unarchivedSessionIds(sessions.byId, workspaceState.archivedSessionIds), [isArchived, sessions.byId, workspaceState.archivedSessionIds]);
 			const groups = (0, react.useMemo)(() => deriveArchivedGroups(sessions.byId, workspaceState.items, eligibleIds, t("group.ungrouped")), [sessions.byId, workspaceState, eligibleIds, t]);
-			const switchTab = (tab) => {
+			const switchTab = (tab: string) => {
 				if (busy || unarchivingSessionIdsRef.current.size > 0) return;
 				preview.close();
 				setArchiveTab(tab); setSelectedSessionIds([]); setArchiveTarget(null); setArchiveGroup(null); setError(null); setNotice(null); setProject("all"); setQuery("");
@@ -443,7 +453,7 @@ window.__ModuleLoader__.load({
 				finally { archiveBusy.current = false; setBusy(false); }
 			};
 			const details = useSessionDetails(sessionDetailCandidates(eligibleIds, sessions.byId), sessionDetails, t);
-            const copyDetail = async (session, kind) => {
+            const copyDetail = async (session: ClientSession, kind: string) => {
                 setError(null); setNotice(null);
                 try {
                     let text = session.id;
@@ -455,7 +465,7 @@ window.__ModuleLoader__.load({
                     }
                     await copySessionText(text);
                     if (navigationActive.current) setNotice(t("details.copied"));
-                } catch (reason) { if (navigationActive.current) setError(reason?.code?.startsWith("copy.") ? t(reason.code) : String(reason?.message ?? reason)); }
+                } catch (reason) { if (navigationActive.current) setError(typeof errorCode(reason) === "string" && String(errorCode(reason)).startsWith("copy.") ? t(String(errorCode(reason))) : errorMessage(reason)); }
             };
             const sortedGroups = (0, react.useMemo)(() => sortArchivedGroups(groups, sortBy, createdAtById, t, details.byId), [groups, sortBy, createdAtById, t, details.byId]);
 			(0, react.useEffect)(() => {
@@ -488,13 +498,13 @@ window.__ModuleLoader__.load({
 			(0, react.useEffect)(() => {
 				setSelectedSessionIds((current) => pruneArchivedSelection(current, eligibleIds));
 			}, [eligibleIds]);
-			const toggleSessionSelection = (sessionId, checked) => {
+			const toggleSessionSelection = (sessionId: string, checked: boolean) => {
 				setSelectedSessionIds((current) => toggleArchivedSelection(current, [sessionId], checked));
 			};
-			const toggleVisibleSelection = (checked) => {
+			const toggleVisibleSelection = (checked: boolean) => {
 				setSelectedSessionIds((current) => toggleArchivedSelection(current, visibleSessionIds, checked));
 			};
-			const onUnarchive = (sessionId) => {
+			const onUnarchive = (sessionId: string) => {
 				if (busy || unarchivingSessionIdsRef.current.has(sessionId)) return;
 				unarchivingSessionIdsRef.current.add(sessionId);
 				setUnarchivingSessionIds(new Set(unarchivingSessionIdsRef.current));
@@ -507,7 +517,7 @@ window.__ModuleLoader__.load({
 					setUnarchivingSessionIds(new Set(unarchivingSessionIdsRef.current));
 				});
 			};
-			const onBatchUnarchive = async (target) => {
+			const onBatchUnarchive = async (target: BatchTarget) => {
 				if (busy) return;
 				if (organizeBatch) {
 					const ids = deriveArchivedBatchIds(workspaceState.archivedSessionIds, workspaceState.items, target);
@@ -540,11 +550,11 @@ window.__ModuleLoader__.load({
 			};
 			(0, react.useEffect)(() => {
 				if (deleteTarget === null) return;
-				const onKeyDown = (event) => {
+				const onKeyDown = (event: KeyboardEvent) => {
 					if (event.key !== "Escape") return;
 					event.preventDefault();
 					event.stopPropagation();
-					if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
+					if ("stopImmediatePropagation" in event && typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
 					if (!busy) setDeleteTarget(null);
 				};
 				window.addEventListener("keydown", onKeyDown, true);
@@ -582,8 +592,8 @@ window.__ModuleLoader__.load({
 				}
 			};
 			const batchScope = deleteTarget?.kind === "batch" ? deleteTarget.target.scope : null;
-			const deleteDialogTitle = batchScope === "ungrouped" ? t("archives.deleteUngroupedTitle") : batchScope === "workspace" ? t("archives.deleteProjectTitle", { name: deleteTarget.title }) : batchScope === "sessions" ? t("archives.deleteSelectedTitle") : t("deleteSession.title");
-			const deleteDialogDescription = deleteTarget === null ? void 0 : batchScope === "ungrouped" ? t("archives.deleteUngroupedDesc", { n: deleteTarget.count }) : batchScope === "workspace" ? t("archives.deleteProjectDesc", { name: deleteTarget.title, n: deleteTarget.count }) : batchScope === "sessions" ? t("archives.deleteSelectedDesc", { n: deleteTarget.count }) : t("deleteSession.desc", { name: displayTitle(deleteTarget.session, t) });
+			const deleteDialogTitle = batchScope === "ungrouped" ? t("archives.deleteUngroupedTitle") : batchScope === "workspace" ? t("archives.deleteProjectTitle", { name: deleteTarget?.kind === "batch" ? deleteTarget.title : "" }) : batchScope === "sessions" ? t("archives.deleteSelectedTitle") : t("deleteSession.title");
+			const deleteDialogDescription = deleteTarget === null ? void 0 : batchScope === "ungrouped" ? t("archives.deleteUngroupedDesc", { n: deleteTarget.kind === "batch" ? deleteTarget.count : 0 }) : batchScope === "workspace" ? t("archives.deleteProjectDesc", { name: deleteTarget?.kind === "batch" ? deleteTarget.title : "", n: deleteTarget.kind === "batch" ? deleteTarget.count : 0 }) : batchScope === "sessions" ? t("archives.deleteSelectedDesc", { n: deleteTarget.kind === "batch" ? deleteTarget.count : 0 }) : t("deleteSession.desc", { name: displayTitle(deleteTarget.kind === "session" ? deleteTarget.session : {}, t) });
 			const deleteConfirmLabel = batchScope === "ungrouped" ? t("archives.deleteUngroupedConfirm") : batchScope === "workspace" ? t("archives.deleteProjectConfirm") : batchScope === "sessions" ? t("archives.deleteSelectedConfirm") : t("deleteSession.title");
 			return (0, react_jsx_runtime.jsxs)("section", {
 				className: "dsham_settings",
@@ -601,7 +611,7 @@ window.__ModuleLoader__.load({
 						onClick: () => switchTab(tab), onKeyDown: (event) => {
 							if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
 								event.preventDefault(); const next = event.key === "Home" ? "archived" : event.key === "End" ? "unarchived" : isArchived ? "unarchived" : "archived";
-								switchTab(next); event.currentTarget.parentElement.querySelector("#dsham-tab-" + next)?.focus();
+								switchTab(next); event.currentTarget.parentElement?.querySelector<HTMLElement>("#dsham-tab-" + next)?.focus();
 							}
 						}, children: t("archives.tab." + tab)
 					}, tab))
@@ -611,7 +621,7 @@ window.__ModuleLoader__.load({
 					children: [(0, react_jsx_runtime.jsxs)("div", {
 						className: "dsham_settingsSearch",
 						children: [react.createElement("div", { className: "dsham_searchScope" }, react.createElement(ArchiveProjectSelect, { id: "dsham-search-scope", value: searchScope, "aria-label": t("discovery.scope"), onChange: setSearchScope, options: [{ value: "title", label: t("discovery.titleOnly") }, { value: "content", label: t("discovery.titleAndContent") }] })), (0, react_jsx_runtime.jsx)("input", { type: "search", maxLength: 200, value: query, onChange: (event) => setQuery(event.target.value), placeholder: t(contentEnabled ? "discovery.searchPlaceholder" : isArchived ? "archives.searchPlaceholder" : "archives.searchUnarchived"), "aria-label": t(contentEnabled ? "discovery.searchPlaceholder" : isArchived ? "archives.searchPlaceholder" : "archives.searchUnarchived") }), react.createElement(DiscoveryFilters, { t, from: dateFrom, to: dateTo, onFrom: setDateFrom, onTo: setDateTo, invalid: invalidDate, onClear: () => { setDateFrom(""); setDateTo(""); } })]
-					}), (0, react_jsx_runtime.jsx)(ArchiveProjectSelect, { id: "dsham-sort-filter", value: sortBy, options: [{ value: "updated", label: t("archives.sortUpdated") }, { value: "created", label: t("archives.sortCreated") }, { value: "alphabetical", label: t("archives.sortAlphabetical") }, ...sessionDetails ? [{ value: "turnsDesc", label: t("details.more") }, { value: "turnsAsc", label: t("details.less") }] : []], onChange: setSortBy, "aria-label": t("archives.sortBy") }), (0, react_jsx_runtime.jsx)(ArchiveProjectSelect, { id: "dsham-project-filter", value: project, options: [{ value: "all", label: t("archives.allProjects") }, ...sortedGroups.map((group) => ({ value: group.key, label: group.title }))], onChange: setProject, "aria-label": t("archives.projectFilter") }), setSessionFavorite && (0, react_jsx_runtime.jsx)(ArchiveProjectSelect, { id: "dsham-favorite-filter", value: favoritesOnly ? "favorites" : "all", disabled: busy || favoriteBusy || !favoritesReady, options: [{ value: "all", label: t("organizer.allSessions") }, { value: "favorites", label: t("organizer.favoritesOnly") }], onChange: (value) => setFavoritesOnly(value === "favorites"), "aria-label": t("organizer.favoriteFilter") })]
+					}), (0, react_jsx_runtime.jsx)(ArchiveProjectSelect, { id: "dsham-sort-filter", value: sortBy, options: [{ value: "updated", label: t("archives.sortUpdated") }, { value: "created", label: t("archives.sortCreated") }, { value: "alphabetical", label: t("archives.sortAlphabetical") }, ...typeof sessionDetails === "function" ? [{ value: "turnsDesc", label: t("details.more") }, { value: "turnsAsc", label: t("details.less") }] : []], onChange: setSortBy, "aria-label": t("archives.sortBy") }), (0, react_jsx_runtime.jsx)(ArchiveProjectSelect, { id: "dsham-project-filter", value: project, options: [{ value: "all", label: t("archives.allProjects") }, ...sortedGroups.map((group) => ({ value: group.key, label: group.title }))], onChange: setProject, "aria-label": t("archives.projectFilter") }), typeof setSessionFavorite === "function" && (0, react_jsx_runtime.jsx)(ArchiveProjectSelect, { id: "dsham-favorite-filter", value: favoritesOnly ? "favorites" : "all", disabled: busy || favoriteBusy || !favoritesReady, options: [{ value: "all", label: t("organizer.allSessions") }, { value: "favorites", label: t("organizer.favoritesOnly") }], onChange: (value) => setFavoritesOnly(value === "favorites"), "aria-label": t("organizer.favoriteFilter") })]
 				}), react.createElement("style", null, discoveryCss), react.createElement(SearchStatus, { state: contentSearch, t }), react.createElement(SessionHealthPanel, { key: archiveTab, t, isArchived, items: details.items, sessions: groups.flatMap(group => group.sessions), diagnoseSession, repairSession, retry: details.retry, pending: details.pending }), organizeBatch && (0, react_jsx_runtime.jsx)(OrganizerPanel, {
 					t, archived: isArchived, busy: busy || favoriteBusy || unarchivingSessionIds.size > 0, ready: favoritesReady,
 					days: idleDays, onDays: setIdleDays, count: idleCandidates.length,
@@ -647,12 +657,12 @@ window.__ModuleLoader__.load({
                     (0, react_jsx_runtime.jsx)(ArchiveSelectionCheckbox, { checked: selectedSessionIdSet.has(session.id), disabled: busy, label: t("archives.selectSession", { name: displayTitle(session, t) }), onChange: (event) => toggleSessionSelection(session.id, event.target.checked) }),
                     (0, react_jsx_runtime.jsxs)("div", { className: "dsham_settingsContent", children: [
                       (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsTitleLink", title: displayTitle(session, t), "aria-label": t("archives.openSession") + t("common.separator") + displayTitle(session, t), disabled: busy || unarchivingSessionIds.has(session.id), onClick: () => viewConversation(session), children: displayTitle(session, t) }),
-                      (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsMeta", children: [archiveTimeLabel(session.updatedAt, t), sessionDetails && react.createElement("span", { key: "turns", title: details.byId[session.id]?.error || t("details.hint") }, " · ", t(typeof details.byId[session.id]?.turnCount === "number" ? "details.turns" : details.byId[session.id] ? "details.unknown" : "details.pending", { n: details.byId[session.id]?.turnCount }))] }), contentMatches.has(session.id) && react.createElement("button", { type: "button", className: "dsham_settingsSnippet", disabled: busy, title: t(isArchived ? "discovery.preview" : "archives.openSession"), onClick: () => isArchived ? preview.open(session, query) : viewConversation(session) }, react.createElement(HighlightedText, { text: contentMatches.get(session.id).snippet, query }))
+                      (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsMeta", children: [archiveTimeLabel(session.updatedAt, t), typeof sessionDetails === "function" && react.createElement("span", { key: "turns", title: details.byId[session.id]?.error || t("details.hint") }, " · ", t(typeof details.byId[session.id]?.turnCount === "number" ? "details.turns" : details.byId[session.id] ? "details.unknown" : "details.pending", { n: details.byId[session.id]?.turnCount }))] }), contentMatches.has(session.id) && react.createElement("button", { type: "button", className: "dsham_settingsSnippet", disabled: busy, title: t(isArchived ? "discovery.preview" : "archives.openSession"), onClick: () => isArchived ? preview.open(session, query) : viewConversation(session) }, react.createElement(HighlightedText, { text: contentMatches.get(session.id)?.snippet ?? "", query }))
                     ] }),
                     (0, react_jsx_runtime.jsxs)("div", { className: "dsham_settingsActions", children: [
-                      setSessionFavorite && (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_favorite", title: t(favoriteSet.has(session.id) ? "organizer.unfavorite" : "organizer.favorite"), "aria-pressed": favoriteSet.has(session.id), "aria-label": t(favoriteSet.has(session.id) ? "organizer.unfavorite" : "organizer.favorite") + t("common.separator") + displayTitle(session, t), disabled: busy || favoriteBusy || !favoritesReady, onClick: () => toggleFavorite(session.id), children: (0, react_jsx_runtime.jsx)("span", { "aria-hidden": true, children: favoriteSet.has(session.id) ? "★" : "☆" }) }),
+                      typeof setSessionFavorite === "function" && (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_favorite", title: t(favoriteSet.has(session.id) ? "organizer.unfavorite" : "organizer.favorite"), "aria-pressed": favoriteSet.has(session.id), "aria-label": t(favoriteSet.has(session.id) ? "organizer.unfavorite" : "organizer.favorite") + t("common.separator") + displayTitle(session, t), disabled: busy || favoriteBusy || !favoritesReady, onClick: () => toggleFavorite(session.id), children: (0, react_jsx_runtime.jsx)("span", { "aria-hidden": true, children: favoriteSet.has(session.id) ? "★" : "☆" }) }),
                       (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_restoreIcon", title: t(isArchived ? "archives.restore" : "archives.archiveSelected"), "aria-label": t(isArchived ? "archives.restore" : "archives.archiveSelected"), disabled: busy || unarchivingSessionIds.has(session.id), onClick: () => isArchived ? onUnarchive(session.id) : requestArchive([session.id]), children: (0, react_jsx_runtime.jsx)(isArchived ? _deepseek_ai_dsh_client_ui_primitives.IconRefreshOutline16 : _deepseek_ai_dsh_client_ui_primitives.IconArchiveOutline20, { size: 16 }) }),
-                      (isArchived || sessionDetails) && (0, react_jsx_runtime.jsx)(ArchivedSessionMenu, { busy: busy || unarchivingSessionIds.has(session.id), t, title: displayTitle(session, t), onCopyId: () => copyDetail(session, "id"), onCopyPath: sessionDetails ? () => copyDetail(session, "path") : undefined, onPreview: isArchived && previewArchivedSession ? () => preview.open(session, query) : undefined, onRestoreOpen: isArchived ? () => viewConversation(session, true) : undefined, onDelete: isArchived ? () => setDeleteTarget({ kind: "session", session }) : undefined })
+                      (isArchived || typeof sessionDetails === "function") && (0, react_jsx_runtime.jsx)(ArchivedSessionMenu, { busy: busy || unarchivingSessionIds.has(session.id), t, title: displayTitle(session, t), onCopyId: () => copyDetail(session, "id"), onCopyPath: typeof sessionDetails === "function" ? () => copyDetail(session, "path") : undefined, onPreview: isArchived && typeof previewArchivedSession === "function" ? () => preview.open(session, query) : undefined, onRestoreOpen: isArchived ? () => viewConversation(session, true) : undefined, onDelete: isArchived ? () => setDeleteTarget({ kind: "session", session }) : undefined })
                     ] })
                   ]
                 }, session.id))
@@ -671,7 +681,7 @@ window.__ModuleLoader__.load({
 						(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, { variant: "outline", className: "dsham_archiveWorkspaceConfirm", disabled: busy || !archiveTarget?.length, onClick: confirmArchive, children: t("archives.archiveSelected") })
 					] }), children: (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
 						organizeBatch && (0, react_jsx_runtime.jsx)("p", { children: t(idleRequest ? "organizer.idleConfirm" : "organizer.manualConfirm") }),
-						organizeBatch && (0, react_jsx_runtime.jsx)("div", { className: "dsham_archivePreview", children: (archiveTarget ?? []).map((id) => (0, react_jsx_runtime.jsxs)("label", { children: [(0, react_jsx_runtime.jsx)("input", { type: "checkbox", checked: true, disabled: busy, onChange: () => setArchiveTarget((current) => current.filter((value) => value !== id)) }), displayTitle(sessions.byId[id] ?? { id }, t)] }, id)) }),
+						organizeBatch && (0, react_jsx_runtime.jsx)("div", { className: "dsham_archivePreview", children: (archiveTarget ?? []).map((id) => (0, react_jsx_runtime.jsxs)("label", { children: [(0, react_jsx_runtime.jsx)("input", { type: "checkbox", checked: true, disabled: busy, onChange: () => setArchiveTarget((current) => (current ?? []).filter((value) => value !== id)) }), displayTitle(sessions.byId[id] ?? { id }, t)] }, id)) }),
 						batchProgress && (0, react_jsx_runtime.jsxs)("div", { role: "status", children: [(0, react_jsx_runtime.jsx)("progress", { value: batchProgress.done, max: Math.max(1, batchProgress.total) }), t("organizer.progressCount", { done: batchProgress.done, total: batchProgress.total })] }),
 						error !== null && (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsError", role: "alert", children: error })
 					] })
@@ -688,16 +698,16 @@ window.__ModuleLoader__.load({
 		}
 		//#endregion
 		//#region ../../../node_modules/.pnpm/clsx@2.1.1/node_modules/clsx/dist/clsx.mjs
-		function r(e) {
+		function r(e: unknown): string {
 			var t, f, n = "";
 			if ("string" == typeof e || "number" == typeof e) n += e;
 			else if ("object" == typeof e) if (Array.isArray(e)) {
 				var o = e.length;
 				for (t = 0; t < o; t++) e[t] && (f = r(e[t])) && (n && (n += " "), n += f);
-			} else for (f in e) e[f] && (n && (n += " "), n += f);
+			} else for (f in e) (e as Record<string, unknown>)[f] && (n && (n += " "), n += f);
 			return n;
 		}
-		function clsx() {
+		function clsx(..._values: unknown[]) {
 			for (var e, t, f = 0, n = "", o = arguments.length; f < o; f++) (e = arguments[f]) && (t = r(e)) && (n && (n += " "), n += t);
 			return n;
 		}
@@ -709,13 +719,13 @@ window.__ModuleLoader__.load({
 		* @param cwd - directory path, or undefined for the ungrouped bucket.
 		* @returns basename, the raw cwd when it has no basename, or the ungrouped label.
 		*/
-		function workspaceLabel(cwd, ungroupedLabel = UNGROUPED_LABEL) {
+		function workspaceLabel(cwd: string | undefined, ungroupedLabel = UNGROUPED_LABEL) {
 			if (cwd === void 0 || cwd === "") return ungroupedLabel;
 			const base = cwd.replace(/[/\\]+$/, "").split(/[/\\]/).pop();
 			return base !== void 0 && base !== "" ? base : cwd;
 		}
 		/** Recency comparator: newest first, id as the deterministic tiebreak (ids are unique per group). */
-		function byRecency(a, b) {
+		function byRecency(a: { updatedAt: number; id: string }, b: { updatedAt: number; id: string }) {
 			if (b.updatedAt !== a.updatedAt) return b.updatedAt - a.updatedAt;
 			return a.id < b.id ? -1 : 1;
 		}
@@ -726,31 +736,31 @@ window.__ModuleLoader__.load({
 		* (`showArchived`); their accounting slots remain either way, so
 		* unarchiving restores position.
 		*/
-		function sessionVisible(session, current, archived, showArchived) {
+		function sessionVisible(session: ClientSession, current: string | undefined, archived: ReadonlySet<string>, showArchived: boolean) {
 			return session.origin !== "subagent" && (!archived.has(session.id) || showArchived === true) && (!session.blank || session.id === current);
 		}
 		/** 识别删除路径上“会话已不存在”的稳定标记；保留旧文案作兜底。 */
-		function isUnknownSessionError(reason) {
+		function isUnknownSessionError(reason: unknown) {
 			const message = reason instanceof Error ? reason.message : String(reason);
 			return message.includes("UNKNOWN_SESSION") || message.includes("no such session");
 		}
 		/** 把删除失败转成当前语言的用户文案。 */
-		function formatDeleteError(reason, t) {
+		function formatDeleteError(reason: unknown, t: Translate) {
 			if (isUnknownSessionError(reason)) return t("deleteSession.unknown");
 			const detail = reason instanceof Error ? reason.message : String(reason);
 			return t("deleteSession.failed", { detail });
 		}
-		function formatUnarchiveError(reason, t) {
+		function formatUnarchiveError(reason: unknown, t: Translate) {
 			if (isUnknownSessionError(reason)) return t("archives.unarchiveUnknown");
 			const detail = reason instanceof Error ? reason.message : String(reason);
 			return t("archives.unarchiveFailed", { detail });
 		}
-		function formatArchiveError(reason, t) {
+		function formatArchiveError(reason: unknown, t: Translate) {
 			if (isUnknownSessionError(reason)) return t("archives.archiveUnknown");
 			const detail = reason instanceof Error ? reason.message : String(reason);
 			return t("archives.archiveFailed", { detail });
 		}
-		function formatForkError(reason, t) {
+		function formatForkError(reason: unknown, t: Translate) {
 			const detail = reason instanceof Error ? reason.message : String(reason);
 			return t("archives.forkFailed", { detail });
 		}
@@ -759,11 +769,11 @@ window.__ModuleLoader__.load({
 		* its canonical title never enters search (blank rows are query-excluded)
 		* and the renderer localizes its display label.
 		*/
-		function sessionTitle(session) {
+		function sessionTitle(session: ClientSession) {
 			return session.blank ? "New Session" : session.displayTitle;
 		}
 		/** Build one group without projecting session lineage into presentation. */
-		function buildGroup(key, workspaceId, cwd, createdAt, label, members, order) {
+		function buildGroup(key: string, workspaceId: string | undefined, cwd: string | undefined, createdAt: number | undefined, label: string, members: readonly ClientSession[], order: string) {
 			const sessions = [...members];
 			if (order === "recency") sessions.sort(byRecency);
 			return {
@@ -776,10 +786,10 @@ window.__ModuleLoader__.load({
 			};
 		}
 		/** Apply a stored Ungrouped order and append newly loose Sessions by recency. */
-		function orderedUngrouped(members, stored) {
+		function orderedUngrouped(members: readonly ClientSession[], stored: readonly string[]) {
 			const byId = new Map(members.map((session) => [session.id, session]));
-			const included = /* @__PURE__ */ new Set();
-			const ordered = [];
+			const included = /* @__PURE__ */ new Set<string>();
+			const ordered: ClientSession[] = [];
 			for (const key of stored) {
 				const session = byId.get(key);
 				if (session === void 0 || included.has(key)) continue;
@@ -798,9 +808,9 @@ window.__ModuleLoader__.load({
 		* outside every Workspace trail in the browser-local Ungrouped order, which
 		* falls back to recency before that order is initialized.
 		*/
-		function groupByWorkspace(list, workspaces, archived, ungroupedOrder, showArchived) {
+		function groupByWorkspace(list: ClientList, workspaces: readonly ClientWorkspace[], archived: ReadonlySet<string>, ungroupedOrder: readonly string[] | undefined, showArchived: boolean) {
 			const groups = [];
-			const accounted = /* @__PURE__ */ new Set();
+			const accounted = /* @__PURE__ */ new Set<string>();
 			for (const workspace of workspaces) {
 				const members = [];
 				for (const id of workspace.sessionIds) {
@@ -817,23 +827,23 @@ window.__ModuleLoader__.load({
 			return groups;
 		}
 		/** 返回工作区中尚未归档的唯一会话数量。 */
-		function archiveableWorkspaceSessionCount(workspace, archivedSessionIds) {
+		function archiveableWorkspaceSessionCount(workspace: ClientWorkspace, archivedSessionIds: readonly string[] | Set<string>) {
 			const archived = archivedSessionIds instanceof Set ? archivedSessionIds : new Set(archivedSessionIds);
 			return [...new Set(workspace.sessionIds)].filter((sessionId) => !archived.has(sessionId)).length;
 		}
 		/** 仅在工作区仍有活跃会话时创建批量归档确认目标。 */
-		function archiveWorkspaceDialogTarget(workspaces, workspaceId, title, archivedSessionIds) {
+		function archiveWorkspaceDialogTarget(workspaces: readonly ClientWorkspace[], workspaceId: string, title: string, archivedSessionIds: readonly string[] | Set<string>) {
 			const workspace = workspaces.find((item) => item.workspaceId === workspaceId);
 			if (workspace === void 0) return null;
 			const count = archiveableWorkspaceSessionCount(workspace, archivedSessionIds);
 			return count === 0 ? null : { workspaceId, title, count };
 		}
 		/** 请求失败时保留确认目标，方便用户查看错误后重试。 */
-		function archiveWorkspaceDialogFailureState(target, reason, t) {
+		function archiveWorkspaceDialogFailureState(target: { workspaceId: string; title: string; count: number }, reason: unknown, t: Translate) {
 			return { target, archiving: false, error: formatArchiveError(reason, t) };
 		}
 		/** 只把侧栏已支持的待处理交互类型交给行渲染，避免未知类型触发断言。 */
-		function visiblePendingKind(kind) {
+		function visiblePendingKind(kind: string | undefined) {
 			switch (kind) {
 				case "approval":
 				case "plan-review":
@@ -841,21 +851,21 @@ window.__ModuleLoader__.load({
 				default: return;
 			}
 		}
-		function pendingInteractionForSession(session, pendingInteractions) {
+		function pendingInteractionForSession(session: ClientSession, pendingInteractions: Map<string, { kind: string }>) {
 			const entry = pendingInteractions.get(session.id);
 			const kind = entry === void 0 ? session.pendingInteraction : entry.kind;
 			return visiblePendingKind(kind);
 		}
-		const EMPTY_PENDING_INTERACTIONS = /* @__PURE__ */ new Map();
-		const EMPTY_COMPLETED_SESSIONS = /* @__PURE__ */ new Set();
-		const EMPTY_SESSION_STATUS = /* @__PURE__ */ new Map();
-		function useEmptySessionPendingInteraction(selector) {
+		const EMPTY_PENDING_INTERACTIONS = new Map<string, { kind: string }>();
+		const EMPTY_COMPLETED_SESSIONS = /* @__PURE__ */ new Set<string>();
+		const EMPTY_SESSION_STATUS: StatusMap = new Map();
+		function useEmptySessionPendingInteraction<T>(selector: (value: Map<string, { kind: string }>) => T) {
 			return selector(EMPTY_PENDING_INTERACTIONS);
 		}
-		function useEmptySessionStatus(selector) {
+		function useEmptySessionStatus<T>(selector: (value: StatusMap) => T) {
 			return selector(EMPTY_SESSION_STATUS);
 		}
-		function pendingFacts(pendingInteractions) {
+		function pendingFacts(pendingInteractions: UiFacts | Map<string, { kind: string }> | undefined) {
 			if (pendingInteractions instanceof Map || pendingInteractions == null) {
 				return { pending: pendingInteractions ?? EMPTY_PENDING_INTERACTIONS, completed: EMPTY_COMPLETED_SESSIONS };
 			}
@@ -864,9 +874,9 @@ window.__ModuleLoader__.load({
 				completed: pendingInteractions.completed ?? EMPTY_COMPLETED_SESSIONS
 			};
 		}
-		function factsFromSessionStatus(status) {
-			const pending = new Map();
-			const completed = new Set();
+		function factsFromSessionStatus(status: StatusMap) {
+			const pending = new Map<string, { kind: string }>();
+			const completed = new Set<string>();
 			if (status instanceof Map) {
 				for (const [id, entry] of status) {
 					if (entry?.pendingInteraction !== undefined) pending.set(id, entry.pendingInteraction);
@@ -875,12 +885,12 @@ window.__ModuleLoader__.load({
 			}
 			return { pending, completed };
 		}
-		function useSessionUiFacts(usePending, useStatus, preferStatus) {
+		function useSessionUiFacts(usePending: PendingHook, useStatus: StatusHook, preferStatus: boolean) {
 			const pending = usePending((s) => s);
 			const status = useStatus((s) => s);
 			return preferStatus ? factsFromSessionStatus(status) : { pending, completed: EMPTY_COMPLETED_SESSIONS };
 		}
-		function sessionNode(s, descendants, archived, pendingInteractions) {
+		function sessionNode(s: ClientSession, descendants: Map<string, { count: number; runningCount: number }>, archived: ReadonlySet<string>, pendingInteractions: UiFacts | Map<string, { kind: string }>) {
 			const facts = pendingFacts(pendingInteractions);
 			const pendingInteraction = pendingInteractionForSession(s, facts.pending);
 			return {
@@ -911,7 +921,7 @@ window.__ModuleLoader__.load({
 		* @param view - local expansion arrays and the show-archived toggle.
 		* @returns group sections in render order.
 		*/
-		function deriveGroups(list, workspaces, archivedSessionIds, pendingInteractions, view) {
+		function deriveGroups(list: ClientList, workspaces: readonly ClientWorkspace[], archivedSessionIds: readonly string[], pendingInteractions: UiFacts | Map<string, { kind: string }>, view: { expandedGroups: string[]; ungroupedOrder?: string[]; showArchived: boolean }) {
 			const archived = new Set(archivedSessionIds);
 			const expandedGroups = new Set(view.expandedGroups);
 			const descendants = indexSubagentDescendants(list.byId);
@@ -947,7 +957,7 @@ window.__ModuleLoader__.load({
 		* @param showArchived - "show archived" view toggle.
 		* @returns flat rows in render order.
 		*/
-		function deriveFlat(list, archivedSessionIds, pendingInteractions, showArchived) {
+		function deriveFlat(list: ClientList, archivedSessionIds: readonly string[], pendingInteractions: UiFacts | Map<string, { kind: string }>, showArchived: boolean) {
 			const archived = new Set(archivedSessionIds);
 			const descendants = indexSubagentDescendants(list.byId);
 			const rows = [];
@@ -975,7 +985,7 @@ window.__ModuleLoader__.load({
 		* @param ungroupedLabel - 未归属工作区会话的本地化回退标签。
 		* @returns bounded deduplicated flat rows and a refine-query hint bit.
 		*/
-		function deriveSearchResults(list, workspaces, query, archivedSessionIds, pendingInteractions, content, limit, showArchived, ungroupedLabel = UNGROUPED_LABEL) {
+		function deriveSearchResults(list: ClientList, workspaces: readonly ClientWorkspace[], query: string, archivedSessionIds: readonly string[], pendingInteractions: UiFacts | Map<string, { kind: string }>, content: { items: { sessionId: string; snippet: string }[]; hasMore: boolean }, limit: number, showArchived: boolean, ungroupedLabel = UNGROUPED_LABEL) {
 			const q = query.trim().toLowerCase();
 			if (q === "") return {
 				items: [],
@@ -983,10 +993,10 @@ window.__ModuleLoader__.load({
 			};
 			const archived = new Set(archivedSessionIds);
 			const descendants = indexSubagentDescendants(list.byId);
-			const workspaceBySession = /* @__PURE__ */ new Map();
+			const workspaceBySession = new Map<string, string>();
 			for (const workspace of workspaces) for (const sessionId of workspace.sessionIds) if (!workspaceBySession.has(sessionId)) workspaceBySession.set(sessionId, workspace.title);
-			const labelOf = (summary) => workspaceBySession.get(summary.id) ?? workspaceLabel(summary.cwd, ungroupedLabel);
-			const contentBySession = /* @__PURE__ */ new Map();
+			const labelOf = (summary: ClientSession) => workspaceBySession.get(summary.id) ?? workspaceLabel(summary.cwd, ungroupedLabel);
+			const contentBySession = new Map<string, { snippet: string }>();
 			for (const item of content.items) if (!contentBySession.has(item.sessionId)) contentBySession.set(item.sessionId, item);
 			const local = [];
 			for (const id of list.ids) {
@@ -995,9 +1005,9 @@ window.__ModuleLoader__.load({
 				if (sessionTitle(summary).toLowerCase().includes(q) || labelOf(summary).toLowerCase().includes(q)) local.push(summary);
 			}
 			local.sort(byRecency);
-			const ordered = [];
-			const included = /* @__PURE__ */ new Set();
-			const include = (summary) => {
+			const ordered: ClientSession[] = [];
+			const included = /* @__PURE__ */ new Set<string>();
+			const include = (summary: ClientSession) => {
 				if (included.has(summary.id)) return;
 				included.add(summary.id);
 				ordered.push(summary);
@@ -1034,7 +1044,7 @@ window.__ModuleLoader__.load({
 		* @param now - current epoch ms (injected for pure rendering).
 		* @returns the row's trailing time bucket and magnitude.
 		*/
-		function relativeTime(updatedAt, now) {
+		function relativeTime(updatedAt: number, now: number) {
 			const MIN = 6e4;
 			const HOUR = 36e5;
 			const DAY = 864e5;
@@ -1121,22 +1131,22 @@ window.__ModuleLoader__.load({
 		* and workspace hover cards are suppressed while a menu is open.
 		*/
 		/** Row display title: blank rows show the localized New Session label. */
-		function displayTitle(node, t) {
+		function displayTitle(node: { blank?: boolean; title?: string; displayTitle?: string }, t: Translate) {
 			return node.blank ? t("session.new") : node.title ?? node.displayTitle ?? "";
 		}
 		/** Localized compact relative time ("刚刚"/"5分钟" in zh, "now"/"5min" in en). */
-		function timeLabel(updatedAt, now, t) {
+		function timeLabel(updatedAt: number, now: number, t: Translate) {
 			const { unit, n } = relativeTime(updatedAt, now);
 			return unit === "now" ? t("time.now") : t(`time.${unit}`, { n });
 		}
 		/** 归档页使用绝对时间，方便在历史记录中准确辨识会话。 */
-		function archiveTimeLabel(updatedAt, t) {
+		function archiveTimeLabel(updatedAt: number, t: Translate) {
 			const date = new Date(updatedAt);
 			const time = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 			return t("archives.timestamp", { date: t("date.ymd", { y: date.getFullYear(), m: date.getMonth() + 1, d: date.getDate() }), time });
 		}
 		/** Hover-card variant: distances wrap in the ago template; the now bucket stays bare (no "now ago"). */
-		function hoverTimeLabel(updatedAt, now, t) {
+		function hoverTimeLabel(updatedAt: number, now: number, t: Translate) {
 			const { unit, n } = relativeTime(updatedAt, now);
 			return unit === "now" ? t("time.now") : t("time.ago", { t: t(`time.${unit}`, { n }) });
 		}
@@ -1145,9 +1155,9 @@ window.__ModuleLoader__.load({
 		* clock pattern): `toLocaleString` would follow the browser language, not the
 		* app locale, and produce mixed-language text after a switch.
 		*/
-		function createdLabel(createdAt, t) {
-			const d = new Date(createdAt);
-			const pad2 = (v) => String(v).padStart(2, "0");
+		function createdLabel(createdAt: number | undefined, t: Translate) {
+			const d = new Date(createdAt ?? NaN);
+			const pad2 = (v: number) => String(v).padStart(2, "0");
 			return t("hover.created", { time: `${t("date.ymd", {
 				y: d.getFullYear(),
 				m: d.getMonth() + 1,
@@ -1155,7 +1165,7 @@ window.__ModuleLoader__.load({
 			})} ${pad2(d.getHours())}:${pad2(d.getMinutes())}` });
 		}
 		/** Hover-card body: workspace title, full directory path, absolute creation time. */
-		function WorkspaceHoverContent({ label, cwd, createdAt, t }) {
+		function WorkspaceHoverContent({ label, cwd, createdAt, t }: { label: string; cwd?: string; createdAt?: number; t: Translate }) {
 			return (0, react_jsx_runtime.jsxs)("div", {
 				className: Rows_module_css_default.hoverContent,
 				children: [
@@ -1175,7 +1185,7 @@ window.__ModuleLoader__.load({
 			});
 		}
 		/** Pointer-position half of a row (insert line above or below). */
-		function rowHalf(e) {
+		function rowHalf(e: import("react").DragEvent<HTMLElement>) {
 			const rect = e.currentTarget.getBoundingClientRect();
 			return e.clientY < rect.top + rect.height / 2 ? "before" : "after";
 		}
@@ -1191,7 +1201,7 @@ window.__ModuleLoader__.load({
 		* @param props.t - the browser root's locale seat.
 		* @returns the row element.
 		*/
-		function ProjectRowItem({ group, onToggle, onCreate, actions, drag, t }) {
+		function ProjectRowItem({ group, onToggle, onCreate, actions, drag, t }: { group: ReturnType<typeof deriveGroups>[number]; onToggle(): void; onCreate(): void; actions?: {canArchive: boolean; rename(): void; archive(): void; delete(): void }; drag?: Pick<RowDrag, "start" | "end">; t: Translate }) {
 			const row = group;
 			const label = row.workspaceId === void 0 ? t("group.ungrouped") : row.label;
 			const active = group.expanded && group.containsCurrent;
@@ -1295,19 +1305,19 @@ window.__ModuleLoader__.load({
 			});
 		}
 		/* v8 ignore next 3 -- closed-union backstop; only reached if the status is forged */
-		function assertNever(value) {
+		function assertNever(value: never): never {
 			throw new Error(`unknown pending interaction: ${String(value)}`);
 		}
 		/**
 		* Session status presentation; pending interaction is primary and live activity
 		* outranks completion reminders.
 		*/
-		function sessionStatuses(node, t) {
+		function sessionStatuses(node: { running: boolean; runningSubagentCount: number; pendingInteraction?: "approval" | "plan-review" | "question"; completed?: boolean }, t: Translate): { state: "ongoing" | "warning" | "done"; label: string }[] {
 			const subagents = node.runningSubagentCount === 0 ? void 0 : {
-				state: "ongoing",
+				state: "ongoing" as const,
 				label: t(node.runningSubagentCount === 1 ? "status.subagentsRunning.one" : "status.subagentsRunning.other", { n: node.runningSubagentCount })
 			};
-			let pending;
+			let pending: {state: "warning"; label: string} | undefined;
 			switch (node.pendingInteraction) {
 				case "approval":
 					pending = {
@@ -1334,7 +1344,7 @@ window.__ModuleLoader__.load({
 			if (pending !== void 0) return subagents === void 0 ? [pending] : [pending, subagents];
 			if (node.running) {
 				const primary = {
-					state: "ongoing",
+					state: "ongoing" as const,
 					label: t("status.running")
 				};
 				return subagents === void 0 ? [primary] : [primary, subagents];
@@ -1350,14 +1360,14 @@ window.__ModuleLoader__.load({
 			}];
 		}
 		/** Primary status dot plus every status's screen-reader label, shared by the search and session rows. */
-		function SessionStatusDots({ statuses }) {
+		function SessionStatusDots({ statuses }: { statuses: ReturnType<typeof sessionStatuses> }) {
 			return (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.StateDot, { state: statuses[0].state }), statuses.map((status) => (0, react_jsx_runtime.jsx)("span", {
 				className: Rows_module_css_default.visuallyHidden,
 				children: status.label
 			}, status.label))] });
 		}
 		/** Hover-card body: full title, relative time, and every relevant live status. */
-		function SessionHoverContent({ node, now, t }) {
+		function SessionHoverContent({ node, now, t }: { node: ReturnType<typeof sessionNode>; now: number; t: Translate }) {
 			const statuses = sessionStatuses(node, t);
 			return (0, react_jsx_runtime.jsxs)("div", {
 				className: Rows_module_css_default.hoverContent,
@@ -1388,7 +1398,7 @@ window.__ModuleLoader__.load({
 		* @param props.t - Workspace-browser translation seat.
 		* @returns the result button.
 		*/
-		function SearchResultItem({ result, currentId, onOpen, t }) {
+		function SearchResultItem({ result, currentId, onOpen, t }: { result: ReturnType<typeof deriveSearchResults>["items"][number]; currentId?: string; onOpen(id: string): void; t: Translate }) {
 			const selected = result.id === currentId;
 			const statuses = sessionStatuses(result, t);
 			const primaryStatus = statuses[0];
@@ -1445,7 +1455,7 @@ window.__ModuleLoader__.load({
 		* @param props.t - the browser root's locale seat.
 		* @returns the session row.
 		*/
-		function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork, onArchive, onUnarchive, onDeleteSession, onReveal, drag, flat = false, t }) {
+		function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork, onArchive, onUnarchive, onDeleteSession, onReveal, drag, flat = false, t }: { node: ReturnType<typeof sessionNode>; currentId?: string; now: number; onOpen(id: string): void; onRename(id: string, title: string): void; onFork(id: string): void; onArchive(id: string): void; onUnarchive(id: string): void; onDeleteSession(id: string, title: string): void; onReveal?: () => void; drag?: RowDrag; flat?: boolean; t: Translate }) {
 			const row = node;
 			const title = displayTitle(node, t);
 			const selected = node.id === currentId;
@@ -1453,7 +1463,7 @@ window.__ModuleLoader__.load({
 			const statuses = sessionStatuses(node, t);
 			const showStatus = statuses[0].state !== "done" || row.completed;
 			const [menuOpen, setMenuOpen] = (0, react.useState)(false);
-			const rowRef = (0, react.useRef)(null);
+			const rowRef = (0, react.useRef)<HTMLDivElement>(null);
 			(0, react.useEffect)(() => {
 				if (onReveal === void 0) return;
 				rowRef.current?.scrollIntoView({ block: "nearest" });
@@ -1633,12 +1643,12 @@ window.__ModuleLoader__.load({
 		* @param props - owner-controlled flow props.
 		* @returns menu + dialog elements.
 		*/
-		function WorkspacePickFlow({ t, open, anchorRef, useWorkspaces, createWorkspace, useDirectoryFlow, renderDirectoryFlow, onPick, onClose, addOnly = false, side = "bottom", selectedId }) {
+		function WorkspacePickFlow({ t, open, anchorRef, useWorkspaces, createWorkspace, useDirectoryFlow, renderDirectoryFlow, onPick, onClose, addOnly = false, side = "bottom", selectedId }: WorkspacePickProps) {
 			const workspaceSnapshot = useWorkspaces((state) => state);
 			const workspaces = workspaceSnapshot.items;
 			const getAnchorRect = (0, react.useCallback)(() => anchorRef?.current?.getBoundingClientRect() ?? null, [anchorRef]);
 			const [errorOpen, setErrorOpen] = (0, react.useState)(false);
-			const [modalError, setModalError] = (0, react.useState)(null);
+			const [modalError, setModalError] = (0, react.useState)<string | null>(null);
 			const [flowOpen, setFlowOpen] = (0, react.useState)(false);
 			const [pickingFolder, setPickingFolder] = (0, react.useState)(false);
 			const flowBusy = flowOpen || pickingFolder;
@@ -1665,7 +1675,7 @@ window.__ModuleLoader__.load({
 				setModalError(null);
 			};
 			/** Adopt a picked directory; failures land in the folder-error dialog (Choose again reopens the flow). */
-			const adoptDirectory = (path) => createWorkspace({ path }).then((workspace) => {
+			const adoptDirectory = (path: string) => createWorkspace({ path }).then((workspace) => {
 				setFlowOpen(false);
 				onPick(workspace.workspaceId);
 			}).catch((reason) => {
@@ -1690,7 +1700,7 @@ window.__ModuleLoader__.load({
 				openDirectoryFlow
 			]);
 			/** Owner side of the flow conversation: adopt keeps the flow open (busy) until the Host answers. */
-			const flowOwner = {
+			const flowOwner: DirectoryFlowOwner = {
 				open: flowOpen,
 				busy: pickingFolder,
 				onPicked: (path) => {
@@ -1708,7 +1718,7 @@ window.__ModuleLoader__.load({
 					setErrorOpen(true);
 				}
 			};
-			const handleSelect = (id) => {
+			const handleSelect = (id: string) => {
 				if (id === ADD_WORKSPACE) {
 					openDirectoryFlow();
 					return;
@@ -1839,7 +1849,7 @@ window.__ModuleLoader__.load({
 		/** Session rows visible per Workspace before the local overflow control. */
 		const COLLAPSED_SESSION_LIMIT = 5;
 		/** Keep controlled input and RPC payload inside the session.search wire contract. */
-		function sanitizeSearchQuery(value) {
+		function sanitizeSearchQuery(value: string) {
 			const withoutNul = value.replaceAll("\0", "");
 			if (withoutNul.length <= SEARCH_QUERY_MAX_CODE_UNITS) return withoutNul;
 			let end = SEARCH_QUERY_MAX_CODE_UNITS;
@@ -1849,7 +1859,7 @@ window.__ModuleLoader__.load({
 			return withoutNul.slice(0, end);
 		}
 		/** Immutable membership toggle for the local expand-all array. */
-		function toggled(list, key) {
+		function toggled(list: string[], key: string) {
 			return list.includes(key) ? list.filter((k) => k !== key) : [...list, key];
 		}
 		/**
@@ -1857,14 +1867,14 @@ window.__ModuleLoader__.load({
 		* hover still owns the insertion marker, and releasing outside the list must
 		* not be rendered as a rejected drop before dragend commits that last marker.
 		*/
-		function useNativeDragAcceptance(active) {
+		function useNativeDragAcceptance(active: boolean) {
 			(0, react.useEffect)(() => {
 				if (!active) return;
-				const acceptDrag = (event) => {
+				const acceptDrag = (event: DragEvent) => {
 					event.preventDefault();
 					if (event.dataTransfer !== null) event.dataTransfer.dropEffect = "move";
 				};
-				const acceptDrop = (event) => {
+				const acceptDrop = (event: DragEvent) => {
 					event.preventDefault();
 				};
 				document.addEventListener("dragover", acceptDrag);
@@ -1876,11 +1886,11 @@ window.__ModuleLoader__.load({
 			}, [active]);
 		}
 		/** Reconcile a stored view order with the Workspace's current session account. */
-		function reconciledSessionOrder(sessionIds, stored) {
+		function reconciledSessionOrder(sessionIds: string[], stored: string[] | undefined) {
 			if (stored === void 0) return [...sessionIds];
 			const byId = new Map(sessionIds.map((id) => [id, id]));
-			const ordered = [];
-			const included = /* @__PURE__ */ new Set();
+			const ordered: string[] = [];
+			const included = /* @__PURE__ */ new Set<string>();
 			for (const key of stored) {
 				const id = byId.get(key);
 				if (id === void 0 || included.has(key)) continue;
@@ -1894,14 +1904,14 @@ window.__ModuleLoader__.load({
 			return ordered;
 		}
 		/** Newest update first with stable Session identity as the tie-break. */
-		function compareSessionRecency(a, b, byId) {
+		function compareSessionRecency(a: string, b: string, byId: Record<string, ClientSession>) {
 			const aUpdatedAt = byId[a]?.updatedAt ?? Number.NEGATIVE_INFINITY;
 			const bUpdatedAt = byId[b]?.updatedAt ?? Number.NEGATIVE_INFINITY;
 			if (aUpdatedAt !== bUpdatedAt) return bUpdatedAt - aUpdatedAt;
 			return a < b ? -1 : 1;
 		}
 		/** Reconcile one editable order account and apply its activity-promotion policy. */
-		function nextSessionOrderAccount({ sessionIds, previousOrder, previousUpdatedAt, list, orderBy, sortByRecency }) {
+		function nextSessionOrderAccount({ sessionIds, previousOrder, previousUpdatedAt, list, orderBy, sortByRecency }: { sessionIds: string[]; previousOrder?: string[]; previousUpdatedAt: Record<string, number>; list: ClientList; orderBy: string; sortByRecency: boolean }) {
 			let order = reconciledSessionOrder(sessionIds, previousOrder);
 			if (sortByRecency) order.sort((a, b) => compareSessionRecency(a, b, list.byId));
 			else if (orderBy === "updated") {
@@ -1914,7 +1924,7 @@ window.__ModuleLoader__.load({
 					order = [...promoted, ...order.filter((id) => !promotedIds.has(id))];
 				}
 			}
-			const updatedAt = {};
+			const updatedAt: Record<string, number> = {};
 			for (const id of sessionIds) {
 				const session = list.byId[id];
 				if (session !== void 0) updatedAt[id] = session.updatedAt;
@@ -1928,7 +1938,7 @@ window.__ModuleLoader__.load({
 			};
 		}
 		/** Grouping and ordering controls for the workspace browser. */
-		function ViewOptionsMenu({ groupBy, orderBy, onGroupPick, onOrderPick, t }) {
+		function ViewOptionsMenu({ groupBy, orderBy, onGroupPick, onOrderPick, t }: { groupBy: string; orderBy: string; onGroupPick(value: string): void; onOrderPick(value: string): void; t: Translate }) {
 			const [open, setOpen] = (0, react.useState)(false);
 			return (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Menu, {
 				open,
@@ -1993,19 +2003,19 @@ window.__ModuleLoader__.load({
 			});
 		}
 		/** Resolve an insertion side from the full rendered workspace group. */
-		function workspaceGroupHalf(e) {
+		function workspaceGroupHalf(e: import("react").DragEvent<HTMLElement>) {
 			const rect = e.currentTarget.getBoundingClientRect();
 			return e.clientY < rect.top + rect.height / 2 ? "before" : "after";
 		}
 		/** The scrolling session tree; unmounting drops the sessions subscription and expand-all state. */
-		function SessionTree({ useSessions, useSessionPendingInteraction, useSessionStatus, preferSessionStatus, startSession, open, forkSession, workspaces, archivedSessionIds, showArchived, onRenameRequest, onArchiveRequest, onDeleteRequest, onSessionRename, onSessionArchive, onSessionUnarchive, onSessionDelete, insertWorkspaceBefore, insertSessionBefore, orderBy, groupExpansion, setGroupExpanded, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t, revealSessionId, onSessionRevealed }) {
+		function SessionTree({ useSessions, useSessionPendingInteraction, useSessionStatus, preferSessionStatus, startSession, open, forkSession, workspaces, archivedSessionIds, showArchived, onRenameRequest, onArchiveRequest, onDeleteRequest, onSessionRename, onSessionArchive, onSessionUnarchive, onSessionDelete, insertWorkspaceBefore, insertSessionBefore, orderBy, groupExpansion, setGroupExpanded, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t, revealSessionId, onSessionRevealed, showArchivedToast }: TreeProps) {
 			const list = useSessions((s) => s);
 			const pendingInteractions = useSessionUiFacts(useSessionPendingInteraction, useSessionStatus, preferSessionStatus);
 			const current = currentSessionId(list);
-			const [expandedSessionGroups, setExpandedSessionGroups] = (0, react.useState)([]);
-			const [drag, setDrag] = (0, react.useState)(null);
+			const [expandedSessionGroups, setExpandedSessionGroups] = (0, react.useState)<string[]>([]);
+			const [drag, setDrag] = (0, react.useState)<SessionDrag | null>(null);
 			const sessionDropCommitted = (0, react.useRef)(false);
-			const [workspaceDrag, setWorkspaceDrag] = (0, react.useState)(null);
+			const [workspaceDrag, setWorkspaceDrag] = (0, react.useState)<WorkspaceDrag | null>(null);
 			const workspaceDropCommitted = (0, react.useRef)(false);
 			const previousOrderBy = (0, react.useRef)(orderBy);
 			useNativeDragAcceptance(drag !== null || workspaceDrag !== null);
@@ -2102,7 +2112,7 @@ window.__ModuleLoader__.load({
 				revealSessionId
 			]);
 			const now = Date.now();
-			const commitSessionDrag = (activeDrag, over) => {
+			const commitSessionDrag = (activeDrag: SessionDrag, over: DropOver) => {
 				if (sessionDropCommitted.current) return;
 				sessionDropCommitted.current = true;
 				setDrag(null);
@@ -2126,7 +2136,7 @@ window.__ModuleLoader__.load({
 					console.warn("session reorder rejected:", reason);
 				});
 			};
-			const commitWorkspaceDrag = (activeDrag, over) => {
+			const commitWorkspaceDrag = (activeDrag: WorkspaceDrag, over: DropOver) => {
 				if (workspaceDropCommitted.current) return;
 				workspaceDropCommitted.current = true;
 				setWorkspaceDrag(null);
@@ -2173,7 +2183,7 @@ window.__ModuleLoader__.load({
 									workspaceDropCommitted.current = false;
 								}
 							};
-							const hoverWorkspace = workspaceId === void 0 ? void 0 : (half) => {
+							const hoverWorkspace = workspaceId === void 0 ? void 0 : (half: "before" | "after") => {
 								setWorkspaceDrag((active) => active === null ? active : {
 									...active,
 									over: {
@@ -2182,7 +2192,7 @@ window.__ModuleLoader__.load({
 									}
 								});
 							};
-							const dropWorkspace = workspaceId === void 0 ? void 0 : (half) => {
+							const dropWorkspace = workspaceId === void 0 ? void 0 : (half: "before" | "after") => {
 								if (workspaceDrag === null) return;
 								commitWorkspaceDrag(workspaceDrag, {
 									id: workspaceId,
@@ -2243,9 +2253,7 @@ window.__ModuleLoader__.load({
 											onOpen: open,
 											onRename: onSessionRename,
 											onFork: (sessionId) => {
-								Promise.resolve(forkSession(sessionId)).catch((reason) => {
-									showArchivedToast(formatForkError(reason, t));
-								});
+								void forkWithFeedback(sessionId, forkSession, showArchivedToast, t);
 							},
 											onArchive: onSessionArchive,
 											onUnarchive: onSessionUnarchive,
@@ -2264,7 +2272,7 @@ window.__ModuleLoader__.load({
 												},
 												active: sameGroupDrag,
 												marker: sameGroupDrag && drag.over?.id === node.id ? drag.over.half : null,
-												hover: (half) => {
+												hover: (half: "before" | "after") => {
 													/* v8 ignore next -- narrowing guard: Rows gates hover on `active`, which is false while the drag state is null. */
 													setDrag((d) => d === null ? d : {
 														...d,
@@ -2274,7 +2282,7 @@ window.__ModuleLoader__.load({
 														}
 													});
 												},
-												drop: (half) => {
+												drop: (half: "before" | "after") => {
 													/* v8 ignore next -- narrowing guard: Rows gates drop on `active`, which is false while the drag state is null. */
 													if (drag === null) return;
 													commitSessionDrag(drag, {
@@ -2309,7 +2317,7 @@ window.__ModuleLoader__.load({
 			});
 		}
 		/** The flat "In one list" body: every session is one draggable top-level row. */
-		function FlatList({ useSessions, useSessionPendingInteraction, useSessionStatus, preferSessionStatus, open, forkSession, onSessionRename, onSessionArchive, onSessionUnarchive, onSessionDelete, archivedSessionIds, showArchived, orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t, revealSessionId, onSessionRevealed }) {
+		function FlatList({ useSessions, useSessionPendingInteraction, useSessionStatus, preferSessionStatus, open, forkSession, onSessionRename, onSessionArchive, onSessionUnarchive, onSessionDelete, archivedSessionIds, showArchived, orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, t, revealSessionId, onSessionRevealed, showArchivedToast }: FlatProps) {
 			const list = useSessions((s) => s);
 			const pendingInteractions = useSessionUiFacts(useSessionPendingInteraction, useSessionStatus, preferSessionStatus);
 			const current = currentSessionId(list);
@@ -2355,10 +2363,10 @@ window.__ModuleLoader__.load({
 				sessionOrderByAccount,
 				sessionIds
 			]);
-			const [drag, setDrag] = (0, react.useState)(null);
+			const [drag, setDrag] = (0, react.useState)<SessionDrag | null>(null);
 			const dropCommitted = (0, react.useRef)(false);
 			useNativeDragAcceptance(drag !== null);
-			const commitDrag = (activeDrag, over) => {
+			const commitDrag = (activeDrag: SessionDrag, over: DropOver) => {
 				if (dropCommitted.current) return;
 				dropCommitted.current = true;
 				setDrag(null);
@@ -2393,9 +2401,7 @@ window.__ModuleLoader__.load({
 							onOpen: open,
 							onRename: onSessionRename,
 							onFork: (sessionId) => {
-								Promise.resolve(forkSession(sessionId)).catch((reason) => {
-									showArchivedToast(formatForkError(reason, t));
-								});
+								void forkWithFeedback(sessionId, forkSession, showArchivedToast, t);
 							},
 							onArchive: onSessionArchive,
 							onUnarchive: onSessionUnarchive,
@@ -2415,7 +2421,7 @@ window.__ModuleLoader__.load({
 								},
 								active,
 								marker: active && drag.over?.id === node.id ? drag.over.half : null,
-								hover: (half) => {
+								hover: (half: "before" | "after") => {
 									setDrag((current) => current === null ? current : {
 										...current,
 										over: {
@@ -2424,7 +2430,7 @@ window.__ModuleLoader__.load({
 										}
 									});
 								},
-								drop: (half) => {
+								drop: (half: "before" | "after") => {
 									if (drag !== null) commitDrag(drag, {
 										id: node.id,
 										half
@@ -2443,7 +2449,7 @@ window.__ModuleLoader__.load({
 			});
 		}
 		/** Flat search body: local metadata matches plus the current Host result page. */
-		function SearchResults({ useSessions, useSessionPendingInteraction, useSessionStatus, preferSessionStatus, open, workspaces, archivedSessionIds, showArchived, query, remote, resultLimit, t }) {
+		function SearchResults({ useSessions, useSessionPendingInteraction, useSessionStatus, preferSessionStatus, open, workspaces, archivedSessionIds, showArchived, query, remote, resultLimit, t }: SearchProps) {
 			const list = useSessions((s) => s);
 			const pendingInteractions = useSessionUiFacts(useSessionPendingInteraction, useSessionStatus, preferSessionStatus);
 			const ungroupedLabel = t("group.ungrouped");
@@ -2510,16 +2516,16 @@ window.__ModuleLoader__.load({
 		* @returns the region element tree.
 		*/
 		const sidebarReveal = {
-			listeners: new Set(),
-			request(sessionId) {
+			listeners: new Set<(sessionId: string) => void>(),
+			request(sessionId: string) {
 				for (const listener of this.listeners) listener(sessionId);
 			},
-			subscribe(listener) {
+			subscribe(listener: (sessionId: string) => void) {
 				this.listeners.add(listener);
 				return () => { this.listeners.delete(listener); };
 			}
 		};
-		function WorkspaceBrowser({ wide, expandSidebar, useSessions, useSessionPendingInteraction, useSessionStatus, useWorkspaces, useStore, actions, startSession, open, renameSession, forkSession, renameWorkspace, deleteWorkspace, insertWorkspaceBefore, archiveSession, archiveWorkspaceSessions, unarchiveSession, deleteSession, insertSessionBefore, createWorkspace, searchSessions, searchResultLimit, useDirectoryFlow, renderSlot, t }) {
+		function WorkspaceBrowser({ wide, expandSidebar, useSessions, useSessionPendingInteraction, useSessionStatus, useWorkspaces, useStore, actions, startSession, open, renameSession, forkSession, renameWorkspace, deleteWorkspace, insertWorkspaceBefore, archiveSession, archiveWorkspaceSessions, unarchiveSession, deleteSession, insertSessionBefore, createWorkspace, searchSessions, searchResultLimit, useDirectoryFlow, renderSlot, t }: BrowserProps) {
 			const preferSessionStatus = typeof useSessionStatus === "function";
 			const useEffectiveSessionPendingInteraction = useSessionPendingInteraction ?? useEmptySessionPendingInteraction;
 			const useEffectiveSessionStatus = useSessionStatus ?? useEmptySessionStatus;
@@ -2535,14 +2541,14 @@ window.__ModuleLoader__.load({
 			const sessionOrderByAccount = useStore((s) => s.sessionOrderByAccount);
 			const sessionUpdatedAtByAccount = useStore((s) => s.sessionUpdatedAtByAccount);
 			const archivedSet = (0, react.useMemo)(() => new Set(archivedSessionIds), [archivedSessionIds]);
-			const [revealSessionId, setRevealSessionId] = (0, react.useState)(void 0);
+			const [revealSessionId, setRevealSessionId] = (0, react.useState)<string | undefined>(void 0);
 			(0, react.useEffect)(() => sidebarReveal.subscribe((sessionId) => setRevealSessionId(sessionId)), []);
-			const acknowledgeSessionReveal = (sessionId) => {
+			const acknowledgeSessionReveal = (sessionId: string) => {
 				setRevealSessionId((current) => current === sessionId ? void 0 : current);
 			};
-			const [archivedToast, setArchivedToast] = (0, react.useState)(null);
+			const [archivedToast, setArchivedToast] = (0, react.useState)<{text: string; seq: number} | null>(null);
 			const archivedToastSeq = (0, react.useRef)(0);
-			const showArchivedToast = (text) => {
+			const showArchivedToast = (text: string) => {
 				archivedToastSeq.current += 1;
 				setArchivedToast({
 					text,
@@ -2550,7 +2556,7 @@ window.__ModuleLoader__.load({
 				});
 			};
 			/** Open a session, unless it is archived (show the archived hint instead). */
-			const guardedOpen = (sessionId) => {
+			const guardedOpen = (sessionId: string) => {
 				if (archivedSet.has(sessionId)) {
 					showArchivedToast(t("archived.notOpenable"));
 					return;
@@ -2572,16 +2578,16 @@ window.__ModuleLoader__.load({
 			const [query, setQuery] = (0, react.useState)("");
 			const [searchExpanded, setSearchExpanded] = (0, react.useState)(false);
 			const normalizedQuery = sanitizeSearchQuery(query).trim();
-			const [remoteSearch, setRemoteSearch] = (0, react.useState)({
+			const [remoteSearch, setRemoteSearch] = (0, react.useState)<RemoteSearch>({
 				query: "",
 				status: "idle",
 				items: [],
 				hasMore: false
 			});
-			const searchRoot = (0, react.useRef)(null);
-			const searchInput = (0, react.useRef)(null);
+			const searchRoot = (0, react.useRef)<HTMLDivElement>(null);
+			const searchInput = (0, react.useRef)<HTMLInputElement>(null);
 			const [wsPickerOpen, setWsPickerOpen] = (0, react.useState)(false);
-			const wsPlusRef = (0, react.useRef)(null);
+			const wsPlusRef = (0, react.useRef)<HTMLButtonElement>(null);
 			const composingRef = (0, react.useRef)(false);
 			const [searchOnExpand, setSearchOnExpand] = (0, react.useState)(false);
 			(0, react.useEffect)(() => {
@@ -2605,7 +2611,7 @@ window.__ModuleLoader__.load({
 			]);
 			(0, react.useEffect)(() => {
 				if (!wide || !searchExpanded) return;
-				const onClick = (event) => {
+				const onClick = (event: MouseEvent) => {
 					if (!(event.target instanceof Node) || searchRoot.current?.contains(event.target) === true) return;
 					searchInput.current?.blur();
 					if (normalizedQuery !== "") return;
@@ -2661,10 +2667,10 @@ window.__ModuleLoader__.load({
 					controller.abort();
 				};
 			}, [normalizedQuery, searchSessions]);
-			const [renameTarget, setRenameTarget] = (0, react.useState)(null);
+			const [renameTarget, setRenameTarget] = (0, react.useState)<{ workspaceId: string; currentTitle: string } | null>(null);
 			const [renameDraft, setRenameDraft] = (0, react.useState)("");
 			const [renaming, setRenaming] = (0, react.useState)(false);
-			const [renameError, setRenameError] = (0, react.useState)(null);
+			const [renameError, setRenameError] = (0, react.useState)<string | null>(null);
 			const renameTrimmed = renameDraft.trim();
 			const renameDuplicate = renameTarget !== null && renameTrimmed !== "" && renameTrimmed !== renameTarget.currentTitle && workspaces.some((w) => w.title === renameTrimmed);
 			const renameBlocked = renaming || renameTrimmed === "" || renameTarget === null || renameTrimmed === renameTarget.currentTitle || renameDuplicate;
@@ -2685,10 +2691,10 @@ window.__ModuleLoader__.load({
 					setRenameError(reason instanceof Error ? reason.message : String(reason));
 				});
 			};
-			const [sessionRenameTarget, setSessionRenameTarget] = (0, react.useState)(null);
+			const [sessionRenameTarget, setSessionRenameTarget] = (0, react.useState)<{ sessionId: string; currentTitle: string } | null>(null);
 			const [sessionRenameDraft, setSessionRenameDraft] = (0, react.useState)("");
 			const [sessionRenaming, setSessionRenaming] = (0, react.useState)(false);
-			const [sessionRenameError, setSessionRenameError] = (0, react.useState)(null);
+			const [sessionRenameError, setSessionRenameError] = (0, react.useState)<string | null>(null);
 			const sessionRenameTrimmed = sessionRenameDraft.trim();
 			const sessionRenameBlocked = sessionRenaming || sessionRenameTrimmed === "" || sessionRenameTarget === null;
 			const closeSessionRename = () => {
@@ -2708,7 +2714,7 @@ window.__ModuleLoader__.load({
 					setSessionRenameError(reason instanceof Error ? reason.message : String(reason));
 				});
 			};
-			const onSessionRename = (sessionId, currentTitle) => {
+			const onSessionRename = (sessionId: string, currentTitle: string) => {
 				setSessionRenameTarget({
 					sessionId,
 					currentTitle
@@ -2716,20 +2722,20 @@ window.__ModuleLoader__.load({
 				setSessionRenameDraft(currentTitle);
 				setSessionRenameError(null);
 			};
-			const onSessionArchive = (sessionId) => {
+			const onSessionArchive = (sessionId: string) => {
 				archiveSession(sessionId).catch((reason) => {
 					showArchivedToast(formatArchiveError(reason, t));
 				});
 			};
-			const [archiveWorkspaceTarget, setArchiveWorkspaceTarget] = (0, react.useState)(null);
+			const [archiveWorkspaceTarget, setArchiveWorkspaceTarget] = (0, react.useState)<{workspaceId: string; title: string; count: number} | null>(null);
 			const [archivingWorkspace, setArchivingWorkspace] = (0, react.useState)(false);
-			const [archiveWorkspaceError, setArchiveWorkspaceError] = (0, react.useState)(null);
+			const [archiveWorkspaceError, setArchiveWorkspaceError] = (0, react.useState)<string | null>(null);
 			const closeArchiveWorkspace = () => {
 				if (archivingWorkspace) return;
 				setArchiveWorkspaceTarget(null);
 				setArchiveWorkspaceError(null);
 			};
-			const onArchiveWorkspaceRequest = (workspaceId, title) => {
+			const onArchiveWorkspaceRequest = (workspaceId: string, title: string) => {
 				const target = archiveWorkspaceDialogTarget(workspaces, workspaceId, title, archivedSet);
 				if (target === null) return;
 				setArchiveWorkspaceTarget(target);
@@ -2749,10 +2755,10 @@ window.__ModuleLoader__.load({
 					setArchiveWorkspaceError(state.error);
 				});
 			};
-			const [deleteTarget, setDeleteTarget] = (0, react.useState)(null);
+			const [deleteTarget, setDeleteTarget] = (0, react.useState)<{workspaceId: string; title: string} | null>(null);
 			const [deleting, setDeleting] = (0, react.useState)(false);
-			const [deleteCommittedId, setDeleteCommittedId] = (0, react.useState)(null);
-			const [deleteError, setDeleteError] = (0, react.useState)(null);
+			const [deleteCommittedId, setDeleteCommittedId] = (0, react.useState)<string | null>(null);
+			const [deleteError, setDeleteError] = (0, react.useState)<string | null>(null);
 			(0, react.useEffect)(() => {
 				if (deleteCommittedId === null || workspaces.some((workspace) => workspace.workspaceId === deleteCommittedId)) return;
 				setDeleting(false);
@@ -2777,15 +2783,15 @@ window.__ModuleLoader__.load({
 					setDeleteError(reason instanceof Error ? reason.message : String(reason));
 				});
 			};
-			const onSessionUnarchive = (sessionId) => {
+			const onSessionUnarchive = (sessionId: string) => {
 				unarchiveSession(sessionId).catch((reason) => {
 					showArchivedToast(formatUnarchiveError(reason, t));
 				});
 			};
-			const [deleteSessionTarget, setDeleteSessionTarget] = (0, react.useState)(null);
+			const [deleteSessionTarget, setDeleteSessionTarget] = (0, react.useState)<{sessionId: string; title: string} | null>(null);
 			const [deletingSession, setDeletingSession] = (0, react.useState)(false);
-			const [deleteSessionCommittedId, setDeleteSessionCommittedId] = (0, react.useState)(null);
-			const [deleteSessionError, setDeleteSessionError] = (0, react.useState)(null);
+			const [deleteSessionCommittedId, setDeleteSessionCommittedId] = (0, react.useState)<string | null>(null);
+			const [deleteSessionError, setDeleteSessionError] = (0, react.useState)<string | null>(null);
 			(0, react.useEffect)(() => {
 				if (deleteSessionCommittedId === null || archivedSet.has(deleteSessionCommittedId) || workspaces.some((workspace) => workspace.sessionIds.includes(deleteSessionCommittedId))) return;
 				setDeletingSession(false);
@@ -2973,7 +2979,7 @@ window.__ModuleLoader__.load({
 							preferSessionStatus,
 							open: guardedOpen,
 							revealSessionId,
-							onSessionRevealed: acknowledgeSessionReveal,
+							onSessionRevealed: acknowledgeSessionReveal, showArchivedToast,
 							forkSession,
 							onSessionRename,
 							onSessionArchive,
@@ -2996,7 +3002,7 @@ window.__ModuleLoader__.load({
 							useSessionStatus: useEffectiveSessionStatus,
 							preferSessionStatus,
 							revealSessionId,
-							onSessionRevealed: acknowledgeSessionReveal,
+							onSessionRevealed: acknowledgeSessionReveal, showArchivedToast,
 							onSessionRename,
 							onSessionArchive,
 							onSessionUnarchive,
@@ -3252,19 +3258,19 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		/** 设置页筛选/排序：自定义菜单，避免原生 select 弹出系统浅色下拉。 */
-		function ArchiveProjectSelect({ id, value, options, onChange, disabled = false, "aria-label": ariaLabel }) {
+		function ArchiveProjectSelect({ id, value, options, onChange, disabled = false, "aria-label": ariaLabel }: { id?: string; value: string; options: {value: string; label: string}[]; onChange(value: string): void; disabled?: boolean; "aria-label": string }) {
 			const [open, setOpen] = (0, react.useState)(false);
 			const selectedIndex = Math.max(0, options.findIndex((option) => option.value === value));
 			const [active, setActive] = (0, react.useState)(selectedIndex);
-			const rootRef = (0, react.useRef)(null);
-			const triggerRef = (0, react.useRef)(null);
-			const listRef = (0, react.useRef)(null);
+			const rootRef = (0, react.useRef)<HTMLDivElement>(null);
+			const triggerRef = (0, react.useRef)<HTMLButtonElement>(null);
+			const listRef = (0, react.useRef)<HTMLDivElement>(null);
 			const wasOpen = (0, react.useRef)(false);
 			const selected = options[selectedIndex];
 			(0, react.useEffect)(() => {
 				if (!open) return;
 				setActive(selectedIndex);
-				const onPointerDown = (event) => {
+				const onPointerDown = (event: PointerEvent) => {
 					const target = event.target;
 					if (target instanceof Node && rootRef.current?.contains(target) === true) return;
 					setOpen(false);
@@ -3287,12 +3293,12 @@ window.__ModuleLoader__.load({
 				if (!open) return;
 				document.getElementById(id + "-opt-" + String(active))?.scrollIntoView({ block: "nearest" });
 			}, [active, open, id]);
-			const choose = (next) => {
+			const choose = (next: string) => {
 				if (disabled) return;
 				onChange(next);
 				setOpen(false);
 			};
-			const move = (next) => {
+			const move = (next: number) => {
 				if (options.length === 0) return;
 				setActive(Math.min(options.length - 1, Math.max(0, next)));
 			};
@@ -3366,7 +3372,7 @@ window.__ModuleLoader__.load({
 						if (event.key === "Escape" || event.key === "Tab") {
 							event.preventDefault();
 							event.stopPropagation();
-							if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
+							if ("stopImmediatePropagation" in event && typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
 							setOpen(false);
 						}
 					},
@@ -3385,7 +3391,7 @@ window.__ModuleLoader__.load({
 			});
 		}
 		/** 选择摘要与动作分组显示；跨筛选范围单独提示，避免被紧凑布局隐藏。 */
-		function ArchiveSelectionToolbar({ selectedCount, hiddenCount, allVisibleSelected, selectedVisibleCount, visibleCount, busy, t, onToggle, onClear, onRestore, onDelete, onArchive }) {
+		function ArchiveSelectionToolbar({ selectedCount, hiddenCount, allVisibleSelected, selectedVisibleCount, visibleCount, busy, t, onToggle, onClear, onRestore, onDelete, onArchive }: { selectedCount: number; hiddenCount: number; allVisibleSelected: boolean; selectedVisibleCount: number; visibleCount: number; busy: boolean; t: Translate; onToggle(value: boolean): void; onClear(): void; onRestore?: () => void; onDelete?: () => void; onArchive?: () => void }) {
 			const hasSelection = selectedCount > 0;
 			return (0, react_jsx_runtime.jsxs)("div", {
 				className: "dsham_settingsSelection",
@@ -3410,8 +3416,8 @@ window.__ModuleLoader__.load({
 			});
 		}
 		/** 原生 checkbox 保留浏览器的正确键盘语义，并显式同步三态显示。 */
-		function ArchiveSelectionCheckbox({ checked, indeterminate = false, disabled = false, label, onChange }) {
-			const inputRef = (0, react.useRef)(null);
+		function ArchiveSelectionCheckbox({ checked, indeterminate = false, disabled = false, label, onChange }: { checked: boolean; indeterminate?: boolean; disabled?: boolean; label: string; onChange: import("react").ChangeEventHandler<HTMLInputElement> }) {
+			const inputRef = (0, react.useRef)<HTMLInputElement>(null);
 			(0, react.useEffect)(() => {
 				if (inputRef.current !== null) inputRef.current.indeterminate = indeterminate;
 			}, [indeterminate]);
@@ -3426,7 +3432,7 @@ window.__ModuleLoader__.load({
 			});
 		}
 		/** 低频和危险操作收进菜单，复用宿主的焦点、键盘及弹出层行为。 */
-		function ArchivedSessionMenu({ busy, title, t, onPreview, onRestoreOpen, onDelete, onCopyId, onCopyPath }) {
+		function ArchivedSessionMenu({ busy, title, t, onPreview, onRestoreOpen, onDelete, onCopyId, onCopyPath }: { busy: boolean; title: string; t: Translate; onPreview?: () => void; onRestoreOpen?: () => void; onDelete?: () => void; onCopyId?: () => void; onCopyPath?: () => void }) {
 			const [open, setOpen] = (0, react.useState)(false);
 			return (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Menu, {
 				open, onClose: () => setOpen(false), portal: true, align: "end", autoFocus: true,
@@ -3437,12 +3443,12 @@ window.__ModuleLoader__.load({
                     ...onCopyPath ? [{ id: "copyPath", label: t("details.copyPath"), icon: react.createElement(_deepseek_ai_dsh_client_ui_primitives.IconFolderOpenOutline16, {}) }] : [],
 					...onDelete ? [{ id: "delete", label: t("menu.deleteSession"), icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconTrashOutline16, {}), danger: true }] : []
 				],
-				onSelect: (id) => { setOpen(false); if (busy) return; if (id === "copyId") return onCopyId?.(); if (id === "copyPath") return onCopyPath?.(); if (id === "preview") return onPreview?.(); if (id === "restoreOpen") return onRestoreOpen(); if (id === "delete") onDelete(); },
+				onSelect: (id) => { setOpen(false); if (busy) return; if (id === "copyId") return onCopyId?.(); if (id === "copyPath") return onCopyPath?.(); if (id === "preview") return onPreview?.(); if (id === "restoreOpen") return onRestoreOpen?.(); if (id === "delete") onDelete?.(); },
 				anchor: (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsGroupMenu", disabled: busy, title: t("archives.moreActions"), "aria-label": t("archives.moreActions") + t("common.separator") + title, "aria-haspopup": "menu", "aria-expanded": open, onClick: () => setOpen(value => !value), children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconEllipsisOutline16, {}) })
 			});
 		}
 		/** 项目标题右侧的批量归档/恢复/删除菜单，复用宿主菜单组件的键盘和焦点行为。 */
-		function ArchivedGroupActions({ group, busy, onArchive, onRestore, onDelete, t }) {
+		function ArchivedGroupActions({ group, busy, onArchive, onRestore, onDelete, t }: { group: ArchivedGroup; busy: boolean; onArchive?: () => void; onRestore?: () => void; onDelete?: () => void; t: Translate }) {
 			const [open, setOpen] = (0, react.useState)(false);
 			const ungrouped = group.key === ARCHIVE_UNGROUPED_KEY;
 			const items = onArchive ? [{
@@ -3468,8 +3474,8 @@ window.__ModuleLoader__.load({
 					setOpen(false);
 					if (busy) return;
 					if (id === "archive") onArchive?.();
-					else if (id === "restore") onRestore();
-					else if (id === "delete") onDelete();
+					else if (id === "restore") onRestore?.();
+					else if (id === "delete") onDelete?.();
 				},
 				portal: true,
 				anchor: (0, react_jsx_runtime.jsx)("button", {
@@ -3484,11 +3490,11 @@ window.__ModuleLoader__.load({
 		}
 		/** 设置页“未分组”桶的稳定 key（workspaceId 均为非空 uuid，不会冲突）。 */
 		const ARCHIVE_UNGROUPED_KEY = "__ungrouped__";
-		function archivedBatchTargetForGroup(groupKey) {
+		function archivedBatchTargetForGroup(groupKey: string): BatchTarget {
 			return groupKey === ARCHIVE_UNGROUPED_KEY ? { scope: "ungrouped" } : { scope: "workspace", workspaceId: groupKey };
 		}
 		/** 客户端按当前快照派生批量目标。删除仍由宿主按持久集合解析；恢复已在客户端串行执行。 */
-		function deriveArchivedBatchIds(archivedSessionIds, items, target) {
+		function deriveArchivedBatchIds(archivedSessionIds: readonly string[], items: readonly ClientWorkspace[], target: BatchTarget) {
 			const ids = [...new Set(archivedSessionIds ?? [])];
 			if (target.scope === "all") return ids;
 			if (target.scope === "sessions") {
@@ -3503,16 +3509,16 @@ window.__ModuleLoader__.load({
 			return ids.filter((id) => !accounted.has(id));
 		}
 		/** 当前筛选结果中的可选会话；按列表显示顺序去重。 */
-		function archivedSessionIdsInGroups(groups) {
+		function archivedSessionIdsInGroups(groups: readonly ArchivedGroup[]) {
 			return [...new Set(groups.flatMap((group) => group.sessions.map((session) => session.id)))];
 		}
 		/** 只保留仍属于权威归档集合的选中项，避免对已变化的列表执行旧操作。 */
-		function pruneArchivedSelection(selectedSessionIds, archivedSessionIds) {
+		function pruneArchivedSelection(selectedSessionIds: readonly string[], archivedSessionIds: readonly string[]) {
 			const archived = new Set(archivedSessionIds);
 			return [...new Set(selectedSessionIds)].filter((id) => archived.has(id));
 		}
 		/** 向当前选择中加入或移除一组可见会话，供“全选筛选结果”复用。 */
-		function toggleArchivedSelection(selectedSessionIds, sessionIds, checked) {
+		function toggleArchivedSelection(selectedSessionIds: readonly string[], sessionIds: readonly string[], checked: boolean) {
 			const selected = new Set(selectedSessionIds);
 			for (const sessionId of sessionIds) {
 				if (checked) selected.add(sessionId);
@@ -3521,7 +3527,7 @@ window.__ModuleLoader__.load({
 			return [...selected];
 		}
 		/** 把批量删除结果转换为准确区分“已删除”与“陈旧标记已清理”的反馈。 */
-		function archivedDeleteFeedback(result, t) {
+		function archivedDeleteFeedback(result: DeletedBatch, t: Translate) {
 			const deleted = result.deletedSessionIds.length;
 			const skipped = result.skippedSessionIds.length;
 			if (result.failures.length > 0) return {
@@ -3539,7 +3545,7 @@ window.__ModuleLoader__.load({
 			return { kind: "notice", message: t("archives.deleteSuccess", { n: deleted }) };
 		}
 		/** 普通非空用户会话可归档；子代理与空占位会话不进入整理列表。 */
-		function unarchivedSessionIds(byId, archivedSessionIds) {
+		function unarchivedSessionIds(byId: Record<string, ClientSession>, archivedSessionIds: readonly string[]) {
 			const archived = new Set(archivedSessionIds);
 			return Object.values(byId).filter((session) => session.origin !== "subagent" && !session.blank && !archived.has(session.id)).map((session) => session.id);
 		}
@@ -3553,18 +3559,18 @@ window.__ModuleLoader__.load({
 		* @param ungroupedLabel - “未分组”显示文案。
 		* @returns 分组数组（仅含有会话的组），每项含 key / title / sessions。
 		*/
-		function deriveArchivedGroups(byId, items, archivedSessionIds, ungroupedLabel) {
-			const byWorkspace = items.map((workspace) => ({
+		function deriveArchivedGroups(byId: Record<string, ClientSession>, items: readonly ClientWorkspace[], archivedSessionIds: readonly string[], ungroupedLabel: string) {
+			const byWorkspace: ArchivedGroup[] = items.map((workspace) => ({
 				key: workspace.workspaceId,
 				title: workspace.title,
 				ids: new Set(workspace.sessionIds),
 				sessions: []
 			}));
-			const ungrouped = [];
+			const ungrouped: ClientSession[] = [];
 			for (const id of archivedSessionIds) {
 				const session = byId[id];
 				if (session === void 0 || session.origin === "subagent") continue;
-				const group = byWorkspace.find((workspace) => workspace.ids.has(id));
+				const group = byWorkspace.find((workspace) => workspace.ids?.has(id));
 				(group === void 0 ? ungrouped : group.sessions).push(session);
 			}
 			const result = byWorkspace.filter((group) => group.sessions.length > 0);
@@ -3575,13 +3581,13 @@ window.__ModuleLoader__.load({
 		* 归档设置页排序：时间排序同时按每组首条会话排列项目，字母排序则
 		* 同时排列项目名和组内标题；所有输入均复制后排序，不改写 store 快照。
 		*/
-		function sortArchivedGroups(groups, sortBy, createdAtById, t, details = {}) {
-			const compareText = (left, right) => String(left).localeCompare(String(right), void 0, { numeric: true, sensitivity: "base" });
-			const timestampOf = (session) => {
+		function sortArchivedGroups(groups: readonly ArchivedGroup[], sortBy: string, createdAtById: Record<string, number>, t: Translate, details: Record<string, SessionDetail> = {}) {
+			const compareText = (left: unknown, right: unknown) => String(left).localeCompare(String(right), void 0, { numeric: true, sensitivity: "base" });
+			const timestampOf = (session: ClientSession) => {
 				const value = sortBy === "created" ? (details[session.id]?.createdAt ?? createdAtById[session.id]) : session.updatedAt;
 				return typeof value === "number" && Number.isFinite(value) ? value : Number.NEGATIVE_INFINITY;
 			};
-			const compareSessions = (left, right) => {
+			const compareSessions = (left: ClientSession, right: ClientSession) => {
                 if (sortBy === "turnsAsc" || sortBy === "turnsDesc") {
                     const difference = compareTurnCounts(details[left.id]?.turnCount, details[right.id]?.turnCount, sortBy);
                     if (difference) return difference;
@@ -3925,7 +3931,7 @@ window.__ModuleLoader__.load({
 			"typert"
 		];
 		/** Preserve the receiver required by alpha-era observable stores. */
-		function bindObservable(source) {
+		function bindObservable<T>(source: Observable<T>) {
 			return {
 				getSnapshot: source.getSnapshot.bind(source),
 				subscribe: source.subscribe.bind(source)
@@ -3944,8 +3950,8 @@ window.__ModuleLoader__.load({
 		* 单条恢复：0.1.6+ 走官方 `workspaces.unarchiveSession`（会回写客户端归档快照）。
 		* 更早宿主没有该方法，回退到本插件一直注册的 `workspaceRegistry.unarchiveSession`。
 		*/
-		function createUnarchiveSession(workspaces, getRegistry) {
-			return async (sessionId) => {
+		function createUnarchiveSession(workspaces: Workspaces, getRegistry: Registry | undefined | (() => Registry | undefined)) {
+			return async (sessionId: string) => {
 				if (typeof workspaces?.unarchiveSession === "function") {
 					await workspaces.unarchiveSession(sessionId);
 					return;
@@ -3958,9 +3964,9 @@ window.__ModuleLoader__.load({
 			};
 		}
 		/** 设置页/侧栏批量归档：串行调官方单笔 archiveSession。已归档与未知会话交给官方处理。 */
-		async function archiveSessionsViaOfficial(workspaces, sessionIds, refresh) {
+		async function archiveSessionsViaOfficial(workspaces: Workspaces, sessionIds: readonly string[], refresh?: () => Promise<unknown>) {
 			const before = new Set(workspaces.list?.getSnapshot?.()?.archivedSessionIds ?? []);
-			const seen = new Set();
+			const seen = new Set<string>();
 			for (const sessionId of sessionIds) {
 				if (typeof sessionId !== "string" || sessionId.length === 0 || seen.has(sessionId)) continue;
 				seen.add(sessionId);
@@ -3974,10 +3980,10 @@ window.__ModuleLoader__.load({
 			};
 		}
 		/** 设置页批量恢复：串行调单笔恢复。官方方法会回写快照；插件 remote 则用返回集合计数。 */
-		async function unarchiveSessionsViaOfficial(workspaces, sessionIds, refresh, unarchive) {
+		async function unarchiveSessionsViaOfficial(workspaces: Workspaces, sessionIds: readonly string[], refresh?: () => Promise<unknown>, unarchive?: (id: string) => Promise<import("./contracts.js").ArchiveState | undefined>) {
 			const before = new Set(workspaces.list?.getSnapshot?.()?.archivedSessionIds ?? []);
-			const seen = new Set();
-			const run = typeof unarchive === "function" ? unarchive : (id) => workspaces.unarchiveSession(id);
+			const seen = new Set<string>();
+			const run = typeof unarchive === "function" ? unarchive : (id: string) => workspaces.unarchiveSession?.(id);
 			let archivedSessionIds;
 			for (const sessionId of sessionIds) {
 				if (typeof sessionId !== "string" || sessionId.length === 0 || seen.has(sessionId)) continue;
@@ -3992,11 +3998,11 @@ window.__ModuleLoader__.load({
 				unarchivedSessionIds: [...before].filter((id) => !archivedSessionIds.includes(id))
 			};
 		}
-		async function apply(ctx) {
+		async function apply(ctx: ClientContext) {
 			// 先挂侧栏和设置页，再等 Remote；否则官方侧栏会一直占着，菜单里没有删除。
 			applyWorkspaceBrowser(ctx);
 			const remote = ctx.get("remote");
-			let disposeRemote = () => {};
+			let disposeRemote: () => void | Promise<void> = () => {};
 			if (remote !== void 0) disposeRemote = await remote.$mount(ARCHIVE_MANAGER_REMOTE);
 			return async () => {
 				await disposeRemote();
@@ -4006,7 +4012,7 @@ window.__ModuleLoader__.load({
 		* 等待声明后覆盖侧栏，并注册归档设置页；首页选择器保持官方注册。
 		* @param ctx - 客户端根上下文。
 		*/
-		function applyWorkspaceBrowser(ctx) {
+		function applyWorkspaceBrowser(ctx: ClientContext) {
 			ctx.effect(() => ctx.locale.register(NS, {
 				zh,
 				en
@@ -4024,33 +4030,33 @@ window.__ModuleLoader__.load({
 			// 侧栏先注册；导航适配等官方 uiWorkspace 出现再绑，否则打开归档会被官方清掉。
 			const uiWorkspaceAt = () => ctx.get("uiWorkspace");
 			const archiveViewState = {};
-			let archiveNavigation;
-			const attachArchiveNavigation = (navigation) => {
+			let archiveNavigation: ReturnType<typeof allowArchivedNavigation> | undefined;
+			const attachArchiveNavigation = (navigation: import("./archive-experience.js").NavigationSource | undefined) => {
 				archiveNavigation = allowArchivedNavigation(navigation, ctx.sessions, ctx.workspaces, {
 					onOpened: () => ctx.get("layout")?.selectPanel(null),
 					beginNavigation: () => ctx.get("layout")?.beginNavigation?.()
 				});
-				return () => archiveNavigation.dispose();
+				return () => archiveNavigation?.dispose();
 			};
 			if (typeof ctx.inject === "function") ctx.inject(["uiWorkspace"], (ready) => attachArchiveNavigation(ready.uiWorkspace ?? uiWorkspaceAt()));
 			else ctx.effect(() => attachArchiveNavigation(uiWorkspaceAt()), "archive-manager: explicit archived navigation");
-			const openConversation = (sessionId) => {
+			const openConversation = (sessionId: string) => {
 				if (archiveNavigation === undefined) throw new ArchiveNavigationError("navigationUnavailable");
 				sidebarReveal.request(sessionId);
 				return archiveNavigation.open(sessionId);
 			};
-			const focusSessionWorkspace = async (sessionId) => {
+			const focusSessionWorkspace = async (sessionId: string) => {
 				ctx.get("layout")?.beginNavigation?.();
 				sidebarReveal.request(sessionId);
 			};
-			const searchSessions = async (query, signal) => {
+			const searchSessions = async (query: string, signal?: AbortSignal) => {
 				const result = await ctx.sessions.search(query, signal);
 				if (!result.ok) throw new Error(result.error.message);
 				return result.value;
 			};
-			const flowSource = (hole) => ({
+			const flowSource = (hole: string) => ({
 				getSnapshot: () => ctx.slots.entries(hole).length > 0,
-				subscribe: (listener) => ctx.slots.subscribe(hole, listener)
+				subscribe: (listener: () => void) => ctx.slots.subscribe(hole, listener)
 			});
 			const browserFlowSource = flowSource(DIRECTORY_FLOW_SLOT);
 			const refreshSessionList = async () => {
@@ -4062,29 +4068,24 @@ window.__ModuleLoader__.load({
 				}
 			};
 			const unarchiveOne = createUnarchiveSession(ctx.workspaces, () => ctx.get("remote.workspaceRegistry"));
-			const favoriteCall = async (method, input) => {
-				const registry = ctx.get("remote.workspaceRegistry");
-				if (!registry || typeof registry[method] !== "function") throw new Error(ctx.locale.bind(NS)("service.unavailable"));
-				const result = input === undefined ? await registry[method]() : await registry[method](input);
-				if (!result.ok) throw new Error(result.error.message);
-				return result.value;
-			};
-			const discoveryCall = async (method, input) => {
+			const registryCall = async <K extends keyof RegistryCalls>(method: K, ...args: Parameters<RegistryCalls[K]>): Promise<Awaited<ReturnType<RegistryCalls[K]>>> => {
                 const registry = ctx.get("remote.workspaceRegistry");
                 if (!registry || typeof registry[method] !== "function") throw new Error(ctx.locale.bind(NS)("service.unavailable"));
-                const result = await registry[method](input);
+                // 映射类型索引后的联合无法保留参数与返回值关联；断言只放在这一个分发边界。
+                const call = registry[method] as (...input: Parameters<RegistryCalls[K]>) => Promise<import("./client-compat.js").RemoteResult<Awaited<ReturnType<RegistryCalls[K]>>>>;
+                const result = await call.apply(registry, args);
                 if (!result.ok) throw new Error(result.error.message);
                 return result.value;
             };
-            const sessionDetails = input => discoveryCall("sessionDetails", input);
-            const diagnoseSession = input => discoveryCall("diagnoseSession", input);
-            const repairSession = input => discoveryCall("repairSession", input);
-            const searchArchivedContent = input => discoveryCall("searchArchivedContent", input);
-            const searchSessionContent = input => discoveryCall("searchSessionContent", input);
-            const previewArchivedSession = input => discoveryCall("previewArchivedSession", input);
-            const favoriteSessions = () => favoriteCall("favoriteSessions");
-			const setSessionFavorite = (input) => favoriteCall("setSessionFavorite", input);
-			const organizeBatch = createSessionOrganizer({
+            const sessionDetails: RegistryCalls["sessionDetails"] = input => registryCall("sessionDetails", input);
+            const diagnoseSession: RegistryCalls["diagnoseSession"] = input => registryCall("diagnoseSession", input);
+            const repairSession: RegistryCalls["repairSession"] = input => registryCall("repairSession", input);
+            const searchArchivedContent: RegistryCalls["searchArchivedContent"] = input => registryCall("searchArchivedContent", input);
+            const searchSessionContent: RegistryCalls["searchSessionContent"] = input => registryCall("searchSessionContent", input);
+            const previewArchivedSession: RegistryCalls["previewArchivedSession"] = input => registryCall("previewArchivedSession", input);
+            const favoriteSessions = () => registryCall("favoriteSessions");
+            const setSessionFavorite: RegistryCalls["setSessionFavorite"] = input => registryCall("setSessionFavorite", input);
+            const organizeBatch = createSessionOrganizer({
 				workspaces: ctx.workspaces.list, sessions: ctx.sessions.list,
 				archive: (id) => ctx.workspaces.archiveSession(id), restore: unarchiveOne,
 				deleteOne: async (id) => {
@@ -4095,30 +4096,30 @@ window.__ModuleLoader__.load({
 				},
 				getFavorites: favoriteSessions, refresh: () => ctx.sessions.refresh?.(), currentSessionId
 			});
-			const unarchiveSession = async (sessionId) => {
+			const unarchiveSession = async (sessionId: string) => {
 				await unarchiveOne(sessionId);
 				await refreshSessionList();
 			};
-			const archiveWorkspaceSessions = async (workspaceId) => {
+			const archiveWorkspaceSessions = async (workspaceId: string) => {
 				const items = ctx.workspaces.list?.getSnapshot?.()?.items ?? [];
 				const workspace = items.find((item) => item.workspaceId === workspaceId);
 				if (workspace === undefined) throw new Error(`unknown workspace "${workspaceId}"`);
 				return archiveSessionsViaOfficial(ctx.workspaces, workspace.sessionIds, refreshSessionList);
 			};
-			const deleteSession = async (sessionId) => {
+			const deleteSession = async (sessionId: string) => {
 				const registry = ctx.get("remote.workspaceRegistry");
 				if (registry === void 0) throw new Error("archive-manager remote service is unavailable");
 				const result = await registry.deleteSession(sessionId);
 				if (!result.ok) throw new Error(result.error.message);
 				await refreshSessionList();
 			};
-			const archiveSessions = async (sessionIds) => archiveSessionsViaOfficial(ctx.workspaces, sessionIds, refreshSessionList);
-			const unarchiveSessions = async (target) => {
+			const archiveSessions = async (sessionIds: string[]) => archiveSessionsViaOfficial(ctx.workspaces, sessionIds, refreshSessionList);
+			const unarchiveSessions = async (target: BatchTarget) => {
 				const snapshot = ctx.workspaces.list?.getSnapshot?.() ?? { archivedSessionIds: [], items: [] };
 				const sessionIds = deriveArchivedBatchIds(snapshot.archivedSessionIds, snapshot.items, target);
 				return unarchiveSessionsViaOfficial(ctx.workspaces, sessionIds, refreshSessionList, unarchiveOne);
 			};
-			const deleteArchivedSessions = async (target) => {
+			const deleteArchivedSessions = async (target: BatchTarget) => {
 				const registry = ctx.get("remote.workspaceRegistry");
 				if (registry === void 0) throw new Error("archive-manager remote service is unavailable");
 				const result = await registry.deleteArchivedSessions(target);
@@ -4140,7 +4141,7 @@ window.__ModuleLoader__.load({
 				}
 				return result.value;
 			};
-			const browserInjected = () => ({
+			const browserInjected = (): BrowserInjected => ({
 				startSession: (workspaceId) => {
 					const uiWorkspace = uiWorkspaceAt();
 					if (uiWorkspace !== void 0) uiWorkspace.startSession(workspaceId);
@@ -4154,7 +4155,7 @@ window.__ModuleLoader__.load({
 				searchSessions,
 				searchResultLimit: ctx.sessions.searchResultLimit,
 				renameSession: async (sessionId, title) => {
-					const rename = async (session) => {
+					const rename = async (session: SessionBinding) => {
 						const result = await session.rename(title);
 						if (!result.ok) throw new Error(result.error.message);
 					};
@@ -4242,7 +4243,13 @@ window.__ModuleLoader__.load({
 		}
 		//#endregion
 		/** Pure derivation surface for dsh-archive-manager self-tests (no-op for the runtime). */
-		exports.__test = {
+		/** 分叉失败由父组件提示，避免列表引用父组件内部作用域。 */
+        async function forkWithFeedback(sessionId: string, fork: BrowserProps["forkSession"], notify: (message: string) => void, t: Translate) {
+            try { await fork(sessionId); }
+            catch (reason) { notify(formatForkError(reason, t)); }
+        }
+        exports.__test = {
+            forkWithFeedback,
 			unarchivedSessionIds,
 			ArchiveSelectionToolbar,
 			ArchivedSessionsSection,

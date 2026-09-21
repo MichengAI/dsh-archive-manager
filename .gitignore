@@ -1,5 +1,6 @@
 # 依赖与构建缓存
 node_modules/
+/lib/
 *.tsbuildinfo
 *.tgz
 pnpm-debug.log*

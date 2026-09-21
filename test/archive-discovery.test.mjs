@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { extractConversation, findContentMatch, previewConversation, matchesUpdatedRange, searchArchiveBatches, searchInputSchema, sessionDetailCandidates } from "../src/archive-discovery.js";
+import { extractConversation, findContentMatch, previewConversation, matchesUpdatedRange, searchArchiveBatches, searchInputSchema, sessionDetailCandidates } from "../src/archive-discovery.ts";
 const user = (seq, text) => ({ type: "user/message", seq, data: { role: "user", content: [{ type: "text", text }] } });
 const assistant = (seq, text) => ({ type: "assistant/message", seq, data: { message: { role: "assistant", content: [{ type: "text", text }] } } });
 
@@ -78,7 +78,7 @@ test("搜索参数限制批量大小、关键词和会话 ID，防止无限请�
 });
 
 test("轮次排序的未知值始终置后，复制成功与拒绝均有明确结果", async () => {
-  const { countConversationTurns, compareTurnCounts, copySessionText, detailsResultSchema } = await import("../src/archive-discovery.js");
+  const { countConversationTurns, compareTurnCounts, copySessionText, detailsResultSchema } = await import("../src/archive-discovery.ts");
   assert.equal(countConversationTurns([user(0, ""), assistant(1, "回答"), { type: "user/message", data: { source: { kind: "agent-message" } } }]), 1);
   for (const order of ["turnsAsc", "turnsDesc"]) {
     assert.ok(compareTurnCounts(0, null, order) < 0);

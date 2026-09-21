@@ -9,17 +9,17 @@ import assert from "node:assert/strict";
 
 const run = promisify(execFile);
 const root = new URL("../", import.meta.url);
-const modules = ["index", "workspace", "projcache", "tombstone", "client"];
+const modules = ["index", "workspace", "projcache", "tombstone", "client", "contracts"];
 
 test("src 是唯一维护源码，lib 是完整发布产物", async () => {
 	for (const module of modules) {
-		await access(new URL(`../src/${module}.js`, import.meta.url), constants.R_OK);
+		await access(new URL(`../src/${module}.ts`, import.meta.url), constants.R_OK);
 		await access(new URL(`../lib/${module}.js`, import.meta.url), constants.R_OK);
 	}
 
 	const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 	assert.match(manifest.scripts?.build ?? "", /scripts[\\/]build\.mjs/);
-	assert.match(manifest.scripts?.test ?? "", /node --test test[\\/][*]\.test\.mjs/);
+	assert.match(manifest.scripts?.test ?? "", /node --import tsx --test test[\\/][*]\.test\.mjs/);
 });
 
 test("构建失败时保留已有 lib 并清理临时目录", async () => {

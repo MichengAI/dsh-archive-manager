@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as health from '../src/session-health-ui.js';
-import { repairResultSchema, classifySessionError } from '../src/archive-discovery.js';
-import { discoveryZh, discoveryEn } from '../src/archive-discovery-ui.js';
-import { organizerZh, organizerEn } from '../src/archive-organizer-ui.js';
-import { ZH, EN } from '../src/plugin-update-ui.js';
+import * as health from '../src/session-health-ui.ts';
+import { repairResultSchema, classifySessionError } from '../src/archive-discovery.ts';
+import { discoveryZh, discoveryEn } from '../src/archive-discovery-ui.ts';
+import { organizerZh, organizerEn } from '../src/archive-organizer-ui.ts';
+import { ZH, EN } from '../src/plugin-update-ui.ts';
 
 test('错误分类优先稳定代码，未知宿主代码才回退文案', () => {
   assert.equal(classifySessionError({ code: 'EACCES', message: 'not found' }).code, 'permission');

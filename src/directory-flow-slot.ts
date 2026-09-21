@@ -1,14 +1,26 @@
+import type { StoredEntry } from "@deepseek-ai/dsh-client-ui-slots";
+
+/** 目录镜像只依赖公开条目，不要求各版本声明相同的业务插槽名。 */
+export interface DirectoryMirrorContext {
+  slots: {
+    inject(target: string, effect: () => () => void): () => void;
+    entries(source: string): readonly StoredEntry[];
+    register(options: StoredEntry["options"] & { name: string; registrant: string | undefined; inject: StoredEntry["inject"]; store: StoredEntry["store"]; locale: StoredEntry["locale"] }, component: StoredEntry["component"]): () => void;
+  };
+  effect(effect: () => () => void, label: string): () => void;
+  on(event: "slots/changed", listener: (key: string) => void): () => void;
+}
 /**
  * 将官方目录叶组件接入归档侧栏独有的子插槽，不抢占官方声明。
  * 组件、store、locale 和 inject 均来自公开插槽条目；原条目卸载时同步释放副本。
  * 当前支持的宿主目录组件均为叶节点；新增子插槽的组件不能借用其声明权限。
  */
-export function mirrorDirectoryFlow(ctx, target) {
+export function mirrorDirectoryFlow(ctx: DirectoryMirrorContext, target: string) {
 	const source = "sidebar.workspaces.directoryFlow";
 	return ctx.slots.inject(target, () => ctx.effect(() => {
-		const mounted = new Map();
-		let registrant;
-		const release = (entry, dispose) => {
+		const mounted = new Map<StoredEntry, () => void>();
+		let registrant: string | undefined;
+		const release = (entry: StoredEntry, dispose: () => void) => {
 			mounted.delete(entry);
 			try {
 				dispose();

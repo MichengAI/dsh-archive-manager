@@ -1,3 +1,11 @@
+interface UpdatePayload {
+ packageName: string; currentVersion: string; latestVersion?: string; updateAvailable: boolean;
+ profileName: string; canAutoUpdate: boolean; latestCheckFailed: boolean; autoReload?: boolean;
+}
+interface UpdateUiOptions {
+ packageName: string; endpoint: string; titleRowSelector: string; linksSelector: string; enName: string; zhName: string;
+ getLanguage?(): string; createIcon(name: string): HTMLElement;
+}
 const UPDATE_HEADER = "x-michengai-plugin-update";
 const STYLE_ID = "michengai-plugin-update-ui";
 const CSS = `
@@ -54,7 +62,7 @@ export const EN = {
   restarting: "Update complete. Restarting DSH Desktop\u2026",
   unavailable: "Automatic update is unavailable. Use the manual command."
 };
-function strings(language) {
+function strings(language?: string) {
   if (language === "en") return EN;
   if (language === "zh") return ZH;
   const lang = document.documentElement.lang.toLowerCase();
@@ -68,12 +76,12 @@ function ensureStyle() {
   style.textContent = CSS;
   (document.head ?? document.documentElement).append(style);
 }
-function validPayload(value) {
+function validPayload(value: unknown): value is UpdatePayload {
   if (value === null || typeof value !== "object") return false;
-  const item = value;
+  const item = value as Record<string, unknown>;
   return typeof item.packageName === "string" && typeof item.currentVersion === "string" && typeof item.updateAvailable === "boolean" && typeof item.profileName === "string" && typeof item.canAutoUpdate === "boolean" && typeof item.latestCheckFailed === "boolean" && (item.latestVersion === void 0 || typeof item.latestVersion === "string");
 }
-async function requestStatus(endpoint, method, signal) {
+async function requestStatus(endpoint: string, method: string, signal?: AbortSignal) {
   const signalOption = signal === void 0 ? {} : { signal };
   const response = await fetch(endpoint, method === "GET" ? { cache: "no-store", ...signalOption } : {
     method: "POST",
@@ -81,15 +89,15 @@ async function requestStatus(endpoint, method, signal) {
     body: "{}",
     ...signalOption
   });
-  const value = await response.json();
-  if (!response.ok || !validPayload(value)) throw new Error(typeof value.error === "string" ? value.error : strings().failed);
+  const value: unknown = await response.json();
+  if (!response.ok || !validPayload(value)) throw new Error(value && typeof value === "object" && "error" in value && typeof value.error === "string" ? value.error : strings().failed);
   return value;
 }
-function manualPluginUpdateCommand(profileName, packageName, version) {
+function manualPluginUpdateCommand(profileName: string, packageName: string, version: string) {
   const profile = profileName.trim() === "" ? "" : ` --profile ${profileName.trim()}`;
   return `dsh plugin${profile} add ${packageName}@${version} --registry=https://registry.npmjs.org/`;
 }
-function handlePluginUpdateEscape(event, close) {
+function handlePluginUpdateEscape(event: KeyboardEvent, close: () => void) {
   if (event.key !== "Escape") return false;
   event.preventDefault();
   event.stopPropagation();
@@ -97,16 +105,16 @@ function handlePluginUpdateEscape(event, close) {
   close();
   return true;
 }
-function observePluginUpdate(options) {
+function observePluginUpdate(options: UpdateUiOptions) {
   if (typeof document === "undefined" || document.body === null) return () => {
   };
   ensureStyle();
   const getStrings = () => strings(options.getLanguage?.());
   const controller = new AbortController();
-  let payload;
-  let overlay;
-  let frame;
-  const setButtonContent = (button, label, iconName) => {
+  let payload: UpdatePayload | undefined;
+  let overlay: HTMLDivElement | undefined;
+  let frame: number | undefined;
+  const setButtonContent = (button: Element, label: string, iconName: string) => {
     const icon = options.createIcon(iconName);
     icon.classList.add("mpi-icon");
     icon.setAttribute("aria-hidden", "true");
@@ -115,7 +123,7 @@ function observePluginUpdate(options) {
     text.textContent = label;
     button.replaceChildren(icon, text);
   };
-  const setButtonLabel = (button, label) => {
+  const setButtonLabel = (button: Element, label: string) => {
     const text = button.querySelector("[data-mpi-label]");
     if (text === null) button.textContent = label;
     else text.textContent = label;
@@ -125,7 +133,7 @@ function observePluginUpdate(options) {
     if (row === null) return;
     const heading = row.querySelector("h1,h2");
     if (heading !== null && payload !== void 0) {
-      let version = heading.querySelector(`.mpi-version[data-package="${options.packageName}"]`);
+      let version = heading.querySelector<HTMLSpanElement>(`.mpi-version[data-package="${options.packageName}"]`);
       if (version === null) {
         version = document.createElement("span");
         version.className = "mpi-version";
@@ -170,22 +178,27 @@ function observePluginUpdate(options) {
     dialog.setAttribute("role", "dialog");
     dialog.setAttribute("aria-modal", "true");
     dialog.innerHTML = `<header class="mpi-head"><h2></h2><button type="button" class="mpi-dialog-close" data-action="close"></button></header><p class="mpi-intro"></p><dl class="mpi-meta"><dt></dt><dd data-role="current"></dd><dt></dt><dd data-role="latest"></dd><dt></dt><dd data-role="profile"></dd></dl><div class="mpi-status" role="status"></div><div class="mpi-progress" hidden></div><section class="mpi-manual"><h3></h3><p></p><div class="mpi-command"><code></code><button type="button" class="mpi-action" data-action="copy"></button></div></section><footer class="mpi-actions"><div class="mpi-actions-group"><button type="button" class="mpi-action" data-action="check"></button><button type="button" class="mpi-action mpi-primary" data-action="update"></button></div></footer>`;
+    const required = <T extends HTMLElement = HTMLElement>(selector: string): T => {
+      const element = dialog.querySelector<T>(selector);
+      if (!element) throw new Error(`更新弹窗缺少节点：${selector}`);
+      return element;
+    };
     const name = text === EN ? options.enName : options.zhName;
-    dialog.querySelector("h2").textContent = `${name} ${text.update}`;
-    dialog.querySelector(".mpi-intro").textContent = text.intro;
+    required("h2").textContent = `${name} ${text.update}`;
+    required(".mpi-intro").textContent = text.intro;
     const terms = dialog.querySelectorAll("dt");
     terms[0].textContent = text.current;
     terms[1].textContent = text.latestLabel;
     terms[2].textContent = text.profile;
-    dialog.querySelector(".mpi-manual h3").textContent = text.manual;
-    dialog.querySelector(".mpi-manual p").textContent = text.manualHint;
-    const status = dialog.querySelector(".mpi-status");
-    const progress = dialog.querySelector(".mpi-progress");
-    const command = dialog.querySelector(".mpi-command code");
-    const close = dialog.querySelector("[data-action=close]");
-    const check = dialog.querySelector("[data-action=check]");
-    const update = dialog.querySelector("[data-action=update]");
-    const copy = dialog.querySelector("[data-action=copy]");
+    required(".mpi-manual h3").textContent = text.manual;
+    required(".mpi-manual p").textContent = text.manualHint;
+    const status = required(".mpi-status");
+    const progress = required(".mpi-progress");
+    const command = required(".mpi-command code");
+    const close = required<HTMLButtonElement>("[data-action=close]");
+    const check = required<HTMLButtonElement>("[data-action=check]");
+    const update = required<HTMLButtonElement>("[data-action=update]");
+    const copy = required<HTMLButtonElement>("[data-action=copy]");
     setButtonContent(close, text.close, "close");
     close.querySelector("[data-mpi-label]")?.remove();
     close.setAttribute("aria-label", text.close);
@@ -194,11 +207,11 @@ function observePluginUpdate(options) {
     setButtonContent(update, text.auto, "download");
     setButtonContent(copy, text.copy, "copy");
     let busy = false;
-    const setMessage = (message, kind = "") => {
+    const setMessage = (message: string, kind = "") => {
       status.textContent = message;
       status.dataset.kind = kind;
     };
-    const setBusy = (value) => {
+    const setBusy = (value: boolean) => {
       busy = value;
       check.disabled = value;
       copy.disabled = value;
@@ -206,9 +219,9 @@ function observePluginUpdate(options) {
       progress.hidden = !value;
     };
     const render = () => {
-      dialog.querySelector("[data-role=current]").textContent = payload === void 0 ? text.unknown : `v${payload.currentVersion}`;
-      dialog.querySelector("[data-role=latest]").textContent = payload?.latestVersion === void 0 ? text.unknown : `v${payload.latestVersion}`;
-      dialog.querySelector("[data-role=profile]").textContent = payload?.profileName ?? text.unknown;
+      required("[data-role=current]").textContent = payload === void 0 ? text.unknown : `v${payload.currentVersion}`;
+      required("[data-role=latest]").textContent = payload?.latestVersion === void 0 ? text.unknown : `v${payload.latestVersion}`;
+      required("[data-role=profile]").textContent = payload?.profileName ?? text.unknown;
       command.textContent = manualPluginUpdateCommand(payload?.profileName ?? "", options.packageName, payload?.latestVersion ?? "latest");
       update.disabled = busy || payload?.canAutoUpdate !== true || payload.updateAvailable !== true;
       if (payload === void 0) setMessage(text.checking);

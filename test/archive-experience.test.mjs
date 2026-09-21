@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { openArchivedConversation, allowArchivedNavigation, ArchiveNavigationError, formatArchiveNavigationError, currentSessionId, sessionIsCurrent } from "../src/archive-experience.js";
+import { openArchivedConversation, allowArchivedNavigation, ArchiveNavigationError, formatArchiveNavigationError, currentSessionId, sessionIsCurrent } from "../src/archive-experience.ts";
 
 test("继续对话不恢复；恢复并打开必须等持久化成功，失败不导航", async () => {
   const calls = [];

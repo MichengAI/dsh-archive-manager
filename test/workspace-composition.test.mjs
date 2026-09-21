@@ -7,9 +7,9 @@ import { pathToFileURL, fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { Context } from "@deepseek-ai/cordis";
 import { loadClientStore } from "./helpers/client-store.mjs";
-import { mirrorDirectoryFlow } from "../src/directory-flow-slot.js";
-import { allowArchivedNavigation, currentSessionId } from "../src/archive-experience.js";
-import { createSessionOrganizer } from "../src/archive-organizer.js";
+import { mirrorDirectoryFlow } from "../src/directory-flow-slot.ts";
+import { allowArchivedNavigation, currentSessionId } from "../src/archive-experience.ts";
+import { createSessionOrganizer } from "../src/archive-organizer.ts";
 
 const require = createRequire(import.meta.url);
 const statics = {};

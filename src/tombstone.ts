@@ -12,7 +12,7 @@
  * @param {number} limit - 墓碑上限。
  * @returns {string[]} 被淘汰出集合的旧 id 列表，调用方据此清理附属簿记。
  */
-function trackTombstone(ids, order, id, limit) {
+function trackTombstone(ids: Set<string>, order: string[], id: string, limit: number) {
 	if (!ids.has(id)) {
 		ids.add(id);
 		order.push(id);

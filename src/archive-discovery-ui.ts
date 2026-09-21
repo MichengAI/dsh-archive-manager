@@ -1,17 +1,24 @@
+import { errorMessage } from "./contracts.js";
+import type { Translate, SearchInput, SearchHit, Failure, SessionDetail, SessionSummary } from "./contracts.js";
+interface SearchState { key?: string; status: string; items: SearchHit[]; failures: Failure[]; done?: number; total?: number; error?: string }
+type PreviewValue = ReturnType<typeof import("./archive-discovery.js").previewResultSchema.parse>;
+interface PreviewTarget { session: SessionSummary; query: string }
+interface PreviewState { key?: PreviewTarget | null; status: string; value?: PreviewValue; error?: string }
+interface MarkdownProps { text: string; streaming: boolean; labels: { code: { copyLabel: string; copiedLabel: string }; footnotes: string } }
 import { searchArchiveBatches, detailsResultSchema, findTextRange } from "./archive-discovery.js";
 
 /** 搜索异步状态和预览展示独立于页面业务操作，防止旧请求覆盖新筛选。 */
-export function createDiscoveryTools(React) {
+export function createDiscoveryTools(React: typeof import("react")) {
   const h = React.createElement;
-  function HighlightedText({ text, query }) {
+  function HighlightedText({ text, query = "" }: { text: string; query?: string }) {
     const match = findTextRange(text, query);
     return !match ? text : h(React.Fragment, null, text.slice(0, match.start), h("mark", null, text.slice(match.start, match.end)), text.slice(match.end));
   }
-  function useArchiveSearch(ids, query, enabled, call) {
+  function useArchiveSearch(ids: readonly string[], query: string, enabled: boolean, call?: (input: SearchInput) => Promise<unknown>) {
     const idsKey = JSON.stringify(ids);
     const key = JSON.stringify([idsKey, query]);
     const [revision, setRevision] = React.useState(0);
-    const [state, setState] = React.useState({ key: "", status: "idle", items: [], failures: [] });
+    const [state, setState] = React.useState<SearchState>({ key: "", status: "idle", items: [], failures: [] });
     React.useEffect(() => {
       if (!enabled || !query.trim() || !call) return;
       const controller = new AbortController();
@@ -20,24 +27,24 @@ export function createDiscoveryTools(React) {
         searchArchiveBatches(JSON.parse(idsKey), query, call, { signal: controller.signal, onProgress: progress => {
           if (!controller.signal.aborted) setState({ key, status: "loading", ...progress });
         } }).then(result => { if (!controller.signal.aborted) setState({ key, status: "ready", done: ids.length, total: ids.length, ...result }); })
-          .catch(error => { if (!controller.signal.aborted) setState(previous => ({ ...previous, key, status: "error", error: String(error?.message ?? error) })); });
+          .catch(error => { if (!controller.signal.aborted) setState(previous => ({ ...previous, key, status: "error", error: errorMessage(error) })); });
       }, 350);
       return () => { controller.abort(); clearTimeout(timer); };
     }, [idsKey, query, enabled, call, revision]);
     const active = enabled && query.trim() && call;
     return { ...(active ? state.key === key ? state : { key, status: "loading", items: [], failures: [], done: 0, total: ids.length } : { status: "idle", items: [], failures: [] }), retry: () => setRevision(value => value + 1) };
   }
-  function useSessionDetails(sessions, call, t) {
+  function useSessionDetails(sessions: readonly SessionSummary[], call?: (input: { sessionIds: string[] }) => Promise<unknown>, t?: Translate) {
     const key = JSON.stringify(sessions.map(session => [session.id, session.updatedAt]));
     const [revision, setRevision] = React.useState(0);
-    const [state, setState] = React.useState({ key: "", items: [], pending: false });
+    const [state, setState] = React.useState<{ key: string; items: SessionDetail[]; pending: boolean }>({ key: "", items: [], pending: false });
     React.useEffect(() => {
       if (!call) return;
       let active = true;
-      const ids = [...new Set(JSON.parse(key).map(row => row[0]))];
+      const ids = [...new Set((JSON.parse(key) as [string, unknown][]).map(row => row[0]))];
       setState({ key, items: [], pending: ids.length > 0 });
       const load = async () => {
-        const items = [];
+        const items: SessionDetail[] = [];
         for (let start = 0; start < ids.length && active; start += 20) {
           const batch = ids.slice(start, start + 20);
           try {
@@ -45,7 +52,7 @@ export function createDiscoveryTools(React) {
             const found = new Map(result.items.map(row => [row.sessionId, row]));
             items.push(...batch.map(sessionId => found.get(sessionId) ?? { sessionId, turnCount: null, path: null, error: "", errorKey: "details.notReturned" }));
           } catch (error) {
-            items.push(...batch.map(sessionId => ({ sessionId, turnCount: null, path: null, error: String(error?.message ?? error) })));
+            items.push(...batch.map(sessionId => ({ sessionId, turnCount: null, path: null, error: errorMessage(error) })));
           }
           if (active) setState({ key, items: [...items], pending: start + 20 < ids.length });
         }
@@ -57,9 +64,9 @@ export function createDiscoveryTools(React) {
     // 只缓存读取结果和本地错误键；语言切换在渲染时生效，不触发重复读取。
     const items = current.items.map(row => row.errorKey ? { ...row, error: t ? t(row.errorKey) : row.errorKey } : row);
     return { ...current, items, byId: Object.fromEntries(items.map(row => [row.sessionId, row])), retry: () => setRevision(value => value + 1) };
-  }  function useArchivePreview(call, eligibleIds) {
-    const [target, setTarget] = React.useState(null);
-    const [state, setState] = React.useState({ status: "idle" });
+  }  function useArchivePreview(call: ((input: { sessionId: string; query: string }) => Promise<PreviewValue>) | undefined, eligibleIds: readonly string[]) {
+    const [target, setTarget] = React.useState<PreviewTarget | null>(null);
+    const [state, setState] = React.useState<PreviewState>({ status: "idle" });
     const [revision, setRevision] = React.useState(0);
     // 每次打开拥有独立身份，避免同一会话再次打开时闪现旧预览。
     const key = target;
@@ -70,7 +77,7 @@ export function createDiscoveryTools(React) {
     React.useEffect(() => {
       if (!available || typeof window === "undefined") return;
       // 预览位于设置壳之上，先截获 Escape，防止两层弹窗一起关闭。
-      const onKeyDown = event => {
+      const onKeyDown = (event: KeyboardEvent) => {
         if (event.key !== "Escape") return;
         event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation();
         setTarget(null);
@@ -84,26 +91,26 @@ export function createDiscoveryTools(React) {
       setState({ key, status: "loading" });
       Promise.resolve().then(() => call({ sessionId: target.session.id, query: target.query })).then(value => {
         if (active) setState({ key, status: "ready", value });
-      }).catch(error => { if (active) setState({ key, status: "error", error: String(error?.message ?? error) }); });
+      }).catch(error => { if (active) setState({ key, status: "error", error: errorMessage(error) }); });
       return () => { active = false; };
     }, [key, available, call, revision]);
-    return { target: available ? target : null, ...(state.key === key ? state : { status: "loading" }), open: (session, query = "") => setTarget({ session, query }), close: () => setTarget(null), retry: () => setRevision(value => value + 1) };
+    return { target: available ? target : null, ...(state.key === key ? state : { status: "loading" }), open: (session: SessionSummary, query = "") => setTarget({ session, query }), close: () => setTarget(null), retry: () => setRevision(value => value + 1) };
   }
-  function DiscoveryFilters({ t, from, to, onFrom, onTo, invalid, onClear }) {
-    const rootRef = React.useRef(null);
+  function DiscoveryFilters({ t, from, to, onFrom, onTo, invalid, onClear }: { t: Translate; from: string; to: string; onFrom(value: string): void; onTo(value: string): void; invalid: boolean; onClear(): void }) {
+    const rootRef = React.useRef<HTMLDetailsElement>(null);
     React.useEffect(() => {
       const root = rootRef.current;
       if (!root) return;
       // 捕获阶段处理外部点击，避免其他控件阻止冒泡后浮层仍停留。
-      const onPointerDown = event => {
-        if (root.open && !root.contains(event.target)) root.open = false;
+      const onPointerDown = (event: PointerEvent) => {
+        if (root.open && !root.contains(event.target as Node | null)) root.open = false;
       };
       root.ownerDocument.addEventListener("pointerdown", onPointerDown, true);
       return () => root.ownerDocument.removeEventListener("pointerdown", onPointerDown, true);
     }, []);
     const active = Boolean(from || to);
     const range = active ? `${from || "…"} ～ ${to || "…"}` : t("discovery.date");
-    return h("details", { className: "dsham_dateFilter", ref: rootRef, onKeyDown: event => {
+    return h("details", { className: "dsham_dateFilter", ref: rootRef, onKeyDown: (event: import("react").KeyboardEvent<HTMLDetailsElement>) => {
       if (event.key === "Escape" && event.currentTarget.open) {
         event.preventDefault(); event.stopPropagation(); event.currentTarget.open = false;
         event.currentTarget.querySelector("summary")?.focus();
@@ -114,12 +121,12 @@ export function createDiscoveryTools(React) {
           h("rect", { x: 2, y: 3.5, width: 12, height: 10.5, rx: 2 }), h("path", { d: "M5 1.5v4M11 1.5v4M2 7h12" })),
         h("span", null, active ? t("discovery.dateActive") : t("discovery.date"))),
       h("div", { className: "dsham_datePanel" },
-        h("label", null, t("discovery.from"), h("input", { type: "date", value: from, max: to || undefined, onChange: event => onFrom(event.target.value) })),
-        h("label", null, t("discovery.to"), h("input", { type: "date", value: to, min: from || undefined, onChange: event => onTo(event.target.value) })),
+        h("label", null, t("discovery.from"), h("input", { type: "date", value: from, max: to || undefined, onChange: event => onFrom(event.currentTarget.value) })),
+        h("label", null, t("discovery.to"), h("input", { type: "date", value: to, min: from || undefined, onChange: event => onTo(event.currentTarget.value) })),
         invalid && h("p", { role: "alert" }, t("discovery.invalidDate")),
         h("button", { type: "button", className: "dsham_settingsAction", disabled: !active, onClick: onClear }, t("discovery.clearDate"))));
   }
-  function SearchStatus({ state, t }) {
+  function SearchStatus({ state, t }: { state: SearchState & { retry(): void }; t: Translate }) {
     if (state.status === "idle") return null;
     return h("div", { className: "dsham_discoveryStatus", role: "status", "aria-live": "polite" },
       h("p", null, t(state.status === "loading" ? "discovery.searching" : state.status === "error" ? "discovery.searchError" : "discovery.searched", { done: state.done ?? 0, total: state.total ?? 0 })),
@@ -127,7 +134,7 @@ export function createDiscoveryTools(React) {
       state.failures.length > 0 && h("details", null, h("summary", null, t("discovery.failed", { n: state.failures.length })), h("ul", null, state.failures.map(row => h("li", { key: row.sessionId }, row.sessionId, t("common.separator"), row.message)))),
       (state.status === "error" || (state.status === "ready" && state.failures.length > 0)) && h("button", { type: "button", className: "dsham_settingsAction", onClick: state.retry }, t("discovery.retry")));
   }
-  function PreviewContent({ preview, t, MarkdownText }) {
+  function PreviewContent({ preview, t, MarkdownText }: { preview: PreviewState & { target?: PreviewTarget | null; retry(): void }; t: Translate; MarkdownText?: import("react").ComponentType<MarkdownProps> }) {
     const [raw, setRaw] = React.useState(false);
     if (preview.status === "loading") return h("p", { role: "status" }, t("discovery.loading"));
     if (preview.status === "error") return h("div", null, h("p", { role: "alert" }, preview.error), h("button", { type: "button", className: "dsham_settingsAction", onClick: preview.retry }, t("discovery.retry")));

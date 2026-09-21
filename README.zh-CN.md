@@ -193,7 +193,7 @@ pnpm build
 dsh plugin --profile web add .
 ```
 
-完成后重启 DSH Web 并硬刷新浏览器。修改 [src](src) 中的源码，不直接编辑生成目录 `lib`；使用 `pnpm test` 验证修改，使用 `pnpm verify` 执行完整检查。
+完成后重启 DSH Web 并硬刷新浏览器。业务源码统一在 [src](src) 中使用 TypeScript 严格模式；共享协议在 `contracts.ts`，宿主版本适配在 `host-compat.ts`、`client-compat.ts`，客户端组件与状态类型在 `client-types.ts`。`lib` 是本地构建目录，不纳入 Git，也不直接编辑；`prepack` 会在打包前自动构建，npm 包仍包含 `lib`。`pnpm typecheck` 检查业务源码和类型负例，`pnpm test` 先检查类型、构建再执行回归，`pnpm verify` 还执行兼容矩阵、打包和生成物不被 Git 跟踪的检查。测试与构建脚本继续使用 `.mjs`；对外发布仍为 JavaScript，不要求宿主加载 TypeScript。
 
 </details>
 
