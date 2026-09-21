@@ -6,19 +6,61 @@ Published release notes are retained below; new versions are added without remov
 
 ## Unreleased
 
-- Preserve missing-file, permission, and corruption classifications when repair is unavailable. Translate local detail errors at render time without repeating reads when the translator changes. Remove obsolete page-wide action strings and add page-level coverage for switching tabs with an open preview.
+## 1.0.0 - 2026-09-21
 
-- Add host-persisted favorites and a Favorites only dropdown on both tabs, idle cleanup preview with favorite/activity protection, and batch progress, partial-failure retry, and temporary archive undo.
-- Introduce compact collapsible project groups, clickable session titles, star/action icons, and a More menu for restore-and-open and deletion. Remove redundant page-wide restore/delete buttons; retain filtered selection and project actions.
-- Add title/content search with snippets and highlights on both tabs, project/favorites/date filters, and a date popover with outside-click dismissal. Search has no persistent index: batches contain up to 20 sequential reads, and an in-flight batch cannot be cancelled. Large logs can be slow; narrow filters first.
-- Add read-only Markdown previews with tables, code, role labels, and a source/highlight mode; show recent messages or context around the first match.
-- Display user turn counts with ascending/descending sorting and unknown values last. Add session ID/path copying and retryable detail failures.
-- Add collapsed session diagnostics and narrowly validated legacy automation repair. Retain original logs and generate a host-validated new generation while holding the host write lease.
-- Align selection, checkboxes, focus, warning, update buttons, and highlights with official theme tokens; localize diagnosis, preview, update controls, and copy errors.
-- Fix preview Escape propagation, filtered group counts, unarchived empty states, and copy-error localization, verified in an isolated real DSH instance.
-- Preserve favorites when indexing or reads are unavailable; only confirmed missing artifacts are pruned. Clear preview targets when leaving the tab, map case-folded matches back to original Unicode text, and avoid splitting surrogate pairs.
-- Include archived IDs without summaries in diagnostics, remove the error-wording prerequisite for artifact validation, and create repair files with private permissions. Keep fail-safe no-overwrite publication when hard links are unavailable.
-- Add regression coverage for Unicode, missing summaries, favorites retention, remote discovery/repair calls, repair permissions/failures, and real host generation validation and locking. Keep this work unreleased; no version bump.
+The first 1.0 release expands session organization, search, previews, and targeted repair since 0.1.44. The package name and existing data remain unchanged; no session migration is required. Existing archive, restore, permanent deletion, and native conversation navigation remain available.
+
+### Lists and shared filters
+
+- Archived and Unarchived share title/content search, project, favorites, and updated-date filters. Titles-only remains the default; switch scope on the left of the search box and open dates on the right. The end date includes the entire local day; dates can be cleared independently and the popover closes on outside clicks.
+- Compact collapsible project groups provide clickable titles, right-side stars and archive/restore icons, and applicable More actions for restore-and-open, preview, copying, and deletion.
+- Sort by update time, creation time, title, or most/fewest turns. Group counts follow filters and empty states match the active tab.
+- Select all covers filtered results, including collapsed groups. Switching tabs clears selection; filtering preserves it and reports hidden selections. Project-wide actions remain independent of filters.
+- Remove redundant page-wide Restore all / Delete all buttons while retaining selection-based and project actions. Operation results remain scoped to their tab.
+
+### Favorites, idle cleanup, and batch actions
+
+- Star or unstar on either tab and filter to favorites. Host-persisted favorites survive archive, restore, and browser changes. Unknown indexes and read failures do not remove favorites; cleanup requires confirmed artifact absence.
+- On Unarchived, preview idle candidates using 1–36,500 whole days and the current filters; deselect individual candidates before confirmation. Exclude favorites, the current conversation, running sessions, pending interactions, and sessions with active subagents or no valid activity time.
+- Recheck favorites and activity before archiving. Batch archive, restore, and delete show progress and successful/skipped/failed/remaining results. Stop at the first failure and retry only remaining items; delete retries still require confirmation.
+- Undo the most recent successful archive batch, including successful retries, while the management page remains open. Permanent deletion cannot be undone.
+
+### Content search and quick preview
+
+- Search persisted user and assistant text with snippets and highlights. Read failures remain visible and retryable; obsolete responses cannot replace results after filters change.
+- Preview archived sessions without restoring them, showing context around the first match or up to eight recent messages. Unarchived snippets open the full conversation.
+- Render Markdown tables, quotes, code blocks, and role labels, with a source/highlight mode, a wider dialog, and action icons.
+- Fix Unicode offsets after case folding, split surrogate pairs on truncation, Escape closing Settings as well as preview, and previews reopening after tab switches.
+
+### Turn counts and session location
+
+- Show user submission counts on both tabs, including image submissions and inherited branch messages; exclude assistant replies, tool calls, and injected messages.
+- Sort by most/fewest turns with unknown counts always last; inspect and retry detail failures.
+- Copy session IDs and paths separately from More. Official JSONL storage exposes the session directory; other backends use a valid host-provided path. Missing paths and clipboard failures are reported explicitly.
+
+### Diagnosis and targeted repair
+
+- Collect archived read failures, including IDs without summaries, in collapsible diagnostic cards with classified advice and technical details.
+- Prefer stable error codes for missing files, permissions, and corruption, with message-based compatibility fallbacks. Unavailable repair preserves the original classification and appends its limitation.
+- Diagnose and explicitly confirm repair for supported legacy automation message sources. Eligibility depends on artifacts, host format validation, and a write lease, not just error wording. Sessions must be archived and closed in every DSH process.
+- Retain original logs, text, automation attribution, and inheritance data. Publish a new generation only after host re-encoding and validation; create private repair files. Publication never overwrites existing logs and fails safely if hard links are unavailable.
+
+### UI, localization, and compatibility
+
+- Align selection, checkboxes, focus, warnings, updates, and highlights with official theme tokens; refine date controls, diagnostic cards, stars, and action icons.
+- Complete Chinese/English diagnosis, preview, update, and error messages. Language changes no longer cause extra detail reads; fix copy-error and empty-state text.
+- Refresh Archived/Unarchived screenshots and both READMEs, including filter, undo, repair, and search boundaries.
+- Retain support for DSH 0.1.0-rc.8, 0.1.1-rc.2, 0.1.2-rc.1, 0.1.5-rc.1, 0.1.5-rc.2, 0.1.6-alpha.1, and 0.1.6-alpha.2. Coexist with Codex UI; no new sidebar pinning or favorites features are introduced.
+- searchSessionContent is the canonical API for both archive states. Keep searchArchivedContent as the archived-only compatibility entry for older hosts/clients; do not dispatch duplicate searches.
+
+### Limits and validation
+
+- Content search and turn counts have no persistent index. Read at most 20 sessions per batch, sequentially. Narrow filters for large or long logs; no scale or latency guarantee is established. In-flight batches cannot be interrupted; cancellation prevents subsequent batches and stale results.
+- Queries accept up to 200 characters. Search excludes tools, attachments, reasoning, system messages, and plugin injections. Preview limits each message to 2,000 UTF-16 code units without splitting Unicode characters; open the native conversation for full content.
+- No scheduled background archiving. Favorite protection applies only to idle cleanup. Reopen management to see favorites changed elsewhere; closing or refreshing clears undo history.
+- Repair is not a general recovery tool: missing files, permissions, and unsupported corruption receive advice, never forced deletion or truncation. Permanent deletion is irreversible. Task summaries and Markdown export are not added.
+- The functional candidate passed local regressions, isolated supported-host matrices, and real DSH 0.1.6-alpha.2 browser smoke tests covering search, preview, favorites, batches, diagnosis, and repair. Real model submission, streaming, tool approvals, and unknown host versions are outside this validation claim.
+- The host Settings shell still has an extremely narrow-screen obstruction; full mobile layout support is not claimed.
 
 ## 0.1.44 - 2026-09-18
 

@@ -1,2 +1,3 @@
-README 顶部使用 assets/branding/dsh-banner.png 全宽展示。
-仓库标识仍保留 assets/icon.png，供插件图标和其它入口复用。
+中文 README 使用 dsh-banner.png，英文 README 使用 dsh-banner-en.png，全宽展示。
+两张横幅均为 1.0.0 版本，尺寸 2172×724，通过 custom API 生成并经用户确认。
+仓库标识仍保留 assets/icon.png，供插件图标和其他入口复用。

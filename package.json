@@ -1,6 +1,6 @@
 {
   "name": "@michengai/dsh-archive-manager",
-  "version": "0.1.44",
+  "version": "1.0.0",
   "description": "NPM-installable DSH Web plugin for managing archived sessions.",
   "type": "module",
   "packageManager": "pnpm@11.22.0",
@@ -23,7 +23,8 @@
     "README.zh-CN.md",
     "LICENSE",
     "CHANGELOG.md",
-    "CHANGELOG.zh-CN.md"
+    "CHANGELOG.zh-CN.md",
+    "RELEASE_NOTES.md"
   ],
   "scripts": {
     "build": "node scripts/build.mjs && node scripts/check-package.mjs",
