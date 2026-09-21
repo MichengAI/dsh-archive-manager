@@ -1,6 +1,6 @@
 {
   "name": "@michengai/dsh-archive-manager",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "NPM-installable DSH Web plugin for managing archived sessions.",
   "type": "module",
   "packageManager": "pnpm@11.22.0",
@@ -23,15 +23,14 @@
     "README.zh-CN.md",
     "LICENSE",
     "CHANGELOG.md",
-    "CHANGELOG.zh-CN.md",
-    "RELEASE_NOTES.md"
+    "CHANGELOG.zh-CN.md"
   ],
   "scripts": {
     "build": "pnpm typecheck && node scripts/build.mjs && node scripts/check-package.mjs",
     "test": "pnpm build && node --import tsx --test test/*.test.mjs",
     "test:matrix": "pnpm build && node scripts/test-version-matrix.mjs",
     "test:latest": "pnpm build && node scripts/test-latest-compatibility.mjs",
-    "test:compat": "node scripts/test-legacy-compatibility.mjs && pnpm test:matrix",
+    "test:compat": "pnpm build && node scripts/test-legacy-compatibility.mjs && pnpm test:matrix",
     "pack:check": "pnpm pack --dry-run",
     "verify": "pnpm test && pnpm test:compat && pnpm pack:check && node scripts/check-generated.mjs",
     "release:preflight": "pwsh -NoProfile -File scripts/release-preflight.ps1",

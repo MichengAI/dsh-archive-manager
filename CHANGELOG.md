@@ -6,6 +6,13 @@ Published release notes are retained below; new versions are added without remov
 
 ## Unreleased
 
+## 1.0.1 - 2026-09-21
+
+- Migrate source code to strict TypeScript. Generated `lib` files are no longer tracked by Git and are rebuilt by `prepack`; published JavaScript entry points and runtime modules remain unchanged.
+- Restore callable snapshot guards at the host navigation boundary and preserve previous turn-count semantics for malformed log payloads, skipping non-object events.
+- Crop the personal filename strip from both screenshots, ship smaller WebP assets and DSH support badges, and remove the unused menu screenshot.
+- Check all 11 runtime modules before packaging and build before standalone compatibility tests. Release notes are generated from the bilingual changelogs for GitHub Releases; the stale standalone notes file is no longer included in npm packages.
+
 ## 1.0.0 - 2026-09-21
 
 The first 1.0 release expands session organization, search, previews, and targeted repair since 0.1.44. The package name and existing data remain unchanged; no session migration is required. Existing archive, restore, permanent deletion, and native conversation navigation remain available.

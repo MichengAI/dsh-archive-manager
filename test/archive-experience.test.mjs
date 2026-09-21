@@ -2,6 +2,23 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { openArchivedConversation, allowArchivedNavigation, ArchiveNavigationError, formatArchiveNavigationError, currentSessionId, sessionIsCurrent } from "../src/archive-experience.ts";
 
+test("保留信息边界容忍原始值与不可调用的快照字段", () => {
+  for (const source of [{ getSnapshot: 42 }, "raw", null, undefined, {}]) {
+    const sessions = { list: { getSnapshot: () => ({}) }, retainInfo: () => source };
+    assert.equal(sessionIsCurrent({}, "old", sessions), false);
+    let cleared = 0;
+    const navigation = { clearArchivedCurrent() { cleared++; return true; }, openSession() { navigation.clearArchivedCurrent(); } };
+    const guard = allowArchivedNavigation(navigation, sessions, { list: { getSnapshot: () => ({ archivedSessionIds: ["old"] }) } }, { warn() {} });
+    assert.throws(() => guard.open("old"), { code: "sessionNotRetained" });
+    assert.equal(navigation.clearArchivedCurrent(), true);
+    assert.equal(cleared, 2);
+    guard.dispose();
+  }
+  for (const source of [{ retainedBy: { mainView: 1 } }, { getSnapshot() { return { retainedBy: { mainView: 1 } }; } }]) {
+    assert.equal(sessionIsCurrent({}, "old", { retainInfo: () => source }), true);
+  }
+});
+
 test("继续对话不恢复；恢复并打开必须等持久化成功，失败不导航", async () => {
   const calls = [];
   const actions = {

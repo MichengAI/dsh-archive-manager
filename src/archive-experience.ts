@@ -4,7 +4,7 @@ import type { ArchiveState, SessionList, Snapshot, Translate } from "./contracts
 interface RetainInfo { retainedBy?: { mainView?: number } }
 export interface SessionNavigationSource {
   list: Snapshot<SessionList>;
-  retainInfo?(id: string): RetainInfo | Snapshot<RetainInfo> | undefined;
+  retainInfo?(id: string): unknown;
   retain?: unknown;
   open?(id: string): unknown;
 }
@@ -37,7 +37,13 @@ export function formatArchiveNavigationError(error: unknown, t: Translate) {
 function retainInfoSnapshot(sessions: SessionNavigationSource | undefined, id: string): RetainInfo | undefined {
   if (typeof sessions?.retainInfo !== "function") return;
   const source = sessions.retainInfo(id);
-  return source && "getSnapshot" in source ? source.getSnapshot() : source;
+  // 宿主边界不能只凭字段存在就调用；畸形保留信息应退化为非当前会话。
+  const value: unknown = source && typeof source === "object" && "getSnapshot" in source && typeof source.getSnapshot === "function"
+    ? source.getSnapshot() : source;
+  if (!value || typeof value !== "object" || !("retainedBy" in value)) return;
+  const retainedBy = value.retainedBy;
+  if (!retainedBy || typeof retainedBy !== "object" || !("mainView" in retainedBy) || typeof retainedBy.mainView !== "number") return;
+  return { retainedBy: { mainView: retainedBy.mainView } };
 }
 
 function mainViewSessionId(list: SessionList | undefined) {

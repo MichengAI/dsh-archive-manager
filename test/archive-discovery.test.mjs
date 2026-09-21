@@ -4,6 +4,22 @@ import { extractConversation, findContentMatch, previewConversation, matchesUpda
 const user = (seq, text) => ({ type: "user/message", seq, data: { role: "user", content: [{ type: "text", text }] } });
 const assistant = (seq, text) => ({ type: "assistant/message", seq, data: { message: { role: "assistant", content: [{ type: "text", text }] } } });
 
+test("轮次统计保留旧载荷选择语义并跳过非对象事件", async () => {
+  const { countConversationTurns } = await import("../src/archive-discovery.ts");
+  for (const [data, expected] of [
+    [{ message: "", source: { kind: "user" } }, 0],
+    [{ message: 0 }, 0],
+    [{ message: "s", source: { kind: "automation" } }, 1],
+    [{ message: null, source: { kind: "automation" } }, 0],
+    [{ message: { source: { kind: "user" } } }, 1],
+    [{ message: { source: { kind: "automation" } } }, 0],
+    [[], 1],
+    [{ message: [], source: { kind: "automation" } }, 1],
+    [{ source: [] }, 1],
+  ]) assert.equal(countConversationTurns([{ type: "user/message", data }]), expected);
+  assert.equal(countConversationTurns([null, undefined, 42, "raw", false, [], user(0, "正常消息")]), 1);
+});
+
 test("诊断候选保留缺摘要会话且去重，不改变现有摘要", () => {
   const a = { id: "a", updatedAt: 1 };
   assert.deepEqual(sessionDetailCandidates(["a", "missing", "a"], { a }), [a, { id: "missing" }]);

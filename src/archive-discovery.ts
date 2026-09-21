@@ -58,12 +58,15 @@ export const detailsResultSchema = { parse(input: unknown) {
 /** 一条用户提交算一轮，包括图片消息；助手工具步骤及插件注入不计入。 */
 export function countConversationTurns(events: readonly unknown[]) {
   if (!Array.isArray(events)) throw new TypeError("会话日志无效");
-  return events.map(record).filter(event => {
-    if (event.type !== "user/message") return false;
-    const data = event.data && typeof event.data === "object" ? record(event.data) : {};
-    const message = data.message && typeof data.message === "object" ? record(data.message) : data;
-    const source = message.source && typeof message.source === "object" ? record(message.source) : {};
-    return Boolean(event.data) && (!source.kind || source.kind === "user");
+  return events.filter(value => {
+    if (!value || typeof value !== "object" || !("type" in value) || value.type !== "user/message") return false;
+    const data = "data" in value ? value.data : undefined;
+    // 保留旧日志的空值回退与真假值语义：空字符串/零不计数，非空原始载荷计数。
+    const message = (data && typeof data === "object" && "message" in data ? data.message : undefined) ?? data;
+    if (!message) return false;
+    const source = typeof message === "object" && "source" in message ? message.source : undefined;
+    const kind = source && typeof source === "object" && "kind" in source ? source.kind : undefined;
+    return !kind || kind === "user";
   }).length;
 }
 /** 未知轮次始终排在已知值之后，避免读取失败被误当作零轮。 */
