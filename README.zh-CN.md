@@ -8,12 +8,13 @@
 
   **在 DeepSeek Harness 中安全管理已归档会话**
 
-  [English](README.md) · [更新日志](CHANGELOG.zh-CN.md) · [1.0.0 发行说明](RELEASE_NOTES.md) · [Apache-2.0](LICENSE)
+  [English](README.md) · [更新日志](CHANGELOG.zh-CN.md) · [Apache-2.0](LICENSE)
 
   [![许可证：Apache-2.0](https://img.shields.io/badge/许可证-Apache--2.0-blue.svg)](LICENSE)
   [![npm package](https://img.shields.io/npm/v/%40michengai%2Fdsh-archive-manager.svg?label=npm%20package)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
   [![npm 下载量](https://img.shields.io/npm/dt/%40michengai%2Fdsh-archive-manager.svg?label=npm%20%E4%B8%8B%E8%BD%BD%E9%87%8F)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
   [![DSH Web Plugin](https://img.shields.io/badge/DSH%20Web-Plugin-0f766e.svg)](https://github.com/MichengAI/dsh-archive-manager)
+  [![DSH 支持至 0.1.6-alpha.2](https://img.shields.io/badge/DSH-%E6%94%AF%E6%8C%81%E8%87%B3%200.1.6--alpha.2-2563eb.svg)](#前置条件)
 </div>
 
 > DSH Archive Manager 是社区维护的 DeepSeek Harness（DSH）插件，并非 DeepSeek AI 官方产品。
@@ -29,7 +30,7 @@
 - **整理重要会话**：收藏常用聊天，预览闲置归档候选，保护收藏与活跃任务。
 - **查看与排障**：不恢复即可快速预览，复制会话 ID／路径，诊断异常并定向修复支持的旧日志。
 
-> 本文对应 1.0.0 版本，完整功能清单与升级边界见发行说明。
+> 本文对应 1.0.0 版本，完整功能清单与升级边界见[更新日志](CHANGELOG.zh-CN.md)。
 
 ## 异常会话诊断与修复
 

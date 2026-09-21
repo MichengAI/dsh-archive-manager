@@ -8,12 +8,13 @@
 
   **Safely manage archived sessions in DeepSeek Harness**
 
-  [简体中文](README.zh-CN.md) · [Changelog](CHANGELOG.md) · [1.0.0 release notes](RELEASE_NOTES.md) · [Apache-2.0](LICENSE)
+  [简体中文](README.zh-CN.md) · [Changelog](CHANGELOG.md) · [Apache-2.0](LICENSE)
 
   [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
   [![npm package](https://img.shields.io/npm/v/%40michengai%2Fdsh-archive-manager.svg?label=npm%20package)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
   [![npm downloads](https://img.shields.io/npm/dt/%40michengai%2Fdsh-archive-manager.svg?label=npm%20downloads)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
   [![DSH Web Plugin](https://img.shields.io/badge/DSH%20Web-Plugin-0f766e.svg)](https://github.com/MichengAI/dsh-archive-manager)
+  [![DSH supported through 0.1.6-alpha.2](https://img.shields.io/badge/DSH-up%20to%200.1.6--alpha.2-2563eb.svg)](#prerequisites)
 </div>
 
 > DSH Archive Manager is a community-maintained DeepSeek Harness (DSH) plugin, not an official DeepSeek AI product.
@@ -29,7 +30,7 @@ Put inactive conversations away and find them again when needed, keeping everyda
 - **Organize important chats**: save favorites and preview idle cleanup while protecting favorites and active work.
 - **Inspect and troubleshoot**: preview without restoring, copy IDs/paths, diagnose errors, and repair supported legacy logs.
 
-> This README describes 1.0.0. See the release notes for the complete feature list and upgrade boundaries.
+> This README describes 1.0.0. See the [changelog](CHANGELOG.md) for the complete feature list and upgrade boundaries.
 
 ## Session diagnosis and repair
 
