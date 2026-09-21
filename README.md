@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/branding/dsh-banner-en.png" alt="DSH Archive Manager" width="100%">
+  <img src="assets/branding/dsh-banner-en.webp" alt="DSH Archive Manager" width="100%">
 </p>
 
 <div align="center">
@@ -55,11 +55,11 @@ The archive page collects read failures, including archived IDs with missing sum
 
 Search, favorite, preview, restore, and clean up in **Settings → Archived sessions → Archived**:
 
-![Archived: shared search filters, favorites, and restore](assets/screenshots/archived-sessions.png)
+![Archived: shared search filters, favorites, and restore](assets/screenshots/archived-sessions.webp)
 
 Switch to **Unarchived** for the same filters, idle cleanup previews, and project-wide archiving:
 
-![Unarchived: idle cleanup and project archiving](assets/screenshots/unarchived-sessions.png)
+![Unarchived: idle cleanup and project archiving](assets/screenshots/unarchived-sessions.webp)
 
 > Screenshots show the pre-release development build labeled 0.1.44; this release is 1.0.0. The sidebar belongs to the installed UI plugin and does not represent new sidebar features in this release.
 

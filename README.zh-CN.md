@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/branding/dsh-banner.png" alt="DSH Archive Manager" width="100%">
+  <img src="assets/branding/dsh-banner.webp" alt="DSH Archive Manager" width="100%">
 </p>
 
 <div align="center">
@@ -59,11 +59,11 @@
 
 在「设置 → 归档会话 → 已归档」检索、收藏、预览、恢复和清理：
 
-![已归档会话：统一检索筛选、收藏与恢复](assets/screenshots/archived-sessions.png)
+![已归档会话：统一检索筛选、收藏与恢复](assets/screenshots/archived-sessions.webp)
 
 切换到「未归档」，使用相同筛选条件整理会话，预览闲置归档或按项目批量归档：
 
-![未归档会话：闲置整理与项目归档](assets/screenshots/unarchived-sessions.png)
+![未归档会话：闲置整理与项目归档](assets/screenshots/unarchived-sessions.webp)
 
 > 截图来自发布前开发版，界面中版本标识为 0.1.44；本次发行版本为 1.0.0。侧栏由当前安装的 UI 插件提供，不代表本插件新增的侧栏功能。
 
