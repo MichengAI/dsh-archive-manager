@@ -1,11 +1,9 @@
 ## 中文说明
 
-- 修复会话数据异常时的导航报错和轮次统计问题。
-- 移除文档截图中的个人信息，缩小安装包体积。
+- 修复 Windows 短路径和扩展路径导致旧会话修复被误拦截的问题，保留目录链接安全防护。
 
 ---
 
 ## English
 
-- Fix navigation errors and incorrect turn counts when session data is malformed.
-- Remove personal information from documentation screenshots and reduce package size.
+- Fix legacy session repair incorrectly rejecting Windows short and extended paths while retaining protection against directory links.

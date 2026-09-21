@@ -3,8 +3,8 @@ import type { SessionHeader, SessionEvent, SessionLogOffset } from "@deepseek-ai
 export interface RepairArtifact { header: SessionHeader; events: SessionEvent[]; inheritedEventCount: SessionLogOffset }
 export interface RepairFormat { currentVersion: number; createRestore(header: unknown): { decodeRow(row: unknown): void; finish(): RepairArtifact }; encodeHeader(header: SessionHeader, inheritedEventCount: SessionLogOffset): unknown; encodeEvent(event: SessionEvent): unknown; validate?(artifact: RepairArtifact): unknown; validateBytes?(bytes: Buffer): unknown }
 import { createHash, randomUUID } from 'node:crypto';
-import { lstat, readFile, readdir, open, link, unlink, realpath, rename } from 'node:fs/promises';
-import { join, resolve, basename } from 'node:path';
+import { lstat, readFile, readdir, open, link, unlink, rename } from 'node:fs/promises';
+import { join, resolve, basename, dirname } from 'node:path';
 import * as zlib from 'node:zlib';
 export { classifySessionError } from './archive-discovery.js';
 const LIMIT = 32 * 1024 * 1024;
@@ -60,10 +60,23 @@ async function regularFile(path: string) {
   const stat = await lstat(path);
   if (!stat.isFile() || stat.isSymbolicLink() || stat.size > LIMIT) throw new Error('工件不是可安全处理的常规日志文件');
 }
+/** Windows 短路径和扩展路径也是合法目录别名；逐级检查链接，避免以路径文本差异误判。 */
+async function regularDirectory(directory: string) {
+  let current = resolve(directory);
+  while (true) {
+    const parent = dirname(current);
+    // 根路径不是目录链接；Windows 扩展盘符根路径不能交给 lstat。
+    if (parent === current) return;
+    const stat = await lstat(current);
+    if (stat.isSymbolicLink()) throw new Error('会话目录存在链接重定向，需人工处理');
+    if (!stat.isDirectory()) throw new Error('会话路径不是常规目录，需人工处理');
+    current = parent;
+  }
+}
 /** 保留旧代际，只生成经宿主转换器校验的新代际；仅允许纠正内容完全匹配的旧版单帧错误产物。 */
 export async function prepareAutomationRepair({ directory, target, sessionId, format }: { directory: string; target: string; sessionId: string; format: RepairFormat }) {
   if (!format || format.currentVersion !== 3 || typeof format.createRestore !== 'function') throw new Error('当前宿主不支持此修复，请升级 DSH 后重试');
-  if (resolve(await realpath(directory)).toLowerCase() !== resolve(directory).toLowerCase()) throw new Error('会话目录存在链接重定向，需人工处理');
+  await regularDirectory(directory);
   const names = (await readdir(directory)).filter(name => /^session(?:\.v[1-9][0-9]*)?\.jsonl(?:\.zstd)?$/.test(name));
   const sources = names.filter(name => /^session\.jsonl(?:\.zstd)?$/.test(name));
   if (sources.length !== 1 || names.some(name => name !== sources[0] && name !== basename(target))) throw new Error('发现多个或非旧版日志工件，请先检查代际状态');

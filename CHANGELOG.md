@@ -6,6 +6,10 @@ Published release notes are retained below; new versions are added without remov
 
 ## Unreleased
 
+## 1.0.2 - 2026-09-21
+
+- Fix legacy session repair incorrectly rejecting Windows short and extended paths while retaining protection against directory links.
+
 ## 1.0.1 - 2026-09-21
 
 - Fix navigation errors and incorrect turn counts when session data is malformed.

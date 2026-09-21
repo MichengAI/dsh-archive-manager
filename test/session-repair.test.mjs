@@ -21,9 +21,10 @@ test("仅转换已知自动化消息来源，保留正文和归属且不修改�
   assert.equal(classifySessionError("cannot safely transform unclassified message source").code, "legacy-source");
   assert.equal(classifySessionError("ENOENT").code, "missing");
 });
-import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
+import { mkdtemp, writeFile, readFile, rm, mkdir, symlink, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, toNamespacedPath } from "node:path";
+import { execFileSync } from "node:child_process";
 import { prepareAutomationRepair } from "../src/session-repair.ts";
 const fakeFormat = {
   currentVersion: 3,
@@ -34,6 +35,55 @@ const fakeFormat = {
   encodeHeader: (header, inheritedEventCount) => ({ ...header, inheritedEventCount }),
   encodeEvent: (event) => event
 };
+
+async function writeRepairSource(directory) {
+  const rows = [
+    { type: "session", version: 0, id: "a" },
+    { type: "user/message", data: { source: { kind: "automation", automationId: "a", runId: "r", scheduledFor: "2026-09-01T00:00:00Z" } } }
+  ];
+  await writeFile(join(directory, "session.jsonl"), rows.map(JSON.stringify).join("\n") + "\n", "utf8");
+}
+
+for (const kind of ["扩展路径", "短路径"]) {
+  test(`Windows ${kind}指向常规目录时允许修复`, { skip: process.platform !== "win32" }, async (t) => {
+    const directory = await mkdtemp(join(await realpath(tmpdir()), "archive-repair-long-directory-"));
+    try {
+      await writeRepairSource(directory);
+      const alias = kind === "扩展路径" ? toNamespacedPath(directory) : execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
+        '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; $fsObject = New-Object -ComObject Scripting.FileSystemObject; $fsObject.GetFolder($env:REPAIR_TEST_DIRECTORY).ShortPath'
+      ], { encoding: "utf8", env: { ...process.env, REPAIR_TEST_DIRECTORY: directory } }).trim();
+      if (kind === "短路径" && alias.toLowerCase() === directory.toLowerCase()) {
+        t.skip("当前卷未提供短路径别名");
+        return;
+      }
+      const target = join(alias, "session.v3.jsonl");
+      const plan = await prepareAutomationRepair({ directory: alias, target, sessionId: "a", format: fakeFormat });
+      await plan.publish(plan.token, async () => {});
+      assert.match(await readFile(target, "utf8"), /dsh-automation/);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+}
+
+test("会话目录及祖先目录的真实链接仍然拒绝修复", async () => {
+  const root = await mkdtemp(join(await realpath(tmpdir()), "archive-repair-links-"));
+  try {
+    const directory = join(root, "real", "session");
+    await mkdir(directory, { recursive: true });
+    await writeRepairSource(directory);
+    const direct = join(root, "direct"), parent = join(root, "parent");
+    const type = process.platform === "win32" ? "junction" : "dir";
+    await symlink(directory, direct, type);
+    await symlink(join(root, "real"), parent, type);
+    for (const alias of [direct, join(parent, "session")]) {
+      await assert.rejects(prepareAutomationRepair({ directory: alias, target: join(alias, "session.v3.jsonl"), sessionId: "a", format: fakeFormat }), /链接重定向/);
+    }
+    assert.deepEqual(await (await import("node:fs/promises")).readdir(directory), ["session.jsonl"]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 test("修复令牌绑定原文件，原文件保留且禁止覆盖已有代际", async () => {
   const directory = await mkdtemp(join(tmpdir(), "archive-repair-test-"));
   try {
