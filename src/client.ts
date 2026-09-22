@@ -3608,8 +3608,7 @@ window.__ModuleLoader__.load({
 			const items = onArchive ? [{
 				id: "archive",
 				label: t(ungrouped ? "archives.archiveUngrouped" : "archives.archiveProject"),
-				icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconArchiveOutline20, { size: 16 }),
-				danger: true
+				icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconArchiveOutline20, { size: 16 })
 			}] : [{
 				id: "restore",
 				label: t(ungrouped ? "archives.restoreUngrouped" : "archives.restoreProject"),
@@ -3620,6 +3619,7 @@ window.__ModuleLoader__.load({
 				icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconTrashOutline16, {}),
 				danger: true
 			}];
+			const menuLabel = t(ungrouped ? "archives.ungroupedActions" : "archives.projectActions", { name: group.title });
 			return (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Menu, {
 				open,
 				onClose: () => setOpen(false),
@@ -3632,11 +3632,16 @@ window.__ModuleLoader__.load({
 					else if (id === "delete") onDelete?.();
 				},
 				portal: true,
+				align: "end",
+				autoFocus: true,
 				anchor: settingsButton({
 					variant: "ghost",
 					className: "dsham_settingsGroupMenu",
 					disabled: busy,
-					"aria-label": t(ungrouped ? "archives.ungroupedActions" : "archives.projectActions", { name: group.title }),
+					title: menuLabel,
+					"aria-label": menuLabel,
+					"aria-haspopup": "menu",
+					"aria-expanded": open,
 					onClick: () => setOpen((current) => !current),
 					icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconEllipsisOutline16, {})
 				})
