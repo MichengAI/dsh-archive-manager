@@ -597,7 +597,10 @@ for (const version of [0, 3])
 		const cacheReads = [];
 		const reads = [];
 		const puts = [];
-		env.projCache.cachedSnapshot = (meta, inheritedEventCount) => {
+		// 真实宿主 0.1.2～0.1.6 的签名是 (meta, inheritedEventCount, keys?)：替身必须
+		// 保持同一形状，否则按形参个数区分代际的探测会把它误判成 0.1.7 的投影键形态。
+		env.projCache.cachedSnapshot = (meta, inheritedEventCount, keys) => {
+			void keys;
 			cacheReads.push({ id: meta.id, inheritedEventCount });
 			const record = records.get(meta.id);
 			return record !== void 0 &&

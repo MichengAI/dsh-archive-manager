@@ -11,6 +11,7 @@ Published release notes are retained below; new versions are added without remov
 - Archiving a running session asks before stopping its work. A recorded pin is cleared in the same archive.
 - Legacy automation repair follows the host's current session generation, including fourth-generation logs.
 - Settings controls use the host's buttons, inputs, tabs, and disclosures where those controls exist. Hosts without the segmented tabs supply the same control locally. Sort, project filter, and the half-selected checkbox stay as they are.
+- Archive tabs dim and ignore input while a batch is running. The search field keeps a single border. Older hosts no longer warn about unlabeled button icons.
 
 ## 1.0.2 - 2026-09-21
 

@@ -370,7 +370,12 @@ async function activeSessionErrorType() {
 	return activeSessionError ?? undefined;
 }
 function snapshotUsesProjectionKeys(cache: { cachedSnapshot: (...args: never[]) => unknown }) {
-	return Function.prototype.toString.call(cache.cachedSnapshot).includes("lifecycleIdentityOf");
+	// 只能按形参个数判定：cordis 经 ctx.get 取服务方法时会包成只有 apply 陷阱的
+	// shadow method，Function.prototype.toString 只剩 [native code]，正文探测在真实宿主
+	// 恒为 false（已实测）。宿主历史形状：0.1.0/0.1.1 为 (meta)=1；0.1.2～0.1.6 为
+	// (meta, inheritedEventCount, keys)=3；0.1.7 起为 (meta, keys)=2。形参个数穿过
+	// 包装层且不受压缩影响；非 2 的一侧传继承切点即可——1 参宿主会忽略多余实参。
+	return cache.cachedSnapshot.length === 2;
 }
 function projectionSnapshot(cache: { cachedSnapshot(header: Header, inheritedOrKeys?: number | readonly string[]): unknown }, header: Header, inheritedEventCount: number) {
 	// 0.1.7 用生命周期身份匹配，第二参数是要查看的投影键；更早宿主用继承切点。

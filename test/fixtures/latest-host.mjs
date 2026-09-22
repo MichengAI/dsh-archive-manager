@@ -382,8 +382,22 @@ for (const { previousCache, seeded } of ["缺失", "无版本", "旧代际"].fla
 				rows: { title: { ver: 1, seq: event.seq, val: "旧代际标题" } },
 			});
 		}
-		const usesProjectionKeys = Function.prototype.toString.call(cache.cachedSnapshot).includes("lifecycleIdentityOf");
+		// 插件经 ctx.get 取服务方法，cordis 会把它包成只有 apply 陷阱的 shadow method：
+		// Function.prototype.toString 只留 [native code]，正文探测在真实宿主恒为 false。
+		// 夹具必须走插件同一条取用路径按形参个数判定，否则两条分支互相掩盖。
+		const cacheService = env.ctx.get("sessionProjectionCache");
+		const usesProjectionKeys = cacheService.cachedSnapshot.length === 2;
 		const snapshot = (header, count) => usesProjectionKeys ? cache.cachedSnapshot(header) : cache.cachedSnapshot(header, count);
+		// 回归护栏：插件必须按宿主签名形态读取缓存，不能被包装层悄悄切成另一分支。
+		// 包装必须保留宿主原形参个数，否则探针会被自己的替身带偏。
+		const cachedSnapshotArgCounts = [];
+		const rawCachedSnapshot = cache.cachedSnapshot.bind(cache);
+		const cachedSnapshotSpy = function (...args) {
+			cachedSnapshotArgCounts.push(args.length);
+			return rawCachedSnapshot(...args);
+		};
+		Object.defineProperty(cachedSnapshotSpy, "length", { value: cache.cachedSnapshot.length });
+		cache.cachedSnapshot = cachedSnapshotSpy;
 		assert.equal(
 			snapshot(session.header, inheritedEventCount),
 			void 0,
@@ -417,6 +431,11 @@ for (const { previousCache, seeded } of ["缺失", "无版本", "旧代际"].fla
 			);
 		const second = await env.registry.archivedSessionMetadata();
 		assert.equal(second.repairedSessionIds, void 0);
+		assert.ok(
+			cachedSnapshotArgCounts.length > 0
+			&& cachedSnapshotArgCounts.every((argCount) => argCount === (usesProjectionKeys ? 1 : 2)),
+			`插件读取缓存的调用形态必须与宿主签名一致，实际：${cachedSnapshotArgCounts.join(",")}`,
+		);
 		assert.equal(
 			reads,
 			seeded ? 2 : 1,
