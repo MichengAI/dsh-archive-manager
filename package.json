@@ -99,6 +99,8 @@
     "@types/node": "^22.20.4",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.0.0",
+    "antd": "6.6.5",
+    "dayjs": "1.11.23",
     "esbuild": "0.25.0",
     "immer": "10.1.1",
     "react": "18.3.1",

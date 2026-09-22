@@ -10,7 +10,7 @@ Published release notes are retained below; new versions are added without remov
 - Keep the official session list when it provides a menu slot, and add Delete session there. Older hosts still use this plugin's session list.
 - Archiving a running session asks before stopping its work. A recorded pin is cleared in the same archive.
 - Legacy automation repair follows the host's current session generation, including fourth-generation logs.
-- Settings controls use the host's buttons, inputs, tabs, and disclosures where those controls exist. Hosts without the segmented tabs supply the same control locally. Sort, project, search scope, and favorites stay as dropdowns, and the half-selected checkbox stays as it is.
+- Settings controls use Ant Design for buttons, inputs, tabs, dropdowns, menus, checkboxes, and dialogs. Sort, project, search scope, and favorites are selects. The half-selected checkbox uses the same checkbox.
 - Archive tabs dim and ignore input while a batch is running. The search field keeps a single border. Older hosts no longer warn about unlabeled button icons.
 - The settings page asks before stopping a running session, instead of sending the user to the sidebar. Session repair passes the parent session's direct child evidence into the format catalog.
 

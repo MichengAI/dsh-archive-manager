@@ -1,7 +1,7 @@
 // 统一从 src 生成可发布的 lib，避免运行产物成为手工维护入口。
 // 先在同级暂存目录完成构建，成功后再替换，避免失败时破坏可安装产物。
 import { randomUUID } from "node:crypto";
-import { access, rename, rm } from "node:fs/promises";
+import { access, rename, rm, writeFile } from "node:fs/promises";
 import { build } from "esbuild";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,14 +34,36 @@ try {
 		target: "node20"
 	});
 
-	await build({
+	const clientBundle = await build({
 		entryPoints: [join(sourceDirectory, "client.ts")],
-		outfile: join(stagingDirectory, "client.js"),
 		bundle: true,
-		format: "iife",
+		format: "cjs",
 		platform: "browser",
-		target: "es2022"
+		target: "es2022",
+		write: false,
+		define: { "process.env.NODE_ENV": "\"production\"" },
+		alias: {
+			react: join(sourceDirectory, "host-react-shim.ts"),
+			"react/jsx-runtime": join(sourceDirectory, "host-jsx-shim.ts"),
+			"react-dom": join(sourceDirectory, "host-react-dom-shim.ts"),
+			"react-dom/client": join(sourceDirectory, "host-react-dom-shim.ts")
+		}
 	});
+	const clientSource = clientBundle.outputFiles[0].text;
+	await writeFile(join(stagingDirectory, "client.js"), `window.__ModuleLoader__.load({
+  id: "@michengai/dsh-archive-manager",
+  factory: function(require) {
+    globalThis.__dshArchiveReact = require("react");
+    globalThis.__dshArchiveJsx = require("react/jsx-runtime");
+    globalThis.__dshArchiveReactDOM = require("react-dom");
+    globalThis.__dshArchiveReactDOMClient = require("react-dom/client");
+    var module = { exports: {} };
+    var exports = module.exports;
+    ${clientSource}
+    return module.exports.startArchiveClient(require);
+  }
+});
+`);
 
 	if (process.env.DSH_ARCHIVE_MANAGER_TEST_FAIL_BEFORE_PUBLISH === "1") {
 		throw new Error("测试：在发布构建产物前中断");

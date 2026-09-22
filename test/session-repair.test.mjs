@@ -156,7 +156,7 @@ test("异常默认折叠，先诊断再确认修复，修复后刷新详情", as
   const flat = (n) => !n || typeof n !== "object" ? [] : [n, ...(n.children ?? []).flat(Infinity).flatMap(flat)];
   let tree = render();
   assert.ok(flat(tree).filter((n) => n.type === "details").every((n) => !n.props.open));
-  const button = (tree2, label) => flat(tree2).find((n) => n.type === "button" && n.children.includes(label));
+  const button = (tree2, label) => flat(tree2).find((n) => (n.children ?? []).flat(Infinity).includes(label));
   assert.equal(button(tree, "确认修复"), void 0);
   await button(tree, "诊断会话").props.onClick();
   tree = render();

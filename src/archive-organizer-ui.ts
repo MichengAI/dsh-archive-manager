@@ -1,33 +1,28 @@
 import type { Translate, BatchProgress, BatchResult, OrganizeKind } from "./contracts.js";
-import type { HostControls } from "./host-controls.js";
+import { Button, Disclosure, InputNumber } from "./antd-ui.js";
 interface OrganizerPanelProps {
  t: Translate; archived: boolean; busy: boolean; ready: boolean; days: string | number; onDays(value: string): void;
  count: number; onPreview(): void; progress?: BatchProgress | null; result?: (BatchResult & { kind?: OrganizeKind }) | null;
  onRetry(): void; undoCount: number; onUndo(): void; onReload(): void;
 }
 /** 整理控件沿用归档页按钮与颜色，避免复制完整设置页。 */
-export function createOrganizerPanel(React: typeof import("react"), controls: HostControls = {}) {
+export function createOrganizerPanel(React: typeof import("react")) {
   const h = React.createElement;
   function textButton(label: string, props: { disabled?: boolean; onClick(): void }) {
-    const Button = controls.Button;
-    if (Button) return h(Button, { type: "button", variant: "outline", size: "sm", ...props }, label);
-    return h("button", { type: "button", className: "dsham_settingsAction", ...props }, label);
+    return h(Button, { shape: "round", ...props }, label);
   }
   function FailureDetails({ title, failures, separator }: { title: string; failures: { sessionId: string; message: string }[]; separator: string }) {
     const [open, setOpen] = React.useState(false);
     const list = h("ul", null, failures.map(failure => h("li", { key: failure.sessionId }, failure.sessionId, separator, failure.message)));
-    const Row = controls.DisclosureRow;
-    if (!Row) return h("details", null, h("summary", null, title), list);
-    return h(Row, { icon: h("span", { "aria-hidden": true }), title, open, expandable: true, onToggle: () => setOpen(value => !value) }, list);
+    return h(Disclosure, { title, open, onToggle: () => setOpen(value => !value) }, list);
   }
   return function OrganizerPanel({ t, archived, busy, ready, days, onDays, count, onPreview, progress, result, onRetry, undoCount, onUndo, onReload }: OrganizerPanelProps) {
-    const daysField = { type: "number" as const, min: 1, max: 36500, step: 1, value: days, disabled: busy, onChange: (event: { currentTarget: { value: string } }) => onDays(event.currentTarget.value), "aria-label": t("organizer.idleDays") };
     return h(React.Fragment, null,
-      h("style", null, ".dsham_organizer,.dsham_batchFeedback{display:grid;gap:12px;margin:0 0 16px;padding:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px}.dsham_organizerControls{display:flex;align-items:center;flex-wrap:wrap;gap:10px}.dsham_organizer label{display:inline-flex;align-items:center;gap:8px}.dsham_organizer label>input[type=number]{width:72px;height:28px;padding:0 8px;color:inherit;background:transparent;border:0.5px solid var(--dsw-alias-border-l3);border-radius:14px;box-sizing:border-box;font:inherit;font-size:13px}.dsham_organizer .dsham_idleDays,.dsham_organizer .dsham_idleDays:focus-within{display:inline-flex;align-items:center;width:72px;height:28px;padding:0 8px;border:0.5px solid var(--dsw-alias-border-l3);border-radius:14px;background:transparent;box-shadow:none;box-sizing:border-box}.dsham_organizer .dsham_idleDays input{width:100%;height:auto;margin:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;color:inherit;font:inherit;font-size:13px;line-height:20px;text-align:center}.dsham_organizer p,.dsham_batchFeedback p{margin:0;font-size:12px;color:var(--dsw-alias-label-secondary)}.dsham_batchFeedback progress{width:100%}.dsham_batchFeedback details{font-size:12px;overflow-wrap:anywhere}.dsham_archivePreview{max-height:260px;overflow:auto;display:grid;gap:8px;padding:8px 0}.dsham_archivePreview label{display:flex;gap:8px;align-items:center;overflow-wrap:anywhere}"),
+      h("style", null, ".dsham_organizer,.dsham_batchFeedback{display:grid;gap:12px;margin:0 0 16px;padding:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px}.dsham_organizerControls{display:flex;align-items:center;flex-wrap:wrap;gap:10px}.dsham_organizer label{display:inline-flex;align-items:center;gap:8px}.dsham_organizer p,.dsham_batchFeedback p{margin:0;font-size:12px;color:var(--dsw-alias-label-secondary)}.dsham_batchFeedback progress{width:100%}.dsham_batchFeedback details{font-size:12px;overflow-wrap:anywhere}.dsham_archivePreview{max-height:260px;overflow:auto;display:grid;gap:8px;padding:8px 0}.dsham_archivePreview label{display:flex;gap:8px;align-items:center;overflow-wrap:anywhere}"),
       (!archived || !ready) && h("div", { className: "dsham_organizer" }, h("div", { className: "dsham_organizerControls" },
         !ready && textButton(t("organizer.reloadFavorites"), { disabled: busy, onClick: onReload }),
         !archived && h(React.Fragment, null,
-          h("label", null, t("organizer.idleDays"), controls.Input ? h(controls.Input, { className: "dsham_idleDays", ...daysField }) : h("input", daysField)),
+          h("label", null, t("organizer.idleDays"), h(InputNumber, { min: 1, max: 36500, value: Number(days) || 1, disabled: busy, "aria-label": t("organizer.idleDays"), onChange: value => onDays(String(value ?? "")) })),
           textButton(t("organizer.preview", { n: count }), { disabled: busy || !ready || count === 0, onClick: onPreview }))),
       !archived && h("p", null, t("organizer.rules"))),
       (progress || result || undoCount > 0) && h("section", { className: "dsham_batchFeedback", "aria-label": t("organizer.feedback") },

@@ -14,7 +14,8 @@ test("删除结果独立于闲置整理区域并保留失败重试", () => {
   const children = React.Children.toArray(tree.props.children);
   const feedback = children.find(child => child.props?.className === "dsham_batchFeedback");
   assert.ok(feedback, "操作结果应为独立区域");
-  const html = renderToStaticMarkup(feedback);
+  const text = (node) => node == null || typeof node === "boolean" ? "" : typeof node === "string" || typeof node === "number" ? String(node) : [node.props?.children].flat().map(text).join("");
+  const html = text(feedback);
   assert.match(html, /删除结果/);
   assert.match(html, /重试剩余/);
   assert.doesNotMatch(html, /闲置天数|预览闲置归档/);

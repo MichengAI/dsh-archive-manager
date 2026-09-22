@@ -4,7 +4,7 @@ import * as health from '../src/session-health-ui.ts';
 import { repairResultSchema, classifySessionError } from '../src/archive-discovery.ts';
 import { discoveryZh, discoveryEn } from '../src/archive-discovery-ui.ts';
 import { organizerZh, organizerEn } from '../src/archive-organizer-ui.ts';
-import { ZH, EN } from '../src/plugin-update-ui.ts';
+import { ZH, EN } from '../src/plugin-update-model.ts';
 
 test('错误分类优先稳定代码，未知宿主代码才回退文案', () => {
   assert.equal(classifySessionError({ code: 'EACCES', message: 'not found' }).code, 'permission');
@@ -38,7 +38,7 @@ test('英文诊断、修复及失败状态不泄露中文到主说明', async ()
   const render=()=>{cursor=0;return Panel(props);};
   const flat=n=>!n||typeof n!=='object'?[]:[n,...(n.children??[]).flat(Infinity).flatMap(flat)];
   const text=n=>typeof n==='string'?n:(n?.children??[]).flat(Infinity).map(text).join(' ');
-  const button=(tree,label)=>flat(tree).find(n=>n.type==='button'&&n.children.includes(label));
+  const button=(tree,label)=>flat(tree).find(n=>(n.children??[]).flat(Infinity).includes(label));
   let tree=render();assert.ok(button(tree,'Diagnose session'));
   await button(tree,'Diagnose session').props.onClick();tree=render();
   assert.match(text(flat(tree).find(n=>n.props.className==='dsham_healthState')), /2/);

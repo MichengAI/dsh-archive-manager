@@ -30,7 +30,7 @@ test("归档设置页保留筛选并移除重复的全量操作入口", async ()
 
   assert.match(client, /dsham_settingsToolbar/);
   assert.match(client, /placeholder: t\(contentEnabled \? "discovery\.searchPlaceholder"/);
-  assert.match(client, /className: "dsham_settingsFilter"/);
+  assert.match(client, /"dsham_settingsFilter"/);
   assert.match(client, /id: "dsham-sort-filter"/);
   assert.match(client, /value: "updated", label: t\("archives\.sortUpdated"\)/);
   assert.match(client, /value: "created", label: t\("archives\.sortCreated"\)/);
@@ -117,8 +117,7 @@ test("归档设置页下拉菜单不强制宿主主题", async () => {
   const client = await readFile(clientPath, "utf8");
 
   assert.doesNotMatch(client, /\.dsham_settingsFilter\{color-scheme:/);
-  assert.match(client, /\.dsham_selectMenu\{[^}]*background-color:var\(--dsw-alias-bg-layer-2\)/);
-  assert.match(client, /\.dsham_selectMenu\{[^}]*backdrop-filter:var\(--dsw-menu-backdrop-filter\)/);
+  assert.match(client, /AntdProvider/);
 });
 
 test("单条删除与批量删除分别调用宿主单会话和作用域接口", async () => {
@@ -163,13 +162,15 @@ test("删除文案中英键齐全，并统一使用子代理用语", async () =>
   assert.match(client, /showArchivedToast\(formatUnarchiveError/);
 });
 
-test("归档设置页使用自定义项目筛选菜单，而不是原生 select", async () => {
+test("归档设置页筛选使用 Ant Design 下拉，而不是原生 select", async () => {
   const client = await readFile(clientPath, "utf8");
 
   assert.match(client, /function ArchiveProjectSelect/);
-  assert.match(client, /className: "dsham_selectMenu"/);
-  assert.match(client, /role: "listbox"/);
-  assert.match(client, /dsham_selectOption\[aria-selected='true'\]/);
+  assert.match(client, /AntdSelect/);
+  assert.doesNotMatch(client, /className: "dsham_selectMenu"/);
+  assert.doesNotMatch(client, /\.dsham_selectMenu\{/);
+  assert.doesNotMatch(client, /\.dsham_selectOption/);
+  assert.doesNotMatch(client, /dsham_selectTrigger/);
   assert.doesNotMatch(client, /jsx\)\("select", \{ className: "dsham_settingsFilter"/);
 });
 

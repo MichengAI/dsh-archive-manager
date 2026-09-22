@@ -86,20 +86,18 @@ test("正文搜索切换后不发布旧命中，禁用后不继续请求", async
   env.dispose();
 });
 
-test("日期浮层点击内部保持展开，点击外部关闭，卸载移除监听", () => {
-  const listeners = new Map(); let cleanup;
-  const inside = {}, outside = {};
-  const root = { open: true, contains: target => target === inside, ownerDocument: {
-    addEventListener: (name, fn, capture) => listeners.set(name, { fn, capture }),
-    removeEventListener: (name, fn, capture) => { assert.equal(listeners.get(name).fn, fn); assert.equal(listeners.get(name).capture, capture); listeners.delete(name); }
-  } };
-  const React = { useRef: () => ({ current: root }), useEffect: fn => { cleanup = fn(); }, createElement: (type, props, ...children) => ({ type, props, children }) };
+test("日期范围写入开始和结束，清空时清除条件", () => {
+  const React = { createElement: (type, props, ...children) => ({ type, props, children }) };
   const { DiscoveryFilters } = createDiscoveryTools(React);
-  DiscoveryFilters({ t: key => key, from: "", to: "" });
-  assert.ok(listeners.has("pointerdown"), "日期浮层应监听外部指针操作");
-  listeners.get("pointerdown").fn({ target: inside }); assert.equal(root.open, true);
-  listeners.get("pointerdown").fn({ target: outside }); assert.equal(root.open, false);
-  cleanup(); assert.equal(listeners.size, 0);
+  const calls = [];
+  const tree = DiscoveryFilters({
+    t: key => key, from: "2026-01-02", to: "2026-01-09", invalid: false,
+    onFrom: value => calls.push(["from", value]), onTo: value => calls.push(["to", value]), onClear: () => calls.push(["clear"])
+  });
+  const picker = tree.children.find(node => node?.props?.onChange);
+  picker.props.onChange([ { format: () => "2026-02-01" }, { format: () => "2026-02-03" } ]);
+  picker.props.onChange(null);
+  assert.deepEqual(calls, [["from", "2026-02-01"], ["to", "2026-02-03"], ["clear"]]);
 });
 
 test("详情分批读取取消后不发布旧结果，单批失败可重试", async () => {
@@ -124,7 +122,7 @@ test("快速预览默认使用宿主排版并允许切换原文高亮", () => {
   const nodes = node => Array.isArray(node) ? node.flatMap(nodes) : node && typeof node === "object" ? [node, ...nodes(node.children)] : [];
   let tree = env.render(() => env.tools.PreviewContent(props));
   assert.ok(nodes(tree).some(node => node.type === MarkdownText && node.props.text === "# 标题"));
-  const modes = nodes(tree).find(node => node.type?.name === "SegmentedControl" && node.props.id === "dsham-preview-mode");
+  const modes = nodes(tree).find(node => node.props?.options?.some(option => option.value === "raw"));
   assert.ok(modes); modes.props.onChange("raw");
   tree = env.render(() => env.tools.PreviewContent(props));
   assert.equal(nodes(tree).some(node => node.type === MarkdownText), false);

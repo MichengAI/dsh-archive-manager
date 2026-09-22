@@ -44,12 +44,16 @@ statics["@deepseek-ai/dsh-client-ui-primitives"] = new Proxy({}, {
 
 // --- browser environment stubs for bundle materialization ---
 globalThis.window = globalThis;
-const styleStub = { dataset: {}, set textContent(v) {} };
+const styleStub = { dataset: {}, style: {}, setAttribute() {}, appendChild() {}, set textContent(v) {} };
+const headStub = { appendChild() {}, removeChild() {}, insertBefore() {}, contains: () => false, querySelector: () => null, querySelectorAll: () => [] };
 globalThis.document = {
-	querySelector: () => null,
-	createElement: () => styleStub,
-	head: { appendChild: () => {} }
+	head: headStub,
+	body: headStub,
+	querySelector: (selector) => selector === "head" || selector === "body" ? headStub : null,
+	querySelectorAll: () => [],
+	createElement: () => styleStub
 };
+globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
 
 // --- minimal client module system ---
 const factories = new Map();
@@ -338,12 +342,10 @@ test("批量归档失败时保持确认框打开并显示错误", () => {
 });
 
 test("bundle resolves the current client-store and keeps the legacy fallback", () => {
-	assert.equal(alphaRequests[0], "@deepseek-ai/dsh-client-store");
+	assert.equal(alphaRequests.includes("@deepseek-ai/dsh-client-store"), true);
 	assert.equal(alphaRequests.includes("@deepseek-ai/dsh-client-runtime/client"), false);
-	assert.deepEqual(legacyRequests.slice(0, 2), [
-		"@deepseek-ai/dsh-client-store",
-		"@deepseek-ai/dsh-client-runtime/client"
-	]);
+	assert.equal(legacyRequests.includes("@deepseek-ai/dsh-client-store"), true);
+	assert.equal(legacyRequests.includes("@deepseek-ai/dsh-client-runtime/client"), true);
 	assert.equal(typeof bundle.__test.createWorkspaceViewStore().create, "function");
 	assert.equal(typeof legacyBundle.__test.createWorkspaceViewStore().create, "function");
 	assert.equal(bundle.__test.hasSplitClientStore, true);
@@ -727,7 +729,7 @@ test("选择栏保留全选语义和操作回调，忙碌时禁用所有操作",
 	assert.equal(checkbox.props.label, "全选当前筛选结果");
 	assert.equal(checkbox.props.indeterminate, true);
 	checkbox.props.onChange({ target: { checked: true } });
-	for (const button of elements.filter(el => el.type === "button")) button.props.onClick();
+	for (const button of elements.filter(el => typeof el.props?.onClick === "function")) button.props.onClick();
 	assert.deepEqual(calls, [true, "clear", "restore", "delete"]);
 	const busy = toolbarElements(t.ArchiveSelectionToolbar({ ...props, busy: true }));
 	assert.ok(busy.filter(el => el.type === "button" || typeof el.type === "function").every(el => el.props.disabled));

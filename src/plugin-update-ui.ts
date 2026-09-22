@@ -1,315 +1,181 @@
-interface UpdatePayload {
- packageName: string; currentVersion: string; latestVersion?: string; updateAvailable: boolean;
- profileName: string; canAutoUpdate: boolean; latestCheckFailed: boolean; autoReload?: boolean;
+import React from "react";
+import { antdLocaleFromDocument } from "./antd-locale.js";
+import { AntdProvider, Button, Modal, Progress } from "./antd-ui.js";
+import { createUpdateFlow, handlePluginUpdateEscape, manualPluginUpdateCommand, pluginUpdateCopy, ZH, EN, type UpdatePayload } from "./plugin-update-model.js";
+
+interface UpdateUiOptions { endpoint: string; packageName: string; titleRowSelector: string; linksSelector: string; zhName: string; enName: string; getLanguage?: () => string; createIcon: (name: "refresh" | "download" | "copy" | "close") => HTMLElement }
+
+type UpdateRoot = { render(node: React.ReactNode): void; unmount(): void };
+function mountRoot(container: Element): UpdateRoot {
+	const client = Function("return globalThis.__dshArchiveReactDOMClient")() as { createRoot?: (container: Element) => UpdateRoot } | undefined;
+	const create = client?.createRoot;
+	if (create === undefined) throw new Error("createRoot unavailable");
+	return create(container);
 }
-interface UpdateUiOptions {
- packageName: string; endpoint: string; titleRowSelector: string; linksSelector: string; enName: string; zhName: string;
- getLanguage?(): string; createIcon(name: string): HTMLElement;
-}
+
 const UPDATE_HEADER = "x-michengai-plugin-update";
 const STYLE_ID = "michengai-plugin-update-ui";
 const CSS = `
-.mpi-version{margin-left:8px;color:var(--dsw-alias-label-tertiary,#9da1aa);font-family:inherit;font-size:12px;font-weight:500;line-height:18px;letter-spacing:0;white-space:nowrap;vertical-align:baseline}.mpi-check{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:28px;padding:0 8px;border:1px solid var(--dsw-alias-border-l2,#4b4d52);border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary,#b8bbc2);font:inherit;font-size:12px;font-weight:500;line-height:18px;white-space:nowrap;cursor:pointer}.mpi-check:hover{background:var(--dsw-alias-interactive-bg-hover,#3a3b3f);color:var(--dsw-alias-label-primary,#fff)}.mpi-check:focus-visible,.mpi-action:focus-visible,.mpi-dialog-close:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary,#4f8cff);outline-offset:2px}.mpi-icon{display:inline-flex;flex:0 0 auto;width:16px;height:16px;align-items:center;justify-content:center;pointer-events:none}.mpi-icon svg{display:block;width:16px;height:16px}
-.mpi-overlay{position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.62)}.mpi-dialog{position:relative;box-sizing:border-box;width:min(680px,100%);max-height:calc(100vh - 48px);overflow:auto;border:1px solid var(--dsw-alias-border-l2,#4b4d52);border-radius:14px;padding:22px;background:var(--dsw-alias-bg-layer-2,var(--dsw-specific-menu,#202124));color:var(--dsw-alias-label-primary,#fff);box-shadow:var(--dsw-shadow-lv3,0 16px 48px rgba(0,0,0,.24));font-family:inherit}.mpi-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.mpi-dialog h2{margin:0;font-size:18px;line-height:26px}.mpi-dialog-close{display:inline-flex;flex:0 0 28px;width:28px;height:28px;align-items:center;justify-content:center;padding:0;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary,#b8bbc2);cursor:pointer}.mpi-dialog-close:hover{background:var(--dsw-alias-interactive-bg-hover,#3a3b3f);color:var(--dsw-alias-label-primary,#fff)}.mpi-intro{margin:8px 0 18px;color:var(--dsw-alias-label-secondary,#c2c4ca);font-size:13px;line-height:20px}.mpi-meta{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:8px 18px;margin:0 0 16px;font-size:12px;line-height:18px}.mpi-meta dt{color:var(--dsw-alias-label-secondary,#c2c4ca)}.mpi-meta dd{margin:0;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}.mpi-status{margin:0 0 18px;border-radius:7px;padding:12px 14px;background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-interactive-bg-hover,#252527));font-size:13px;font-weight:600;line-height:20px}.mpi-status[data-kind=error]{color:var(--dsw-alias-state-error-primary,#ff6464)}.mpi-status[data-kind=success]{color:var(--dsw-alias-state-success-primary,#36d67a)}.mpi-manual{border-top:1px solid var(--dsw-alias-border-l2,#4b4d52);padding-top:16px}.mpi-manual h3{margin:0 0 6px;font-size:14px;line-height:20px}.mpi-manual p{margin:0 0 10px;color:var(--dsw-alias-label-secondary,#c2c4ca);font-size:12px;line-height:18px}.mpi-command{display:flex;align-items:center;gap:8px;border:1px solid var(--dsw-alias-border-l2,#4b4d52);border-radius:7px;padding:10px;background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-interactive-bg-hover,#252527))}.mpi-command code{min-width:0;flex:1;overflow:auto;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;line-height:18px;white-space:nowrap}.mpi-actions{display:flex;align-items:center;justify-content:flex-end;gap:12px;margin-top:18px}.mpi-actions-group{display:flex;gap:8px}.mpi-action{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:32px;border:1px solid var(--dsw-alias-border-l2,#4b4d52);border-radius:7px;padding:6px 10px;background:transparent;color:inherit;font:inherit;font-size:12px;cursor:pointer}.mpi-action:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,#414247)}.mpi-action:disabled{cursor:not-allowed;opacity:.55}.mpi-primary{border-color:transparent;background:var(--dsw-alias-button-primary-fill);color:var(--dsw-alias-label-primary-foreground)}.mpi-action.mpi-primary:hover:not(:disabled){background:var(--dsw-alias-button-primary-hover)}.mpi-progress{height:4px;margin-top:10px;overflow:hidden;border-radius:99px;background:var(--dsw-alias-border-l2,#4b4d52)}.mpi-progress::after{display:block;width:32%;height:100%;background:var(--dsw-alias-state-business-primary,#4f8cff);content:'';animation:mpi-wave 1.15s ease-in-out infinite}@keyframes mpi-wave{from{transform:translateX(-110%)}to{transform:translateX(330%)}}@media(max-width:560px){.mpi-overlay{padding:10px}.mpi-dialog{max-height:calc(100vh - 20px);padding:16px}.mpi-actions{align-items:stretch}.mpi-actions-group{justify-content:flex-end;flex-wrap:wrap}.mpi-meta{grid-template-columns:1fr;gap:2px}.mpi-meta dd{margin-bottom:6px}}
+.mpi-version{margin-left:8px;color:var(--dsw-alias-label-tertiary,#a0a0a0);font-family:inherit;font-size:12px;font-weight:500;line-height:18px;letter-spacing:0;white-space:nowrap;vertical-align:baseline}.mpi-check-host{display:inline-flex;align-items:center}.mpi-icon{display:inline-flex;flex:0 0 auto;width:16px;height:16px;align-items:center;justify-content:center;pointer-events:none}.mpi-icon svg{display:block;width:16px;height:16px}
+.mpi-intro{margin:0 0 16px;color:var(--dsw-alias-label-secondary,#b9b9b9);font-size:13px;line-height:20px}.mpi-meta{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:8px 18px;margin:0 0 16px;font-size:12px;line-height:18px}.mpi-meta dt{color:var(--dsw-alias-label-secondary,#b9b9b9)}.mpi-meta dd{margin:0}.mpi-mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}.mpi-latest{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px}.mpi-status{font-size:13px;font-weight:600;line-height:18px}.mpi-status[data-kind=error]{color:var(--dsw-alias-state-error-primary,#ef7272)}.mpi-status[data-kind=success]{color:var(--dsw-alias-state-success-primary,#51b976)}.mpi-manual{border-top:1px solid var(--dsw-alias-border-l2,#494949);padding-top:16px}.mpi-manual h3{margin:0 0 6px;font-size:14px;line-height:20px}.mpi-manual p{margin:0 0 10px;color:var(--dsw-alias-label-secondary,#b9b9b9);font-size:12px;line-height:18px}.mpi-command{display:flex;align-items:flex-start;gap:8px;border:1px solid var(--dsw-alias-border-l2,#494949);border-radius:7px;padding:10px;background:var(--dsw-alias-bg-layer-3,var(--dsw-specific-menu-item-hover,#353638))}.mpi-command code{min-width:0;flex:1;overflow:visible;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;line-height:18px;white-space:pre-wrap;overflow-wrap:anywhere}@media(max-width:560px){.mpi-meta{grid-template-columns:1fr;gap:2px}.mpi-meta dd{margin-bottom:6px}}
 `;
-export const ZH = {
-  check: "\u68C0\u67E5\u66F4\u65B0",
-  update: "\u66F4\u65B0",
-  close: "\u5173\u95ED",
-  recheck: "\u91CD\u65B0\u68C0\u67E5",
-  auto: "\u81EA\u52A8\u66F4\u65B0",
-  updating: "\u6B63\u5728\u66F4\u65B0\u2026",
-  copy: "\u590D\u5236\u547D\u4EE4",
-  copied: "\u5DF2\u590D\u5236",
-  copyFailed: "\u590D\u5236\u5931\u8D25",
-  checking: "\u6B63\u5728\u68C0\u67E5\u66F4\u65B0\u2026",
-  latest: "\u5DF2\u662F\u6700\u65B0\u7248\u672C",
-  found: "\u53D1\u73B0\u65B0\u7248\u672C",
-  failed: "\u68C0\u67E5\u66F4\u65B0\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002",
-  current: "\u8FD0\u884C\u7248\u672C",
-  latestLabel: "\u6700\u65B0\u7248\u672C",
-  profile: "\u76EE\u6807 profile",
-  unknown: "\u672A\u77E5",
-  manual: "\u624B\u5DE5\u66F4\u65B0",
-  manualHint: "\u81EA\u52A8\u66F4\u65B0\u5931\u8D25\u65F6\uFF0C\u53EF\u5728\u5F53\u524D DSH \u7EC8\u7AEF\u6267\u884C\u4EE5\u4E0B\u547D\u4EE4\uFF0C\u5B8C\u6210\u540E\u91CD\u542F DSH Web\u3002",
-  intro: "\u4EC5\u68C0\u67E5\u5E76\u66F4\u65B0\u5F53\u524D\u63D2\u4EF6\uFF0C\u4E0D\u4F1A\u8054\u52A8\u5B89\u88C5\u5176\u4ED6\u63D2\u4EF6\u3002",
-  restart: "\u66F4\u65B0\u5B8C\u6210\uFF0C\u8BF7\u91CD\u542F DSH Web\u3002",
-  restarting: "\u66F4\u65B0\u5B8C\u6210\uFF0C\u6B63\u5728\u91CD\u542F DSH Desktop\u2026",
-  unavailable: "\u5F53\u524D\u73AF\u5883\u4E0D\u652F\u6301\u81EA\u52A8\u66F4\u65B0\uFF0C\u8BF7\u4F7F\u7528\u624B\u5DE5\u66F4\u65B0\u547D\u4EE4\u3002"
-};
-export const EN = {
-  check: "Check for updates",
-  update: "Update",
-  close: "Close",
-  recheck: "Check again",
-  auto: "Update automatically",
-  updating: "Updating\u2026",
-  copy: "Copy command",
-  copied: "Copied",
-  copyFailed: "Copy failed",
-  checking: "Checking for updates\u2026",
-  latest: "You are up to date",
-  found: "New version available",
-  failed: "Could not check for updates. Try again later.",
-  current: "Running version",
-  latestLabel: "Latest version",
-  profile: "Target profile",
-  unknown: "Unknown",
-  manual: "Manual update",
-  manualHint: "If automatic update fails, run this command in the current DSH terminal, then restart DSH Web.",
-  intro: "Only this plugin is checked and updated. Other plugins are not changed.",
-  restart: "Update complete. Restart DSH Web.",
-  restarting: "Update complete. Restarting DSH Desktop\u2026",
-  unavailable: "Automatic update is unavailable. Use the manual command."
-};
-function strings(language?: string) {
-  if (language === "en") return EN;
-  if (language === "zh") return ZH;
-  const lang = document.documentElement.lang.toLowerCase();
-  const settings = document.querySelector('[role="dialog"]')?.textContent ?? "";
-  return lang.startsWith("en") || settings.includes("Settings") && !settings.includes("\u8BBE\u7F6E") ? EN : ZH;
-}
+
 function ensureStyle() {
-  if (document.getElementById(STYLE_ID) !== null) return;
-  const style = document.createElement("style");
-  style.id = STYLE_ID;
-  style.textContent = CSS;
-  (document.head ?? document.documentElement).append(style);
+	if (document.getElementById(STYLE_ID) !== null) return;
+	const style = document.createElement("style");
+	style.id = STYLE_ID;
+	style.textContent = CSS;
+	(document.head ?? document.documentElement).append(style);
 }
+
 function validPayload(value: unknown): value is UpdatePayload {
-  if (value === null || typeof value !== "object") return false;
-  const item = value as Record<string, unknown>;
-  return typeof item.packageName === "string" && typeof item.currentVersion === "string" && typeof item.updateAvailable === "boolean" && typeof item.profileName === "string" && typeof item.canAutoUpdate === "boolean" && typeof item.latestCheckFailed === "boolean" && (item.latestVersion === void 0 || typeof item.latestVersion === "string");
+	if (value === null || typeof value !== "object") return false;
+	const item = value as Record<string, unknown>;
+	return typeof item.packageName === "string" && typeof item.currentVersion === "string" && typeof item.updateAvailable === "boolean" && typeof item.profileName === "string" && typeof item.canAutoUpdate === "boolean" && typeof item.latestCheckFailed === "boolean" && (item.latestVersion === undefined || typeof item.latestVersion === "string");
 }
-async function requestStatus(endpoint: string, method: string, signal?: AbortSignal) {
-  const signalOption = signal === void 0 ? {} : { signal };
-  const response = await fetch(endpoint, method === "GET" ? { cache: "no-store", ...signalOption } : {
-    method: "POST",
-    headers: { "content-type": "application/json", [UPDATE_HEADER]: "1" },
-    body: "{}",
-    ...signalOption
-  });
-  const value: unknown = await response.json();
-  if (!response.ok || !validPayload(value)) throw new Error(value && typeof value === "object" && "error" in value && typeof value.error === "string" ? value.error : strings().failed);
-  return value;
+
+async function requestStatus(endpoint: string, method: "GET" | "POST", signal?: AbortSignal) {
+	const signalOption = signal === undefined ? {} : { signal };
+	const response = await fetch(endpoint, method === "GET" ? { cache: "no-store", ...signalOption } : {
+		method: "POST", headers: { "content-type": "application/json", [UPDATE_HEADER]: "1" }, body: "{}", ...signalOption,
+	});
+	const value: unknown = await response.json();
+	if (!response.ok || !validPayload(value)) throw new Error(value && typeof value === "object" && "error" in value && typeof value.error === "string" ? value.error : pluginUpdateCopy(document.documentElement.lang).failed);
+	return value;
 }
-function manualPluginUpdateCommand(profileName: string, packageName: string, version: string) {
-  const profile = profileName.trim() === "" ? "" : ` --profile ${profileName.trim()}`;
-  return `dsh plugin${profile} add ${packageName}@${version} --registry=https://registry.npmjs.org/`;
+
+function HostIcon(props: { node: HTMLElement }) {
+	const ref = React.useRef<HTMLSpanElement>(null);
+	React.useLayoutEffect(() => { ref.current?.replaceChildren(props.node); }, [props.node]);
+	return React.createElement("span", { ref, className: "mpi-icon", "aria-hidden": true });
 }
-function handlePluginUpdateEscape(event: KeyboardEvent, close: () => void) {
-  if (event.key !== "Escape") return false;
-  event.preventDefault();
-  event.stopPropagation();
-  event.stopImmediatePropagation();
-  close();
-  return true;
+
+function UpdateDialog(props: { flow: ReturnType<typeof createUpdateFlow>; packageName: string; zhName: string; enName: string; onClose: () => void }) {
+	const bodyRef = React.useRef<HTMLDivElement>(null);
+	const [, setRev] = React.useState(0);
+	const [copyState, setCopyState] = React.useState<"idle" | "copied" | "failed">("idle");
+	React.useEffect(() => props.flow.subscribe(() => setRev((value) => value + 1)), [props.flow]);
+	React.useEffect(() => {
+		const element = document.documentElement;
+		const observer = new MutationObserver(() => setRev((value) => value + 1));
+		observer.observe(element, { attributes: true, attributeFilter: ["lang"] });
+		return () => observer.disconnect();
+	}, []);
+	React.useEffect(() => { void props.flow.check(); }, [props.flow]);
+	React.useEffect(() => {
+		function onKey(event: KeyboardEvent) { handlePluginUpdateEscape(event, props.onClose); }
+		document.addEventListener("keydown", onKey, true);
+		return () => document.removeEventListener("keydown", onKey, true);
+	}, [props.onClose]);
+	const lang = document.documentElement.lang;
+	const view = props.flow.view(lang);
+	const name = lang.toLowerCase().startsWith("zh") ? props.zhName : props.enName;
+	const command = manualPluginUpdateCommand(view.profileRaw, props.packageName, view.latestRaw);
+	const copyLabel = copyState === "copied" ? view.copy.copied : copyState === "failed" ? view.copy.copyFailed : view.copy.copy;
+	return React.createElement(AntdProvider, { locale: antdLocaleFromDocument() }, React.createElement(Modal, {
+		open: true, width: 680, zIndex: 1200, title: `${name} ${view.copy.update}`, keyboard: false, destroyOnHidden: true, onCancel: props.onClose,
+		afterOpenChange: (open: boolean) => { if (open && bodyRef.current) { bodyRef.current.tabIndex = -1; bodyRef.current.focus(); } },
+		footer: [
+			React.createElement(Button, { key: "check", disabled: view.busy, loading: view.busy && !view.loading, onClick: () => { void props.flow.check(); } }, view.copy.recheck),
+			React.createElement(Button, { key: "update", type: "primary", disabled: view.disabled, loading: view.loading, onClick: () => { void props.flow.update(); } }, view.updateLabel),
+		],
+	}, React.createElement("div", { ref: bodyRef },
+		React.createElement("p", { className: "mpi-intro" }, view.copy.intro),
+		React.createElement("dl", { className: "mpi-meta" },
+			React.createElement("dt", null, view.copy.current), React.createElement("dd", null, React.createElement("span", { className: "mpi-mono" }, view.currentVersion)),
+			React.createElement("dt", null, view.copy.latestLabel), React.createElement("dd", { className: "mpi-latest" }, React.createElement("span", { className: "mpi-mono" }, view.latestVersion), React.createElement("span", { className: "mpi-status", role: "status", "data-kind": view.kind }, view.message)),
+			React.createElement("dt", null, view.copy.profile), React.createElement("dd", null, React.createElement("span", { className: "mpi-mono" }, view.profileName))),
+		view.busy ? React.createElement(Progress, { percent: 100, showInfo: false, status: "active" }) : null,
+		React.createElement("section", { className: "mpi-manual" },
+			React.createElement("h3", null, view.copy.manual),
+			React.createElement("p", null, view.copy.manualHint),
+			React.createElement("div", { className: "mpi-command" },
+				React.createElement("code", null, command),
+				React.createElement(Button, { disabled: view.busy, onClick: () => {
+					const write = navigator.clipboard?.writeText(command);
+					if (write === undefined) { setCopyState("failed"); return; }
+					void write.then(() => { setCopyState("copied"); window.setTimeout(() => setCopyState("idle"), 1400); }).catch(() => setCopyState("failed"));
+				} }, copyLabel))))));
 }
+
 function observePluginUpdate(options: UpdateUiOptions) {
-  if (typeof document === "undefined" || document.body === null) return () => {
-  };
-  ensureStyle();
-  const getStrings = () => strings(options.getLanguage?.());
-  const controller = new AbortController();
-  let payload: UpdatePayload | undefined;
-  let overlay: HTMLDivElement | undefined;
-  let frame: number | undefined;
-  const setButtonContent = (button: Element, label: string, iconName: string) => {
-    const icon = options.createIcon(iconName);
-    icon.classList.add("mpi-icon");
-    icon.setAttribute("aria-hidden", "true");
-    const text = document.createElement("span");
-    text.dataset.mpiLabel = "";
-    text.textContent = label;
-    button.replaceChildren(icon, text);
-  };
-  const setButtonLabel = (button: Element, label: string) => {
-    const text = button.querySelector("[data-mpi-label]");
-    if (text === null) button.textContent = label;
-    else text.textContent = label;
-  };
-  const applyControls = () => {
-    const row = document.querySelector(options.titleRowSelector);
-    if (row === null) return;
-    const heading = row.querySelector("h1,h2");
-    if (heading !== null && payload !== void 0) {
-      let version = heading.querySelector<HTMLSpanElement>(`.mpi-version[data-package="${options.packageName}"]`);
-      if (version === null) {
-        version = document.createElement("span");
-        version.className = "mpi-version";
-        version.dataset.package = options.packageName;
-        heading.append(version);
-      }
-      const versionLabel = `v${payload.currentVersion}`;
-      if (version.textContent !== versionLabel) version.textContent = versionLabel;
-    }
-    const links = row.querySelector(options.linksSelector);
-    if (links === null) return;
-    const existing = links.querySelector(`[data-mpi-check="${options.packageName}"]`);
-    if (existing !== null) {
-      const label = getStrings().check;
-      if (existing.querySelector('[data-mpi-label]')?.textContent !== label) setButtonLabel(existing, label);
-      return;
-    }
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "mpi-check";
-    button.dataset.mpiCheck = options.packageName;
-    setButtonContent(button, getStrings().check, "refresh");
-    button.addEventListener("click", openDialog);
-    links.append(button);
-  };
-  const load = async () => {
-    payload = await requestStatus(options.endpoint, "GET", controller.signal);
-    applyControls();
-    return payload;
-  };
-  const closeDialog = () => {
-    overlay?.remove();
-    overlay = void 0;
-  };
-  function openDialog() {
-    closeDialog();
-    const text = getStrings();
-    overlay = document.createElement("div");
-    overlay.className = "mpi-overlay";
-    const dialog = document.createElement("section");
-    dialog.className = "mpi-dialog";
-    dialog.setAttribute("role", "dialog");
-    dialog.setAttribute("aria-modal", "true");
-    dialog.innerHTML = `<header class="mpi-head"><h2></h2><button type="button" class="mpi-dialog-close" data-action="close"></button></header><p class="mpi-intro"></p><dl class="mpi-meta"><dt></dt><dd data-role="current"></dd><dt></dt><dd data-role="latest"></dd><dt></dt><dd data-role="profile"></dd></dl><div class="mpi-status" role="status"></div><div class="mpi-progress" hidden></div><section class="mpi-manual"><h3></h3><p></p><div class="mpi-command"><code></code><button type="button" class="mpi-action" data-action="copy"></button></div></section><footer class="mpi-actions"><div class="mpi-actions-group"><button type="button" class="mpi-action" data-action="check"></button><button type="button" class="mpi-action mpi-primary" data-action="update"></button></div></footer>`;
-    const required = <T extends HTMLElement = HTMLElement>(selector: string): T => {
-      const element = dialog.querySelector<T>(selector);
-      if (!element) throw new Error(`更新弹窗缺少节点：${selector}`);
-      return element;
-    };
-    const name = text === EN ? options.enName : options.zhName;
-    required("h2").textContent = `${name} ${text.update}`;
-    required(".mpi-intro").textContent = text.intro;
-    const terms = dialog.querySelectorAll("dt");
-    terms[0].textContent = text.current;
-    terms[1].textContent = text.latestLabel;
-    terms[2].textContent = text.profile;
-    required(".mpi-manual h3").textContent = text.manual;
-    required(".mpi-manual p").textContent = text.manualHint;
-    const status = required(".mpi-status");
-    const progress = required(".mpi-progress");
-    const command = required(".mpi-command code");
-    const close = required<HTMLButtonElement>("[data-action=close]");
-    const check = required<HTMLButtonElement>("[data-action=check]");
-    const update = required<HTMLButtonElement>("[data-action=update]");
-    const copy = required<HTMLButtonElement>("[data-action=copy]");
-    setButtonContent(close, text.close, "close");
-    close.querySelector("[data-mpi-label]")?.remove();
-    close.setAttribute("aria-label", text.close);
-    close.title = text.close;
-    setButtonContent(check, text.recheck, "refresh");
-    setButtonContent(update, text.auto, "download");
-    setButtonContent(copy, text.copy, "copy");
-    let busy = false;
-    const setMessage = (message: string, kind = "") => {
-      status.textContent = message;
-      status.dataset.kind = kind;
-    };
-    const setBusy = (value: boolean) => {
-      busy = value;
-      check.disabled = value;
-      copy.disabled = value;
-      update.disabled = value || payload?.canAutoUpdate !== true || payload.updateAvailable !== true;
-      progress.hidden = !value;
-    };
-    const render = () => {
-      required("[data-role=current]").textContent = payload === void 0 ? text.unknown : `v${payload.currentVersion}`;
-      required("[data-role=latest]").textContent = payload?.latestVersion === void 0 ? text.unknown : `v${payload.latestVersion}`;
-      required("[data-role=profile]").textContent = payload?.profileName ?? text.unknown;
-      command.textContent = manualPluginUpdateCommand(payload?.profileName ?? "", options.packageName, payload?.latestVersion ?? "latest");
-      update.disabled = busy || payload?.canAutoUpdate !== true || payload.updateAvailable !== true;
-      if (payload === void 0) setMessage(text.checking);
-      else if (payload.latestCheckFailed) setMessage(text.failed, "error");
-      else if (payload.updateAvailable) setMessage(`${text.found}: v${payload.latestVersion ?? text.unknown}`);
-      else setMessage(text.latest, "success");
-      if (payload !== void 0 && !payload.canAutoUpdate && payload.updateAvailable) setMessage(text.unavailable);
-    };
-    const checkNow = async () => {
-      if (busy) return;
-      setBusy(true);
-      setMessage(text.checking);
-      try {
-        await load();
-        setBusy(false);
-        render();
-      } catch (error) {
-        setBusy(false);
-        setMessage(error instanceof Error ? error.message : text.failed, "error");
-      }
-    };
-    const updateNow = async () => {
-      if (busy) return;
-      setBusy(true);
-      setButtonLabel(update, text.updating);
-      setMessage(text.updating);
-      try {
-        payload = await requestStatus(options.endpoint, "POST", controller.signal);
-        applyControls();
-        render();
-        setMessage(payload.autoReload === true ? text.restarting : text.restart, "success");
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : text.failed, "error");
-      } finally {
-        setButtonLabel(update, text.auto);
-        setBusy(false);
-      }
-    };
-    close.addEventListener("click", closeDialog);
-    check.addEventListener("click", () => {
-      void checkNow();
-    });
-    update.addEventListener("click", () => {
-      void updateNow();
-    });
-    copy.addEventListener("click", () => {
-      void navigator.clipboard?.writeText(command.textContent ?? "").then(() => {
-        setButtonLabel(copy, text.copied);
-        setTimeout(() => {
-          setButtonLabel(copy, text.copy);
-        }, 1400);
-      }).catch(() => {
-        setButtonLabel(copy, text.copyFailed);
-      });
-    });
-    overlay.addEventListener("click", (event) => {
-      if (event.target === overlay) closeDialog();
-    });
-    overlay.addEventListener("keydown", (event) => {
-      handlePluginUpdateEscape(event, closeDialog);
-    }, true);
-    overlay.append(dialog);
-    document.body.append(overlay);
-    render();
-    close.focus();
-    void checkNow();
-  }
-  const observer = new MutationObserver(() => {
-    if (frame !== void 0) return;
-    frame = window.requestAnimationFrame(() => {
-      frame = void 0;
-      applyControls();
-    });
-  });
-  observer.observe(document.body, { childList: true, subtree: true });
-  applyControls();
-  void load().catch(() => {
-  });
-  return () => {
-    controller.abort();
-    observer.disconnect();
-    closeDialog();
-    if (frame !== void 0) window.cancelAnimationFrame(frame);
-    document.querySelectorAll(`[data-mpi-check="${options.packageName}"],.mpi-version[data-package="${options.packageName}"]`).forEach((node) => node.remove());
-  };
+	if (typeof document === "undefined" || document.body === null) return () => {};
+	ensureStyle();
+	const controller = new AbortController();
+	let payload: UpdatePayload | undefined;
+	let buttonHost: HTMLElement | undefined;
+	let buttonRoot: UpdateRoot | undefined;
+	let iconNode: HTMLElement | undefined;
+	let dialogHost: HTMLElement | undefined;
+	let dialogRoot: UpdateRoot | undefined;
+	let frame: number | undefined;
+
+	function unmountCheck() { buttonRoot?.unmount(); buttonRoot = undefined; buttonHost = undefined; iconNode = undefined; }
+	function renderCheck() {
+		if (buttonRoot === undefined) return;
+		if (iconNode === undefined) iconNode = options.createIcon("refresh");
+		const icon = iconNode;
+		buttonRoot.render(React.createElement(AntdProvider, { locale: antdLocaleFromDocument() }, React.createElement(Button, {
+			size: "small", shape: "default", onClick: openDialog, icon: React.createElement(HostIcon, { node: icon }),
+		}, React.createElement("span", { "data-mpi-label": "" }, pluginUpdateCopy(document.documentElement.lang).check))));
+	}
+	function closeDialog() { dialogRoot?.unmount(); dialogRoot = undefined; dialogHost?.remove(); dialogHost = undefined; }
+	function openDialog() {
+		closeDialog();
+		const host = document.createElement("div");
+		host.className = "mpi-dialog-root";
+		document.body.append(host);
+		dialogHost = host;
+		dialogRoot = mountRoot(host);
+		dialogRoot.render(React.createElement(UpdateDialog, {
+			flow: createUpdateFlow((method) => requestStatus(options.endpoint, method, controller.signal), payload, (next) => { payload = next; applyControls(); }),
+			packageName: options.packageName, zhName: options.zhName, enName: options.enName, onClose: closeDialog,
+		}));
+	}
+	function applyControls() {
+		const row = document.querySelector(options.titleRowSelector);
+		if (row === null) return;
+		const heading = row.querySelector("h1,h2");
+		if (heading !== null && payload !== undefined) {
+			let version = heading.querySelector<HTMLElement>(`.mpi-version[data-package="${options.packageName}"]`);
+			if (version === null) {
+				version = document.createElement("span");
+				version.className = "mpi-version";
+				version.dataset.package = options.packageName;
+				heading.append(version);
+			}
+			const versionLabel = `v${payload.currentVersion}`;
+			if (version.textContent !== versionLabel) version.textContent = versionLabel;
+		}
+		if (buttonHost !== undefined && !buttonHost.isConnected) unmountCheck();
+		const links = row.querySelector(options.linksSelector);
+		if (links === null) return;
+		const existing = links.querySelector<HTMLElement>(`[data-mpi-check="${options.packageName}"]`);
+		if (existing !== null) {
+			const label = existing.querySelector("[data-mpi-label]");
+			if (label === null || label.textContent !== pluginUpdateCopy(document.documentElement.lang).check) renderCheck();
+			return;
+		}
+		const host = document.createElement("span");
+		host.dataset.mpiCheck = options.packageName;
+		host.className = "mpi-check-host";
+		links.append(host);
+		buttonHost = host;
+		buttonRoot = mountRoot(host);
+		renderCheck();
+	}
+	const observer = new MutationObserver(() => {
+		if (frame !== undefined) return;
+		frame = window.requestAnimationFrame(() => { frame = undefined; applyControls(); });
+	});
+	observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["lang"] });
+	applyControls();
+	void requestStatus(options.endpoint, "GET", controller.signal).then((next) => { payload = next; applyControls(); }).catch(() => {});
+	return () => {
+		controller.abort(); observer.disconnect(); closeDialog(); unmountCheck();
+		if (frame !== undefined) window.cancelAnimationFrame(frame);
+		document.querySelectorAll(`[data-mpi-check="${options.packageName}"],.mpi-version[data-package="${options.packageName}"]`).forEach((node) => node.remove());
+	};
 }
-export {
-  handlePluginUpdateEscape,
-  manualPluginUpdateCommand,
-  observePluginUpdate
-};
+
+export { EN, handlePluginUpdateEscape, manualPluginUpdateCommand, observePluginUpdate, ZH };

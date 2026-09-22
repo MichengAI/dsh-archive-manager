@@ -27,7 +27,7 @@ if (globalThis.localStorage === undefined) {
 		clear: () => memory.clear()
 	};
 }
-globalThis.document = { body: null, querySelector: () => ({}), createElement: () => ({ dataset: {} }), head: { appendChild() {} } };
+globalThis.document = { body: null, querySelector: () => ({}), createElement: () => ({ dataset: {}, style: {} }), head: { appendChild() {} } };
 const factories = new Map();
 window.__ModuleLoader__ = { load: ({ id, factory }) => factories.set(id, factory) };
 async function load(id, path = join(dirname(require.resolve(`${id}/package.json`)), "lib", "client.js")) {
@@ -192,7 +192,7 @@ test("官方样式已加载时，归档侧栏仍加载自己的样式", () => {
 	}));
 	globalThis.document = {
 		querySelector(selector) { return tags.find((tag) => selector.includes(JSON.stringify(tag.dataset.pluginCss))) ?? null; },
-		createElement: () => ({ dataset: {} }), head: { appendChild: (tag) => tags.push(tag) }
+		createElement: () => ({ dataset: {}, style: {} }), head: { appendChild: (tag) => tags.push(tag) }
 	};
 	try {
 		factories.get("@michengai/dsh-archive-manager")((id) => {
@@ -424,18 +424,19 @@ test("归档 TAB 默认与切换、多项目选择、确认提交和状态刷新
  const render=()=>{cursor=0;return client.__test.ArchivedSessionsSection(props);};
  const nodes=(node)=>Array.isArray(node)?node.flatMap(nodes):node?.props?[node,...nodes(node.props.children)]:[];
  let tree=render();
- const tab=(name)=>{ const control=nodes(tree).find(n=>n.type?.name==="SegmentedTabs"); return nodes(control.type(control.props)).find(n=>n.props.role==="tab" && n.props.children===`archives.tab.${name}`); };
+ const tabs=()=>nodes(tree).find(n=>n.props?.["aria-label"]==="archives.title" && typeof n.props.onChange==="function");
+ const tab=(name)=>({ props: { onClick: () => tabs().props.onChange(name), "aria-selected": tabs().props.value===name } });
  assert.equal(tab("archived").props["aria-selected"],true);
  assert.equal(nodes(tree).some(n=>n.type==="header" && nodes(n.props.children).some(child=>child.props.role==="tablist")),false,"归档页签不得被 Codex UI 的 header [role=tablist] 会话顶栏适配器命中");
  assert.equal(nodes(tree).some(n=>n.props.children==="archives.restoreAll"),false);
  tab("unarchived").props.onClick();tree=render();
  assert.equal(tab("unarchived").props["aria-selected"],true);
  assert.equal(nodes(tree).some(n=>n.props.children==="archives.restoreAll"),false);
- for(const row of nodes(tree).filter(n=>n.type==="article")) nodes(row).find(n=>n.props.label && n.props.onChange).props.onChange({target:{checked:true}});
+ for(const row of nodes(tree).filter(n=>n.props?.className==="dsham_settingsRow")) nodes(row).find(n=>n.props.label && n.props.onChange).props.onChange({target:{checked:true}});
  tree=render();
  let toolbar=nodes(tree).find(n=>n.props.onToggle);
  assert.equal(toolbar.props.selectedCount,2);
- const search=nodes(tree).find(n=>n.type==="input" && n.props.type==="search");
+ const search=nodes(tree).find(n=>n.props.type==="search");
  search.props.onChange({target:{value:"one"}});tree=render();
  toolbar=nodes(tree).find(n=>n.props.onToggle);
  assert.equal(toolbar.props.hiddenCount,1);
@@ -443,7 +444,7 @@ test("归档 TAB 默认与切换、多项目选择、确认提交和状态刷新
  const dialog=nodes(tree).find(n=>n.props.open===true && n.props.description==="archives.archiveSelectedDesc");
  assert.ok(dialog);
  const confirmButton=nodes(dialog.props.footer).find(n=>n.props.children==="archives.archiveSelected");
- assert.equal(confirmButton.props.variant,"outline","归档确认按钮与取消按钮使用一致的描边样式");
+ assert.equal(typeof confirmButton.props.onClick,"function","归档确认按钮可以提交");
  const submit=confirmButton.props.onClick;
  await Promise.all([submit(),submit()]);
  tree=render(); assert.equal(calls.length,1,"重复提交只发送一次请求");
@@ -456,12 +457,12 @@ test("归档 TAB 默认与切换、多项目选择、确认提交和状态刷新
  await nodes(retry.props.footer).find(n=>n.props.children==="archives.archiveSelected").props.onClick();
  tree=render();assert.deepEqual(calls,[["one","two"],["one","two"]]);
  assert.equal(tab("archived").props["aria-selected"],true,"批量归档成功后切到已归档页");
- assert.equal(nodes(tree).filter(n=>n.type==="article").length,3);
+ assert.equal(nodes(tree).filter(n=>n.props?.className==="dsham_settingsRow").length,3);
  assert.ok(nodes(tree).some(n=>n.props.role==="status" && n.props.children==="archives.archiveSuccess"));
  state.archivedSessionIds=["old"];
  tab("unarchived").props.onClick();tree=render();
  assert.equal(nodes(tree).some(n=>n.props.role==="status" && n.props.children==="archives.archiveSuccess"),false,"切换页签清除上次成功提示");
- nodes(tree).find(n=>n.type==="button" && n.props["aria-label"]==="archives.archiveSelected").props.onClick();tree=render();
+ nodes(tree).find(n=>n.props["aria-label"]==="archives.archiveSelected").props.onClick();tree=render();
  assert.equal(nodes(tree).some(n=>n.props.role==="status" && n.props.children==="archives.archiveSuccess"),false,"新归档清除上次成功提示");
  const freshDialog=nodes(tree).find(n=>n.props.open===true && n.props.description==="archives.archiveSelectedDesc");
  freshDialog.props.onClose();tree=render();
@@ -469,19 +470,19 @@ test("归档 TAB 默认与切换、多项目选择、确认提交和状态刷新
  state.archivedSessionIds=["old","one","two"];tree=render();
  tab("archived").props.onClick();tree=render();
  assert.equal(nodes(tree).find(n=>n.props.onToggle).props.selectedCount,0);
- assert.equal(nodes(tree).filter(n=>n.type==="article").length,3);
+ assert.equal(nodes(tree).filter(n=>n.props?.className==="dsham_settingsRow").length,3);
  // 项目菜单作用于整个项目，不被标题搜索缩小；未分组采用相同规则。
  for (const ungrouped of [false,true]) {
   state.archivedSessionIds=["old"];
   state.items=ungrouped?[]:[{workspaceId:"a",title:"项目 A",sessionIds:["one","two"]}];
   tab("unarchived").props.onClick();tree=render();
-  nodes(tree).find(n=>n.type==="input" && n.props.type==="search").props.onChange({target:{value:"one"}});tree=render();
+  nodes(tree).find(n=>n.props.type==="search").props.onChange({target:{value:"one"}});tree=render();
   const actions=nodes(tree).find(n=>n.props.group && n.props.onArchive);
   assert.ok(actions,"未归档项目与未分组均提供更多菜单");
   const menu=actions.type(actions.props);
-  assert.deepEqual(menu.props.items.map(item=>item.id),["archive"]);
-  assert.equal(menu.props.items[0].danger,true);
-  menu.props.onSelect("archive");tree=render();
+  assert.deepEqual(menu.props.menu.items.map(item=>item.key),["archive"]);
+  assert.equal(menu.props.menu.items[0].danger,true);
+  menu.props.menu.items[0].onClick();tree=render();
   const groupDialog=nodes(tree).find(n=>n.props.open===true && n.props.description===(ungrouped?"archives.archiveUngroupedDesc":"archives.archiveProjectDesc"));
   assert.ok(groupDialog,"确认框说明整个分组的范围");
   await nodes(groupDialog.props.footer).find(n=>n.props.children==="archives.archiveSelected").props.onClick();
@@ -518,50 +519,52 @@ test("整理页收藏、闲置预览、部分失败重试及撤回形成完整�
   let tree;
   const render = () => { cursor = 0; tree = client.__test.ArchivedSessionsSection(props); };
   const panel = () => nodes(tree).find(node => node.type?.name === "OrganizerPanel");
-  const tab = name => { const control = nodes(tree).find(node => node.type?.name === "SegmentedTabs"); return { props: { onClick: () => control.props.onChange(name) } }; };
+  const tab = name => { const control = nodes(tree).find(node => node.props?.options?.some?.(option => option.value === "archived") && typeof node.props.onChange === "function"); return { props: { onClick: () => control.props.onChange(name) } }; };
   render();
   await panel().props.onReload(); render();
   assert.equal(panel().props.ready, true);
   const filter = nodes(tree).find(node => node.props.id === "dsham-favorite-filter");
   assert.deepEqual(filter.props.options.map(option => option.value), ["all", "favorites"]);
+  const searchKids = nodes(tree).find(node => node.props.className === "dsham_settingsSearch").props.children.filter(Boolean);
+  assert.ok(searchKids.findIndex(node => node.props?.id === "dsham-favorite-filter") < searchKids.findIndex(node => node.props?.id === "dsham-search-scope"), "只看收藏在仅标题前面");
   const menuNode = nodes(tree).find(node => node.type?.name === "ArchivedSessionMenu");
   assert.ok(menuNode, "已归档行通过更多菜单提供恢复打开和删除");
   const menu = menuNode.type(menuNode.props);
-  assert.deepEqual(menu.props.items.map(item => item.id), ["restoreOpen", "copyId", "delete"]);
-  assert.equal(menu.props.items.at(-1).danger, true);
-  menu.props.onSelect("delete"); render();
+  assert.deepEqual(menu.props.menu.items.map(item => item.key), ["restoreOpen", "copyId", "delete"]);
+  assert.equal(menu.props.menu.items.at(-1).danger, true);
+  menu.props.menu.items.at(-1).onClick(); render();
   const deleteDialog = nodes(tree).find(node => node.props.open === true);
   assert.ok(deleteDialog, "删除菜单先打开确认框");
   deleteDialog.props.onClose(); render();
   const groupToggle = () => nodes(tree).find(node => node.props.className === "dsham_groupToggle");
   groupToggle().props.onClick(); render();
-  assert.equal(nodes(tree).filter(node => node.type === "article").length, 0);
+  assert.equal(nodes(tree).filter(node => node.props?.className === "dsham_settingsRow").length, 0);
   assert.equal(groupToggle().props["aria-expanded"], false);
   groupToggle().props.onClick(); render();
-  assert.equal(nodes(tree).filter(node => node.type === "article").length, 1);
+  assert.equal(nodes(tree).filter(node => node.props?.className === "dsham_settingsRow").length, 1);
   tab("unarchived").props.onClick(); render();
   assert.equal(panel().props.count, 3, "收藏不参与闲置归档");
   const rowActions = nodes(tree).find(node => node.props.className === "dsham_settingsActions").props.children;
   assert.deepEqual(rowActions.filter(Boolean).map(node => node.props.title), ["organizer.favorite", "archives.archiveSelected"]);
   assert.ok(rowActions.filter(Boolean).every(node => typeof node.props.children !== "string"), "右侧只显示图标");
-  const favorite = nodes(tree).find(node => node.type === "button" && node.props["aria-label"] === "organizer.favoritecommon.separatora");
+  const favorite = nodes(tree).find(node => node.props["aria-label"] === "organizer.favoritecommon.separatora");
   await favorite.props.onClick(); render();
   assert.equal(panel().props.count, 2);
   nodes(tree).find(node => node.props.id === "dsham-favorite-filter").props.onChange("favorites"); render();
-  assert.equal(nodes(tree).filter(node => node.type === "article").length, 2);
+  assert.equal(nodes(tree).filter(node => node.props?.className === "dsham_settingsRow").length, 2);
   nodes(tree).find(node => node.props.id === "dsham-favorite-filter").props.onChange("all"); render();
-  await nodes(tree).find(node => node.type === "button" && node.props["aria-label"] === "organizer.unfavoritecommon.separatora").props.onClick(); render();
+  await nodes(tree).find(node => node.props["aria-label"] === "organizer.unfavoritecommon.separatora").props.onClick(); render();
   panel().props.onPreview(); render();
   const dialog = nodes(tree).find(node => node.props.open === true);
-  assert.equal(nodes(dialog.props.children).filter(node => node.type === "input" && node.props.type === "checkbox").length, 3);
+  assert.equal(nodes(dialog.props.children).filter(node => node.props?.checked === true).length, 3);
   const confirm = nodes(dialog.props.footer).find(node => node.props.children === "archives.archiveSelected");
   await Promise.all([confirm.props.onClick(), confirm.props.onClick()]); render();
   assert.deepEqual(calls, ["a", "b"]);
   assert.deepEqual(panel().props.result.succeeded, ["a"]);
   assert.deepEqual(panel().props.result.remaining, ["b", "c"]);
-  nodes(tree).find(node => node.type?.name === "SegmentedTabs").props.onChange("archived"); render();
+  nodes(tree).find(node => node.props?.options?.some?.(option => option.value === "archived")).props.onChange("archived"); render();
   assert.equal(panel().props.result, null, "归档结果不得出现在另一页签");
-  nodes(tree).find(node => node.type?.name === "SegmentedTabs").props.onChange("unarchived"); render();
+  nodes(tree).find(node => node.props?.options?.some?.(option => option.value === "archived")).props.onChange("unarchived"); render();
   assert.deepEqual(panel().props.result.remaining, ["b", "c"], "返回原页签仍可重试失败项");
   assert.equal(panel().props.undoCount, 1);
   await panel().props.onRetry(); await tick(); render();
@@ -584,30 +587,33 @@ test("归档发现入口提供组合日期筛选及只读预览", async () => {
   const filters = nodes(tree).find(n => n.type?.name === "DiscoveryFilters");
   assert.ok(filters, "日期筛选应接入真实设置页");
   const searchRow = nodes(tree).find(n => n.props.className === "dsham_settingsSearch");
-  assert.ok(nodes(searchRow).includes(filters), "日期筛选应位于搜索框右侧");
+  const filterRow = nodes(tree).find(n => n.props.className === "dsham_settingsFilters");
   assert.ok(nodes(searchRow).some(n => n.type?.name === "ArchiveProjectSelect" && n.props["aria-label"] === "discovery.scope"), "搜索框左侧常驻查找范围切换");
+  assert.equal(nodes(searchRow).includes(filters), false, "日期筛选不和搜索框挤在同一行");
+  assert.ok(nodes(filterRow).includes(filters), "日期筛选跟在项目和收藏后面");
+  assert.ok(nodes(filterRow).some(n => n.props.className === "dsham_settingsSort"), "排序靠在筛选行右侧");
   filters.props.onFrom("2026-09-01"); tree = render();
-  assert.equal(nodes(tree).filter(n => n.type === "article").length, 1);
+  assert.equal(nodes(tree).filter(n => n.props?.className === "dsham_settingsRow").length, 1);
   assert.equal(nodes(tree).find(n => n.props.className === "dsham_settingsCount").props.children, "1", "日期筛选后的数量必须与可见会话一致");
   const menuNode = nodes(tree).find(n => n.type?.name === "ArchivedSessionMenu");
   const menu = menuNode.type(menuNode.props);
-  assert.deepEqual(menu.props.items.map(i => i.id), ["preview", "restoreOpen", "copyId", "delete"]);
+  assert.deepEqual(menu.props.menu.items.map(i => i.key), ["preview", "restoreOpen", "copyId", "delete"]);
   await menuNode.props.onCopyId(); tree = render();
   assert.equal(nodes(tree).find(n => n.props.role === "alert").props.children, "copy.unavailable");
-  menu.props.onSelect("preview"); tree = render();
+  menu.props.menu.items.find(item => item.key === "preview").onClick(); tree = render();
   assert.ok(nodes(tree).some(n => n.props.open && n.props.title === "九月"), "预览弹窗应打开且仍保持归档列表");
-  nodes(tree).find(n => n.type?.name === "SegmentedTabs").props.onChange("unarchived"); tree = render();
+  nodes(tree).find(n => n.props?.options?.some?.(option => option.value === "archived")).props.onChange("unarchived"); tree = render();
   assert.equal(nodes(tree).some(n => n.props.open), false, "未主动关闭预览，切页签也应关闭");
-  nodes(tree).find(n => n.type?.name === "SegmentedTabs").props.onChange("archived"); tree = render();
+  nodes(tree).find(n => n.props?.options?.some?.(option => option.value === "archived")).props.onChange("archived"); tree = render();
   assert.equal(nodes(tree).some(n => n.props.open), false, "切回已归档不能重新打开预览");
   const reopenedMenu = nodes(tree).find(n => n.type?.name === "ArchivedSessionMenu");
-  reopenedMenu.type(reopenedMenu.props).props.onSelect("preview"); tree = render();
+  reopenedMenu.type(reopenedMenu.props).props.menu.items.find(item => item.key === "preview").onClick(); tree = render();
   assert.ok(nodes(tree).some(n => n.props.open), "用户主动打开仍然可用");
   nodes(tree).find(n => n.props.open).props.onClose(); tree = render();
   assert.equal(nodes(tree).some(n => n.props.open), false);
   nodes(tree).find(n => n.type?.name === "DiscoveryFilters").props.onClear(); tree = render();
-  assert.equal(nodes(tree).filter(n => n.type === "article").length, 2);
-  nodes(tree).find(n => n.type?.name === "SegmentedTabs").props.onChange("unarchived"); tree = render();
+  assert.equal(nodes(tree).filter(n => n.props?.className === "dsham_settingsRow").length, 2);
+  nodes(tree).find(n => n.props?.options?.some?.(option => option.value === "archived")).props.onChange("unarchived"); tree = render();
   assert.ok(nodes(tree).some(n => n.props.id === 'dsham-search-scope'), '未归档同样提供标题与正文范围');
   assert.ok(nodes(tree).find(n => n.props.id === 'dsham-sort-filter').props.options.some(option => option.value === 'created'), '未归档同样支持创建时间排序');
 });

@@ -1,6 +1,6 @@
 import { errorMessage } from "./contracts.js";
 import type { Translate, SessionDetail, SessionSummary } from "./contracts.js";
-import type { HostControls } from "./host-controls.js";
+import { Button, Disclosure } from "./antd-ui.js";
 type HealthResult = Partial<ReturnType<typeof import("./archive-discovery.js").repairResultSchema.parse>> & { repairable: boolean };
 interface HealthProps {
  items: SessionDetail[]; sessions: (SessionSummary & { displayTitle?: string })[]; t?: Translate; isArchived?: boolean;
@@ -28,29 +28,24 @@ export const sessionHealthCss = `
 .dsham_healthItem{padding:14px;border:1px solid var(--dsw-alias-border-l2);border-radius:9px;background:var(--dsw-alias-bg-layer-3)}
 .dsham_healthRow{display:flex;align-items:center;justify-content:space-between;gap:16px}.dsham_healthCopy{flex:1;min-width:0}.dsham_healthTitle{display:block;font-size:13px;font-weight:600;overflow-wrap:anywhere}.dsham_healthState{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px;color:var(--dsw-alias-label-secondary)}
 .dsham_healthState[data-state=ready]{color:var(--dsw-alias-label-primary)}.dsham_healthState[data-state=ready]>span{color:var(--health-accent)}.dsham_healthState[data-state=success]{color:var(--dsw-alias-state-success-primary,#60b58a)}
-.dsham_healthButton{display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:none;min-height:32px;padding:5px 11px;border:1px solid var(--dsw-alias-border-l2);border-radius:7px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;white-space:nowrap;cursor:pointer;transition:background .15s,border-color .15s}
-.dsham_healthButton:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);border-color:var(--dsw-alias-label-secondary)}.dsham_healthButton[data-primary=true]{background:var(--dsw-alias-button-primary-fill,#3169c6);border-color:transparent;color:var(--dsw-alias-label-primary-foreground,#fff)}.dsham_healthButton[data-primary=true]:hover:not(:disabled){background:var(--dsw-alias-button-primary-hover,var(--dsw-alias-button-primary-fill,#3169c6));border-color:transparent}.dsham_healthButton:disabled{opacity:.5;cursor:wait}.dsham_healthButton[data-subtle=true]{border-color:transparent;padding:3px 6px;min-height:28px;color:var(--dsw-alias-label-secondary)}
 .dsham_healthAdvice{margin-top:10px!important;padding-top:10px;border-top:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary);font-size:12px;overflow-wrap:anywhere}.dsham_healthTech{margin-top:10px;font-size:12px;color:var(--dsw-alias-label-secondary)}.dsham_healthTech>summary{display:inline-flex;gap:4px;align-items:center;min-height:24px;cursor:pointer}.dsham_healthTech[open]>summary .dsham_healthChevron{transform:rotate(180deg)}.dsham_healthLog{margin-top:8px;padding:10px;border-radius:6px;background:var(--dsw-alias-bg-layer-2);overflow-wrap:anywhere;font:11px/1.7 ui-monospace,monospace}.dsham_healthLog p+p{margin-top:6px}
 .dsham_healthNotice{display:flex;align-items:center;gap:8px;padding:10px 12px;margin-bottom:10px!important;border:1px solid var(--dsw-alias-border-l2);border-radius:9px;color:var(--dsw-alias-label-primary)}
 .dsham_health button:focus-visible,.dsham_health summary:focus-visible{outline:2px solid var(--health-accent);outline-offset:3px}.dsham_health svg{flex:none}
-@media(max-width:520px){.dsham_healthSummary{padding:12px}.dsham_healthSummaryHint{display:none}.dsham_healthBody{padding:10px}.dsham_healthItem{padding:12px}.dsham_healthRow{align-items:flex-start;flex-wrap:wrap;gap:12px}.dsham_healthCopy{flex-basis:65%}.dsham_healthButton{min-height:36px}.dsham_healthIntro{align-items:flex-start}.dsham_healthIntro>span{flex:1}}
+@media(max-width:520px){.dsham_healthSummary{padding:12px}.dsham_healthSummaryHint{display:none}.dsham_healthBody{padding:10px}.dsham_healthItem{padding:12px}.dsham_healthRow{align-items:flex-start;flex-wrap:wrap;gap:12px}.dsham_healthCopy{flex-basis:65%}.dsham_healthIntro{align-items:flex-start}.dsham_healthIntro>span{flex:1}}
 @media(prefers-reduced-motion:reduce){.dsham_health *{transition:none!important}}
 `;
 
 /** 异常默认折叠；只在服务端完成诊断后提供确认修复。 */
-export function createSessionHealthPanel(React: typeof import("react"), icons: Record<string, import("react").ComponentType<{ size?: number; className?: string; width?: number; height?: number }>> = {}, controls: HostControls = {}) {
+export function createSessionHealthPanel(React: typeof import("react"), icons: Record<string, import("react").ComponentType<{ size?: number; className?: string; width?: number; height?: number }>> = {}) {
   const h = React.createElement;
   const icon = (name: string, className?: string) => icons[name] ? h('span', { className, 'aria-hidden': true }, h(icons[name], { width: 16, height: 16 })) : null;
   function actionButton(label: string, options: { primary?: boolean; subtle?: boolean; disabled?: boolean; onClick(): void }, glyph: import("react").ReactNode) {
-    const Button = controls.Button;
-    if (Button) return h(Button, { type: "button", size: "sm", variant: options.primary ? "primary" : options.subtle ? "ghost" : "outline", disabled: options.disabled, onClick: options.onClick, icon: glyph ?? undefined }, label);
-    return h("button", { type: "button", className: "dsham_healthButton", "data-primary": options.primary || undefined, "data-subtle": options.subtle || undefined, disabled: options.disabled, onClick: options.onClick }, glyph, label);
+    const type = options.primary ? "primary" : options.subtle ? "text" : "default";
+    return h(Button, { shape: "round", type, disabled: options.disabled, onClick: options.onClick, icon: glyph ?? undefined }, label);
   }
   function TechnicalDetails({ title, glyph, children }: { title: string; glyph: import("react").ReactNode; children?: import("react").ReactNode }) {
     const [open, setOpen] = React.useState(false);
-    const Row = controls.DisclosureRow;
-    if (!Row) return h("details", { className: "dsham_healthTech" }, h("summary", null, glyph, title), children);
-    return h(Row, { className: "dsham_healthTech", icon: glyph ?? h("span", { "aria-hidden": true }), title, open, expandable: true, onToggle: () => setOpen(value => !value) }, children);
+    return h(Disclosure, { className: "dsham_healthTech", title: h(React.Fragment, null, glyph, title), open, onToggle: () => setOpen(value => !value) }, children);
   }
   return function SessionHealthPanel({ items, sessions, t = defaultT, isArchived = true, diagnoseSession, repairSession, retry, pending }: HealthProps) {
     const [results, setResults] = React.useState<Record<string, HealthResult>>({});
