@@ -585,7 +585,7 @@ test("归档发现入口提供组合日期筛选及只读预览", async () => {
   assert.ok(filters, "日期筛选应接入真实设置页");
   const searchRow = nodes(tree).find(n => n.props.className === "dsham_settingsSearch");
   assert.ok(nodes(searchRow).includes(filters), "日期筛选应位于搜索框右侧");
-  assert.ok(nodes(searchRow).some(n => n.type?.name === "SegmentedControl" && n.props.label === "discovery.scope"), "搜索框左侧常驻查找范围切换");
+  assert.ok(nodes(searchRow).some(n => n.type?.name === "ArchiveProjectSelect" && n.props["aria-label"] === "discovery.scope"), "搜索框左侧常驻查找范围切换");
   filters.props.onFrom("2026-09-01"); tree = render();
   assert.equal(nodes(tree).filter(n => n.type === "article").length, 1);
   assert.equal(nodes(tree).find(n => n.props.className === "dsham_settingsCount").props.children, "1", "日期筛选后的数量必须与可见会话一致");
