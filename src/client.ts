@@ -3604,11 +3604,13 @@ window.__ModuleLoader__.load({
 		/** 项目标题右侧的批量归档/恢复/删除菜单，复用宿主菜单组件的键盘和焦点行为。 */
 		function ArchivedGroupActions({ group, busy, onArchive, onRestore, onDelete, t }: { group: ArchivedGroup; busy: boolean; onArchive?: () => void; onRestore?: () => void; onDelete?: () => void; t: Translate }) {
 			const [open, setOpen] = (0, react.useState)(false);
+			const anchorRef = (0, react.useRef)<HTMLSpanElement>(null);
 			const ungrouped = group.key === ARCHIVE_UNGROUPED_KEY;
 			const items = onArchive ? [{
 				id: "archive",
 				label: t(ungrouped ? "archives.archiveUngrouped" : "archives.archiveProject"),
-				icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconArchiveOutline20, { size: 16 })
+				icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconArchiveOutline20, { size: 16 }),
+				danger: true
 			}] : [{
 				id: "restore",
 				label: t(ungrouped ? "archives.restoreUngrouped" : "archives.restoreProject"),
@@ -3634,17 +3636,21 @@ window.__ModuleLoader__.load({
 				portal: true,
 				align: "end",
 				autoFocus: true,
-				anchor: settingsButton({
+				getAnchorRect: () => {
+					const rect = anchorRef.current?.getBoundingClientRect();
+					if (rect === undefined) return null;
+					return new DOMRect(rect.left - 4, rect.top - 4, 0, 0);
+				},
+				anchor: (0, react_jsx_runtime.jsx)("span", { ref: anchorRef, children: settingsButton({
 					variant: "ghost",
 					className: "dsham_settingsGroupMenu",
 					disabled: busy,
-					title: menuLabel,
 					"aria-label": menuLabel,
 					"aria-haspopup": "menu",
 					"aria-expanded": open,
 					onClick: () => setOpen((current) => !current),
 					icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconEllipsisOutline16, {})
-				})
+				}) })
 			});
 		}
 		/** 设置页“未分组”桶的稳定 key（workspaceId 均为非空 uuid，不会冲突）。 */
