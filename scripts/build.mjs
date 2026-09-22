@@ -1,7 +1,7 @@
 // 统一从 src 生成可发布的 lib，避免运行产物成为手工维护入口。
 // 先在同级暂存目录完成构建，成功后再替换，避免失败时破坏可安装产物。
 import { randomUUID } from "node:crypto";
-import { access, rename, rm, writeFile } from "node:fs/promises";
+import { access, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { build } from "esbuild";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +13,19 @@ const stagingDirectory = join(root, `.dsh-archive-manager-build-${randomUUID()}`
 const backupDirectory = join(root, `.dsh-archive-manager-build-backup-${randomUUID()}`);
 let previousOutputMoved = false;
 let published = false;
+
+async function bundledLicenseNotice() {
+	const notices = [
+		["Ant Design", join(root, "node_modules/antd/LICENSE")],
+		["dayjs", join(root, "node_modules/dayjs/LICENSE")]
+	];
+	const lines = ["/*!", "Third-party notices for code bundled into this file.", ""];
+	for (const [name, path] of notices) {
+		lines.push(name, "", (await readFile(path, "utf8")).trim(), "");
+	}
+	lines.push("*/");
+	return lines.join("\n");
+}
 
 async function exists(path) {
 	try {
@@ -53,6 +66,7 @@ try {
 		}
 	});
 	const clientSource = clientBundle.outputFiles[0].text;
+	const thirdPartyNotices = await bundledLicenseNotice();
 	await writeFile(join(stagingDirectory, "client.js"), `window.__ModuleLoader__.load({
   id: "@michengai/dsh-archive-manager",
   factory: function(require) {
@@ -66,6 +80,7 @@ try {
     return module.exports.startArchiveClient(require);
   }
 });
+${thirdPartyNotices}
 `);
 
 	if (process.env.DSH_ARCHIVE_MANAGER_TEST_FAIL_BEFORE_PUBLISH === "1") {
