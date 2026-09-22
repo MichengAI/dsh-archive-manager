@@ -84,6 +84,22 @@ test("会话目录及祖先目录的真实链接仍然拒绝修复", async () =>
     await rm(root, { recursive: true, force: true });
   }
 });
+test("修复接受宿主当前代际，拒绝第三代之前的格式", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "archive-repair-generation-"));
+  try {
+    await writeRepairSource(directory);
+    const next = { ...fakeFormat, currentVersion: 4, createRestore(header) {
+      const events = [];
+      return { decodeRow: (row) => events.push(row), finish: () => ({ header: { ...header, version: 4 }, events, inheritedEventCount: 0 }) };
+    } };
+    const plan = await prepareAutomationRepair({ directory, target: join(directory, "session.v4.jsonl"), sessionId: "a", format: next });
+    await plan.publish(plan.token, async () => {});
+    assert.match(await readFile(join(directory, "session.v4.jsonl"), "utf8"), /"version":4/);
+    await assert.rejects(prepareAutomationRepair({ directory, target: join(directory, "session.v2.jsonl"), sessionId: "a", format: { ...fakeFormat, currentVersion: 2 } }), /不支持此修复/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 test("修复令牌绑定原文件，原文件保留且禁止覆盖已有代际", async () => {
   const directory = await mkdtemp(join(tmpdir(), "archive-repair-test-"));
   try {

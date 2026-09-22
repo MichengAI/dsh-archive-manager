@@ -75,7 +75,7 @@ async function regularDirectory(directory: string) {
 }
 /** 保留旧代际，只生成经宿主转换器校验的新代际；仅允许纠正内容完全匹配的旧版单帧错误产物。 */
 export async function prepareAutomationRepair({ directory, target, sessionId, format }: { directory: string; target: string; sessionId: string; format: RepairFormat }) {
-  if (!format || format.currentVersion !== 3 || typeof format.createRestore !== 'function') throw new Error('当前宿主不支持此修复，请升级 DSH 后重试');
+  if (!format || !Number.isInteger(format.currentVersion) || format.currentVersion < 3 || typeof format.createRestore !== 'function') throw new Error('当前宿主不支持此修复，请升级 DSH 后重试');
   await regularDirectory(directory);
   const names = (await readdir(directory)).filter(name => /^session(?:\.v[1-9][0-9]*)?\.jsonl(?:\.zstd)?$/.test(name));
   const sources = names.filter(name => /^session\.jsonl(?:\.zstd)?$/.test(name));

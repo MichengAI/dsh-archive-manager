@@ -21,7 +21,7 @@ function run(command, args, env = process.env) {
 }
 try {
 	const dependencies = Object.fromEntries([
-		"session", "session-persistence", "session-persistence-jsonl", "session-query", "session-projection", "session-projection-cache", "workspace", "spill-local", "typert-protocol", "typert-registry"
+		"session", "session-persistence", "session-persistence-jsonl", "session-format-catalog", "session-format-v3-to-v4", "session-query", "session-projection", "session-projection-cache", "workspace", "spill-local", "typert-protocol", "typert-registry"
 	].map((name) => [`@deepseek-ai/dsh-${name}`, version]));
 	dependencies["@deepseek-ai/cordis"] = manifest.devDependencies["@deepseek-ai/cordis"];
 	await writeFile(join(isolated, "package.json"), JSON.stringify({ private: true, type: "module", dependencies, overrides: hostTestOverrides(version) }), "utf8");

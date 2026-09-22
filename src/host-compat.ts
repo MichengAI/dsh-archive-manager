@@ -9,7 +9,7 @@ import type { RepairFormat } from "./session-repair.js";
 /** 旧宿主使用普通字符串 ID；只在经现有 schema 校验的兼容边界消除新版本品牌。 */
 export type Header = Omit<SessionHeader, "id"> & { id: string; header?: Header };
 export type WorkspaceRow = Omit<WorkspaceRecord, "sessionIds"> & { sessionIds: string[] };
-export type WorkspaceState = Omit<WorkspaceDomainState, "workspaceIds" | "archivedSessionIds"> & { workspaceIds: string[]; archivedSessionIds: string[] };
+export type WorkspaceState = Omit<WorkspaceDomainState, "workspaceIds" | "archivedSessionIds" | "pinnedSessionIds"> & { workspaceIds: string[]; archivedSessionIds: string[]; pinnedSessionIds?: string[] };
 export interface StoredSource { meta: Header; events: SessionEvent[]; inheritedEventCount?: number }
 export interface PersistenceCompat {
   name: string; root?: string; config?: { root?: string }; generationFormat: RepairFormat;
@@ -33,7 +33,7 @@ export interface SessionsCompat {
 }
 interface CacheCompat {
   whenIdle?(): Promise<void>; delete(id: string): Promise<void>; clearTombstone?(id: string): void;
-  cachedSnapshot(header: Header, inheritedEventCount: number): unknown;
+  cachedSnapshot(header: Header, inheritedOrKeys?: number | readonly string[]): unknown;
   put(id: string, identity: Omit<CheckpointRecord["identity"], "inheritedEventCount"> & { inheritedEventCount: number }, rows: CheckpointRecord["rows"]): Promise<void>;
 }
 interface HostServices {

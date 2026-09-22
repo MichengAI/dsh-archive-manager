@@ -7,7 +7,7 @@ import type { Schema, SessionDetail } from "./contracts.js";
 import type { TypertGatewayBinding } from "@deepseek-ai/dsh-typert-protocol";
 type BatchTarget = { scope: "all" | "ungrouped" } | { scope: "workspace"; workspaceId: string } | { scope: "sessions"; sessionIds: string[] };
 import * as SessionRuntime from "@deepseek-ai/dsh-session";
-import { prepareAutomationRepair } from "./session-repair.js";
+import { prepareAutomationRepair, type RepairFormat } from "./session-repair.js";
 import { repairInputSchema, classifySessionError, detailsInputSchema, countConversationTurns, discoveryInvocations, searchInputSchema, previewInputSchema, extractConversation, findContentMatch, previewConversation } from "./archive-discovery.js";
 import { lstat, rm } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
@@ -349,6 +349,38 @@ function registerHostRemote(ctx: HostContext) {
 		typertCtx.typert.register(ARCHIVE_MANAGER_TYPERT as TypertContribution);
 	});
 }
+/** 0.1.6 及更早的 generationFormat 自带 createRestore；0.1.7 起改由带空子会话证据的目录创建。 */
+async function hostRepairFormat(format: RepairFormat | undefined): Promise<RepairFormat> {
+	if (!format || !Number.isInteger(format.currentVersion) || format.currentVersion < 3) throw new Error("当前宿主不支持此修复，请升级 DSH 后重试");
+	if (typeof format.createRestore === "function") return format;
+	if (typeof format.encodeHeader !== "function" || typeof format.encodeEvent !== "function") throw new Error("当前宿主不支持此修复，请升级 DSH 后重试");
+	const catalog = await import("@deepseek-ai/dsh-session-format-catalog");
+	if (typeof catalog.createSessionFormatCatalogWithChildren !== "function") throw new Error("当前宿主不支持此修复，请升级 DSH 后重试");
+	return { ...format, createRestore(header: unknown) {
+		return catalog.createSessionFormatCatalogWithChildren([]).createRestore(header, { recovery: "recoverable", validation: "transformed" });
+	} } as unknown as RepairFormat;
+}
+let activeSessionError: (new (sessionId: string, activity: readonly unknown[]) => Error) | null | undefined;
+async function activeSessionErrorType() {
+	if (activeSessionError !== undefined) return activeSessionError ?? undefined;
+	const workspace = await import("@deepseek-ai/dsh-workspace");
+	activeSessionError = typeof workspace.WorkspaceActiveSessionError === "function"
+		? workspace.WorkspaceActiveSessionError as unknown as new (sessionId: string, activity: readonly unknown[]) => Error
+		: null;
+	return activeSessionError ?? undefined;
+}
+function snapshotUsesProjectionKeys(cache: { cachedSnapshot: (...args: never[]) => unknown }) {
+	return Function.prototype.toString.call(cache.cachedSnapshot).includes("lifecycleIdentityOf");
+}
+function projectionSnapshot(cache: { cachedSnapshot(header: Header, inheritedOrKeys?: number | readonly string[]): unknown }, header: Header, inheritedEventCount: number) {
+	// 0.1.7 用生命周期身份匹配，第二参数是要查看的投影键；更早宿主用继承切点。
+	if (snapshotUsesProjectionKeys(cache)) return cache.cachedSnapshot(header);
+	return cache.cachedSnapshot(header, inheritedEventCount);
+}
+function hostEvent(ctx: HostContext, name: "waterfall" | "parallel") {
+	const caller = (ctx as HostContext & { waterfall?: unknown; parallel?: unknown })[name];
+	return typeof caller === "function" ? caller as (this: HostContext, ...args: unknown[]) => Promise<unknown> : undefined;
+}
 var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as WorkspaceConstructor) {
 	static inject = [
 		"storageDomain",
@@ -450,8 +482,11 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Wo
         const header = await this.readSessionHeader(sessionId);
         const location = await persistence?.locate?.(header);
         const directory = location && jsonlSessionDirectory(persistence, header, location);
-        if (!directory || !/^session\.v3\.jsonl(?:\.zstd)?$/.test(basename(location.path))) throw new Error("当前存储后端或格式不支持自动修复");
-        return prepareAutomationRepair({ directory, target: location.path, sessionId, format: { ...persistence.generationFormat, validateBytes: async bytes => {
+        const version = persistence.generationFormat?.currentVersion;
+        const currentGeneration = Number.isInteger(version) && version >= 3 ? new RegExp(`^session\\.v${version}\\.jsonl(?:\\.zstd)?$`) : undefined;
+        if (!directory || currentGeneration === undefined || !currentGeneration.test(basename(location.path))) throw new Error("当前存储后端或格式不支持自动修复");
+        const format = await hostRepairFormat(persistence.generationFormat);
+        return prepareAutomationRepair({ directory, target: location.path, sessionId, format: { ...format, validateBytes: async bytes => {
             if (location.path.endsWith(".zstd")) {
                 if (typeof persistence.readZstdPrefix !== "function") throw new Error("当前宿主缺少压缩日志校验能力");
                 const parsed = await persistence.readZstdPrefix(bytes);
@@ -703,7 +738,8 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Wo
 			return false;
 		try {
 			// 未播种会话的继承事件数恒为零，先查缓存可避免读取完整会话原文。
-			if (!header.isSeeded && cache.cachedSnapshot(header, 0) !== void 0)
+			// 0.1.7 起第二参数是投影键，不再是继承切点。
+			if (!header.isSeeded && projectionSnapshot(cache, header, 0) !== void 0)
 				return false;
 			const stored = await this.readStoredProjectionSource(persistence, header.id);
 			const meta = stored.meta ?? header;
@@ -720,7 +756,7 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Wo
 				);
 				return false;
 			}
-			if (cache.cachedSnapshot(meta, inheritedEventCount) !== void 0) return false;
+			if (projectionSnapshot(cache, meta, inheritedEventCount) !== void 0) return false;
 			const restored = projections.restore(
 				{},
 				stored.events,
@@ -775,16 +811,47 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Wo
 	 * 未知 id 直接跳过，不抛 `UNKNOWN_SESSION`，避免把幽灵 id 写进集合。
 	 * @param sessionId - 要归档的会话。
 	 */
-	async archiveSession(sessionId: string) {
+	async archiveSession(sessionId: string, options?: { stopActivity?: boolean }) {
 		return this.enqueueOperation(async () => {
 			if (this.requireState().archivedSessionIds.includes(sessionId)) return;
 			if (!(await this.sessionKnown(sessionId))) return;
+			const stopActivity = options?.stopActivity === true;
+			const ActiveSession = await activeSessionErrorType();
+			if (!stopActivity && ActiveSession !== undefined) {
+				const activity = await this.sessionActivity(sessionId);
+				if (activity.length > 0) throw new ActiveSession(sessionId, activity);
+			}
 			const state = this.requireState();
+			const pinnedSessionIds = Array.isArray(state.pinnedSessionIds)
+				? state.pinnedSessionIds.filter((id) => id !== sessionId)
+				: undefined;
 			await this.setState({
 				...state,
 				archivedSessionIds: [...state.archivedSessionIds, sessionId],
+				...(pinnedSessionIds === undefined ? {} : { pinnedSessionIds }),
 			});
+			if (stopActivity && ActiveSession !== undefined) await this.stopSessionActivity(sessionId);
 		});
+	}
+	/** 0.1.7 起宿主用 waterfall 报告仍在运行的回合、子代理、任务和提醒。旧宿主没有该事件。 */
+	async sessionActivity(sessionId: string) {
+		const waterfall = hostEvent(this.ctx, "waterfall");
+		if (waterfall === undefined) return [];
+		const activity = await waterfall.call(this.ctx, "workspace/session-activity", { sessionId }, () => Promise.resolve([]));
+		return Array.isArray(activity) ? activity : [];
+	}
+	/** 归档已经写入后再请求停止；提供方失败只记日志，不撤回归档。 */
+	async stopSessionActivity(sessionId: string) {
+		const parallel = hostEvent(this.ctx, "parallel");
+		if (parallel === undefined) return;
+		try {
+			await parallel.call(this.ctx, "workspace/session-stop", { sessionId });
+		} catch (error) {
+			const failures = error instanceof AggregateError ? error.errors : [error];
+			for (const failure of failures) {
+				this.ctx.logger.warn(`archive-manager: stopping session "${sessionId}" for archive failed: ${String(failure)}`);
+			}
+		}
 	}
 	/**
 	 * 把一个会话移出注册表全局归档集合，恢复其正常可见性（其记账位从未

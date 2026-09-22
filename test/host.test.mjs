@@ -418,6 +418,54 @@ test("恢复不在工作区记账的会话时按 cwd 重新挂回原工作区", 
 	assert.ok(registry.get(A).sessionIds.includes(s1));
 });
 
+test("archive drops a recorded pin and leaves hosts without pins unchanged", async () => {
+	const pinned = buildRoot({
+		headers: [header(s1, cwdA), header(s2, cwdA)],
+		workspaces: { [A]: workspace("D:\\proj-a", [s1, s2]) },
+	});
+	pinned.global.pinnedSessionIds = [s1, s2];
+	const pinnedRegistry = await mountWorkspaceRegistry(pinned);
+	await pinnedRegistry.archiveSession(s1);
+	assert.deepEqual(pinned.global.archivedSessionIds, [s1]);
+	assert.deepEqual(pinned.global.pinnedSessionIds, [s2]);
+	const legacy = buildRoot({
+		headers: [header(s1, cwdA)],
+		workspaces: { [A]: workspace("D:\\proj-a", [s1]) },
+	});
+	const legacyRegistry = await mountWorkspaceRegistry(legacy);
+	await legacyRegistry.archiveSession(s1);
+	assert.equal(Object.hasOwn(legacy.global, "pinnedSessionIds"), false);
+});
+
+test("running sessions use the host activity gate when that error type exists", async () => {
+	const workspacePackage = await import("@deepseek-ai/dsh-workspace");
+	if (typeof workspacePackage.WorkspaceActiveSessionError !== "function") return;
+	const env = buildRoot({
+		headers: [header(s1, cwdA)],
+		workspaces: { [A]: workspace("D:\\proj-a", [s1]) },
+	});
+	const registry = await mountWorkspaceRegistry(env);
+	let asked = 0;
+	const stopped = [];
+	env.ctx.waterfall = async () => {
+		asked += 1;
+		return [{ kind: "turn" }];
+	};
+	env.ctx.parallel = async (name, request) => {
+		stopped.push([name, request.sessionId]);
+	};
+	await assert.rejects(registry.archiveSession(s1), (error) => error instanceof workspacePackage.WorkspaceActiveSessionError);
+	assert.deepEqual(env.global.archivedSessionIds, []);
+	assert.equal(asked, 1);
+	await registry.archiveSession(s1, { stopActivity: true });
+	assert.deepEqual(env.global.archivedSessionIds, [s1]);
+	assert.equal(asked, 1);
+	assert.deepEqual(stopped, [["workspace/session-stop", s1]]);
+	asked = 0;
+	await registry.archiveSession(s1);
+	assert.equal(asked, 0);
+});
+
 test("archiveSession skips unknown ids", async () => {
 	const env = buildRoot({
 		headers: [header(s1, cwdA)],

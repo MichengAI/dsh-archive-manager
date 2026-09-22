@@ -262,8 +262,17 @@ for (const archiveFirst of [false, true]) test(`官方选择器和导航保持�
 		if (!custom) custom = root.plugin(archive);
 		await custom;
 		await tick();
-		assert.equal(slots.entries("sidebar.workspaces").length, 2);
-		assert.equal(slots.entries("sidebar.workspaces")[0].component !== stockSidebar.component, true);
+		const sessionMenu = "sidebar.workspaces.session.menu.item";
+		const extensible = slots.entries("sidebar.workspaces").some((entry) => entry.children?.[sessionMenu] !== undefined);
+		if (extensible) {
+			assert.equal(slots.entries("sidebar.workspaces").length, 1);
+			assert.equal(slots.entries("sidebar.workspaces")[0].component, stockSidebar.component);
+			const deletion = slots.entries(sessionMenu).find((entry) => entry.options.id === "archive-manager.delete-session");
+			assert.equal(deletion.options.order, 500);
+		} else {
+			assert.equal(slots.entries("sidebar.workspaces").length, 2);
+			assert.equal(slots.entries("sidebar.workspaces")[0].component !== stockSidebar.component, true);
+		}
 		assert.deepEqual(slots.entries("conversation.hero.workspace"), [picker]);
 		assert.equal(root.get("uiWorkspace")?.archiveCompositionMarker, navigation ? "official-instance" : undefined);
 		if (typeof navigation?.openWorkspace === "function") {
@@ -272,21 +281,23 @@ for (const archiveFirst of [false, true]) test(`官方选择器和导航保持�
 			assert.deepEqual(draft, ["new-session"]);
 			assert.ok(opened.includes("new-session"));
 		}
-		const flow = () => null;
-		const injected = () => ({ pick: "official" });
-		const disposeFlow = slots.register({ name: "sidebar.workspaces.directoryFlow", inject: injected }, flow);
-		await tick();
-		const mirror = slots.entries("archiveManager.sidebar.directoryFlow")[0];
-		assert.equal(mirror.component, flow);
-		assert.equal(mirror.inject, injected);
-		disposeFlow();
-		await tick();
-		assert.equal(slots.entries("archiveManager.sidebar.directoryFlow").length, 0);
+		if (!extensible) {
+			const flow = () => null;
+			const injected = () => ({ pick: "official" });
+			const disposeFlow = slots.register({ name: "sidebar.workspaces.directoryFlow", inject: injected }, flow);
+			await tick();
+			const mirror = slots.entries("archiveManager.sidebar.directoryFlow")[0];
+			assert.equal(mirror.component, flow);
+			assert.equal(mirror.inject, injected);
+			disposeFlow();
+			await tick();
+			assert.equal(slots.entries("archiveManager.sidebar.directoryFlow").length, 0);
+		}
 		// 父插槽消失后重建，两个插件必须重新注册，且目录声明不能残留。
 		disposeRoot();
 		disposeRoot = declare();
 		await tick();
-		assert.equal(slots.entries("sidebar.workspaces").length, 2);
+		assert.equal(slots.entries("sidebar.workspaces").length, extensible ? 1 : 2);
 		assert.equal(slots.entries("conversation.hero.workspace").length, 1);
 		await custom.dispose();
 		assert.equal(slots.entries("sidebar.workspaces").length, 1);

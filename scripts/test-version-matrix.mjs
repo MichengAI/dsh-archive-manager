@@ -15,7 +15,8 @@ const profiles = [
 	{ version: "0.1.5-rc.1", cordis: "4.0.2", latest: true },
 	{ version: "0.1.5-rc.2", cordis: "4.0.2", latest: true },
 	{ version: "0.1.6-alpha.1", cordis: "4.0.2", latest: true },
-	{ version: manifest.devDependencies["@deepseek-ai/dsh-session"], cordis: "4.0.2", latest: true }
+	{ version: "0.1.6-alpha.2", cordis: "4.0.2", latest: true },
+	{ version: manifest.devDependencies["@deepseek-ai/dsh-session"], cordis: "4.0.3", latest: true }
 ];
 const npm = process.platform === "win32" ? process.execPath : "npm";
 const npmPrefix = process.platform === "win32" ? [join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js")] : [];
@@ -39,6 +40,8 @@ for (const profile of profiles) {
 	try {
 		const dependencies = {};
 		for (const [name, pinned] of Object.entries(manifest.devDependencies)) {
+			// 格式目录从 0.1.5 才发布；更早宿主的修复仍使用 persistence.generationFormat.createRestore。
+			if (name === "@deepseek-ai/dsh-session-format-catalog" && ["0.1.0-rc.8", "0.1.1-rc.2", "0.1.2-rc.1"].includes(profile.version)) continue;
 			const target = profile.runtime && name === "@deepseek-ai/dsh-client-store" ? "@deepseek-ai/dsh-client-runtime" : name;
 			dependencies[target] = name.startsWith("@deepseek-ai/dsh-") ? profile.version : pinned;
 		}

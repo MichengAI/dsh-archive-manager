@@ -265,6 +265,15 @@ test("batch archive stops on failure and leaves earlier sessions archived", asyn
 	assert.deepEqual(archived, ["s1"]);
 });
 
+test("active archive refusals expose their activity kinds", () => {
+	assert.deepEqual(t.activeSessionActivity({ name: "WorkspaceActiveSessionError", activity: [{ kind: "turn" }, { kind: "job" }] }), ["turn", "job"]);
+	assert.deepEqual(t.activeSessionActivity({
+		name: "WorkspaceArchiveError",
+		rpcError: { code: "workspace/session-active", details: { activity: [{ kind: "subagent" }] } },
+	}), ["subagent"]);
+	assert.equal(t.activeSessionActivity(new Error("archive failed")), undefined);
+});
+
 test("legacy workspace view prefs migrate onto the archive-manager persist key", () => {
 	const storage = new Map([
 		["dsh.workspace.view.v5", JSON.stringify({ groupBy: "flat", orderBy: "title", groupExpansion: { w1: false } })],
@@ -333,15 +342,15 @@ test("manifest keeps one DSH peer range and both client contracts optional", () 
 		.map(([, version]) => version);
 	assert.ok(dshPeerRanges.length > 0);
 	assert.equal(new Set(dshPeerRanges).size, 1);
-	assert.equal(dshPeerRanges[0], "0.1.0-rc.8 || 0.1.1-rc.2 || 0.1.2-rc.1 || 0.1.5-rc.1 || 0.1.5-rc.2 || 0.1.6-alpha.1 || 0.1.6-alpha.2");
-	for (const version of ["0.1.0-rc.8", "0.1.1-rc.2", "0.1.2-rc.1", "0.1.5-rc.1", "0.1.5-rc.2", "0.1.6-alpha.1", "0.1.6-alpha.2"]) {
+	assert.equal(dshPeerRanges[0], "0.1.0-rc.8 || 0.1.1-rc.2 || 0.1.2-rc.1 || 0.1.5-rc.1 || 0.1.5-rc.2 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1");
+	for (const version of ["0.1.0-rc.8", "0.1.1-rc.2", "0.1.2-rc.1", "0.1.5-rc.1", "0.1.5-rc.2", "0.1.6-alpha.1", "0.1.6-alpha.2", "0.1.7-alpha.1"]) {
 		assert.ok(semver.satisfies(version, dshPeerRanges[0]), `peer 范围必须接纳已验证宿主 ${version}`);
 	}
-	for (const version of ["0.1.0-rc.5", "0.1.0-rc.9", "0.1.3-alpha.2", "0.1.5-rc.3", "0.1.5", "0.1.6", "0.2.0"]) {
+	for (const version of ["0.1.0-rc.5", "0.1.0-rc.9", "0.1.3-alpha.2", "0.1.5-rc.3", "0.1.5", "0.1.6", "0.1.7", "0.2.0"]) {
 		assert.equal(semver.satisfies(version, dshPeerRanges[0]), false, `不接纳未声明版本 ${version}`);
 	}
 	assert.ok(dshDevelopmentVersions.length > 0);
-	assert.deepEqual([...new Set(dshDevelopmentVersions)], ["0.1.6-alpha.2"]);
+	assert.deepEqual([...new Set(dshDevelopmentVersions)], ["0.1.7-alpha.1"]);
 	assert.equal(PACKAGE_MANIFEST.peerDependenciesMeta?.["@deepseek-ai/dsh-client-store"]?.optional, true);
 	assert.equal(PACKAGE_MANIFEST.peerDependenciesMeta?.["@deepseek-ai/dsh-client-runtime"]?.optional, true);
 	assert.equal(PACKAGE_MANIFEST.dsh.client.inject.includes("@deepseek-ai/dsh-client-runtime"), false);

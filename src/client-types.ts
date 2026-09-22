@@ -85,7 +85,7 @@ export interface BrowserProps {
   renameWorkspace(id: string, title: string): Promise<unknown>; deleteWorkspace(id: string): Promise<unknown>;
   insertWorkspaceBefore(id: string, before?: string): Promise<unknown>;
   insertSessionBefore(workspaceId: string, sessionId: string, before?: string): Promise<unknown>;
-  archiveSession(id: string): Promise<unknown>; archiveWorkspaceSessions(id: string): Promise<unknown>;
+  archiveSession(id: string, options?: { readonly stopActivity?: boolean }): Promise<unknown>; archiveWorkspaceSessions(id: string): Promise<unknown>;
   unarchiveSession(id: string): Promise<unknown>; deleteSession(id: string): Promise<unknown>;
   createWorkspace(input: { path: string }): Promise<ClientWorkspace>;
   searchSessions(query: string, signal?: AbortSignal): Promise<SearchPage>; searchResultLimit: number;

@@ -26,7 +26,7 @@ statics[clientStore.id] = clientStore.exports;
 statics["@deepseek-ai/dsh-client-ui-primitives"] = new Proxy({}, { get: (t, p) => (typeof p === "string" ? (t[p] ??= () => null) : t[p]) });
 
 globalThis.window = globalThis;
-globalThis.document = { querySelector: () => null, createElement: () => ({ dataset: {}, set textContent(v) {} }), head: { appendChild: () => {} } };
+globalThis.document = { querySelector: () => null, createElement: () => ({ dataset: {}, set textContent(v) {} }), head: { appendChild: () => {} }, baseURI: "http://127.0.0.1/" };
 const factories = new Map();
 window.__ModuleLoader__ = { load: (h) => { factories.set(h.id, h.factory); } };
 

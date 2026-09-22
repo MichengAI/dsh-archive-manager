@@ -32,7 +32,17 @@ window.__ModuleLoader__.load({
 		let react = require("react");
 		const OrganizerPanel = createOrganizerPanel(react);
         const { HighlightedText, useSessionDetails, useArchiveSearch, useArchivePreview, DiscoveryFilters, SearchStatus, PreviewContent } = createDiscoveryTools(react);
-		let _deepseek_ai_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
+		type LegacyIcon = (props: { size?: number; className?: string }) => import("react").ReactNode;
+		let _deepseek_ai_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives") as typeof import("@deepseek-ai/dsh-client-ui-primitives") & Record<string, LegacyIcon>;
+		// 0.1.7 把带尺寸后缀的图标改成 Medium；旧宿主仍导出原来的名字。
+		_deepseek_ai_dsh_client_ui_primitives = new Proxy(_deepseek_ai_dsh_client_ui_primitives, {
+			get(target, prop, receiver) {
+				const value = Reflect.get(target, prop, receiver);
+				if (value !== undefined || typeof prop !== "string") return value;
+				const medium = prop.replace(/(\D)\d+$/, "$1Medium");
+				return medium === prop ? value : Reflect.get(target, medium, receiver);
+			},
+		});
         const SessionHealthPanel = createSessionHealthPanel(react, { warning: _deepseek_ai_dsh_client_ui_primitives.IconWarningOutline16, info: _deepseek_ai_dsh_client_ui_primitives.IconInfoOutline14, check: _deepseek_ai_dsh_client_ui_primitives.IconCheckOutline16, refresh: _deepseek_ai_dsh_client_ui_primitives.IconRefreshOutline16, search: _deepseek_ai_dsh_client_ui_primitives.IconSearchOutline16, chevron: _deepseek_ai_dsh_client_ui_primitives.IconChevronDownOutline14 });
 		const UPDATE_ICON_PATHS: Record<string, string[]> = {
 			refresh: ["M13.5 5.5V2.5m0 0h-3m3 0-2.1 2.1A5.5 5.5 0 1 0 13.2 12"],
@@ -449,7 +459,10 @@ window.__ModuleLoader__.load({
 					setQuery("");
 					setNotice(t("archives.archiveSuccess", { n: result.archivedSessionIdsAdded.length }));
 					setArchiveTarget(null); setArchiveGroup(null);
-				} catch (reason) { setError(t("archives.archiveBatchFailed", { detail: reason instanceof Error ? reason.message : String(reason) })); }
+				} catch (reason) {
+					const kinds = activeSessionActivity(reason);
+					setError(kinds === undefined ? t("archives.archiveBatchFailed", { detail: reason instanceof Error ? reason.message : String(reason) }) : t("archives.archiveActive", { kinds: kinds.join(", ") }));
+				}
 				finally { archiveBusy.current = false; setBusy(false); }
 			};
 			const details = useSessionDetails(sessionDetailCandidates(eligibleIds, sessions.byId), sessionDetails, t);
@@ -759,6 +772,25 @@ window.__ModuleLoader__.load({
 			if (isUnknownSessionError(reason)) return t("archives.archiveUnknown");
 			const detail = reason instanceof Error ? reason.message : String(reason);
 			return t("archives.archiveFailed", { detail });
+		}
+		/** 0.1.7 宿主拒绝运行中会话时，客户端错误不共享类身份，只认错误名和活动列表。 */
+		function activeSessionActivity(reason: unknown) {
+			if (reason === null || typeof reason !== "object") return;
+			const error = record(reason);
+			const rpc = error.rpcError !== null && typeof error.rpcError === "object" ? record(error.rpcError) : undefined;
+			const direct = error.name === "WorkspaceActiveSessionError" ? error.activity : undefined;
+			const details = rpc?.details;
+			const wrapped = error.name === "WorkspaceArchiveError" && rpc?.code === "workspace/session-active" && details !== null && typeof details === "object"
+				? record(details).activity
+				: undefined;
+			const activity = Array.isArray(direct) ? direct : Array.isArray(wrapped) ? wrapped : undefined;
+			if (activity === undefined) return;
+			const kinds = activity.flatMap((item) => {
+				if (item === null || typeof item !== "object") return [];
+				const kind = record(item).kind;
+				return typeof kind === "string" && kind.length > 0 ? [kind] : [];
+			});
+			return kinds.length > 0 ? kinds : undefined;
 		}
 		function formatForkError(reason: unknown, t: Translate) {
 			const detail = reason instanceof Error ? reason.message : String(reason);
@@ -2722,9 +2754,36 @@ window.__ModuleLoader__.load({
 				setSessionRenameDraft(currentTitle);
 				setSessionRenameError(null);
 			};
+			const [stopArchiveTarget, setStopArchiveTarget] = (0, react.useState)<{ sessionId: string; title: string; kinds: string } | null>(null);
+			const [stoppingArchive, setStoppingArchive] = (0, react.useState)(false);
+			const [stopArchiveError, setStopArchiveError] = (0, react.useState)<string | null>(null);
+			const closeStopArchive = () => {
+				if (stoppingArchive) return;
+				setStopArchiveTarget(null);
+				setStopArchiveError(null);
+			};
 			const onSessionArchive = (sessionId: string) => {
 				archiveSession(sessionId).catch((reason) => {
+					const kinds = activeSessionActivity(reason);
+					if (kinds !== undefined) {
+						const session = sessionSnapshot.byId[sessionId];
+						setStopArchiveTarget({ sessionId, title: session === undefined ? sessionId : displayTitle(session, t), kinds: kinds.join(", ") });
+						setStopArchiveError(null);
+						return;
+					}
 					showArchivedToast(formatArchiveError(reason, t));
+				});
+			};
+			const confirmStopArchive = () => {
+				if (stoppingArchive || stopArchiveTarget === null) return;
+				setStoppingArchive(true);
+				setStopArchiveError(null);
+				archiveSession(stopArchiveTarget.sessionId, { stopActivity: true }).then(() => {
+					setStoppingArchive(false);
+					setStopArchiveTarget(null);
+				}).catch((reason) => {
+					setStoppingArchive(false);
+					setStopArchiveError(formatArchiveError(reason, t));
 				});
 			};
 			const [archiveWorkspaceTarget, setArchiveWorkspaceTarget] = (0, react.useState)<{workspaceId: string; title: string; count: number} | null>(null);
@@ -3230,6 +3289,34 @@ window.__ModuleLoader__.load({
 							children: deleteSessionError
 						})]
 					}),
+					(0, react_jsx_runtime.jsxs)(_deepseek_ai_dsh_client_ui_primitives.Modal, {
+						open: stopArchiveTarget !== null,
+						onClose: closeStopArchive,
+						closeLabel: t("close"),
+						title: t("archiveActive.title"),
+						...stopArchiveTarget === null ? {} : { description: t("archiveActive.desc", { name: stopArchiveTarget.title, kinds: stopArchiveTarget.kinds }) },
+						footer: (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+							variant: "outline",
+							disabled: stoppingArchive,
+							onClick: closeStopArchive,
+							children: t("cancel")
+						}), (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+							variant: "outline",
+							className: "dsham_archiveWorkspaceConfirm",
+							disabled: stoppingArchive,
+							onClick: confirmStopArchive,
+							children: t("archiveActive.confirm")
+						})] }),
+						children: [stoppingArchive && (0, react_jsx_runtime.jsx)("div", {
+							className: WorkspaceBrowser_module_css_default.deleteStatus,
+							role: "status",
+							children: t("archiveActive.pending")
+						}), stopArchiveError !== null && (0, react_jsx_runtime.jsx)("div", {
+							className: WorkspaceBrowser_module_css_default.renameError,
+							role: "alert",
+							children: stopArchiveError
+						})]
+					}),
 					archivedToast !== null && (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Toast, {
 						key: archivedToast.seq,
 						text: archivedToast.text,
@@ -3243,7 +3330,7 @@ window.__ModuleLoader__.load({
 		//#endregion
 		//#region dsh-archive-manager: settings section
 		const ARCHIVE_TABS_CSS = ".dsham_archiveTabs{display:flex;gap:24px;border-bottom:1px solid var(--dsw-alias-border-l2)}.dsham_archiveTab{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;padding:12px 2px;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-weight:600;cursor:pointer}.dsham_archiveTab[aria-selected=true]{border-bottom-color:var(--dsw-alias-button-primary-fill);color:var(--dsw-alias-label-primary)}.dsham_archiveTab:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}.dsham_archiveTab:disabled{opacity:.5;cursor:not-allowed}@container(max-width:520px){.dsham_archiveTabs{gap:16px}}";
-		const ARCHIVE_SETTINGS_CSS = ".dsham_settings{container-type:inline-size;min-width:0;box-sizing:border-box;width:min(100%,760px);margin:0 auto;padding:0 0 32px;color:var(--dsw-alias-label-primary)}.dsham_settingsHeader{display:flex;flex-direction:column;align-items:stretch;gap:16px;margin-bottom:16px}.dsham_settings h2{margin:0;font-size:24px;line-height:32px;font-weight:600;letter-spacing:-.4px;white-space:nowrap}.dsham_settingsIntro{margin:12px 0 0;max-width:42em;color:var(--dsw-alias-label-tertiary);font-size:14px;line-height:22px}.dsham_settingsDanger{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;color:var(--dsw-alias-state-error-primary);background:transparent;border:1px solid var(--dsw-alias-state-error-primary);border-radius:8px;cursor:pointer;font:inherit;font-size:13px;font-weight:500}.dsham_settingsDanger:hover{background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 20%,transparent)}.dsham_settingsToolbar{display:grid;grid-template-columns:minmax(150px,1fr) repeat(3,minmax(0,126px));align-items:center;gap:8px;margin-bottom:16px}.dsham_settingsSearch{display:flex;align-items:center;gap:8px;min-width:0;flex:1;height:32px;padding:0 12px;color:var(--dsw-alias-label-tertiary);background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-button-elevated-fill));border:1px solid var(--dsw-alias-border-l2);border-radius:8px}.dsham_settingsSearch:focus-within{border-color:var(--dsw-alias-label-tertiary)}.dsham_settingsSearch input{width:100%;min-width:0;padding:0;color:var(--dsw-alias-label-primary);background:transparent;border:0;outline:0;font:inherit;font-size:12px}.dsham_settingsSearch input::placeholder{color:var(--dsw-alias-label-tertiary)}.dsham_settingsFilter{position:relative;min-width:0;flex:none}.dsham_selectTrigger{box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:32px;padding:0 10px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-button-elevated-fill));border:1px solid var(--dsw-alias-border-l2);border-radius:8px;cursor:pointer;font:inherit;font-size:13px;line-height:20px;text-align:left}.dsham_selectTrigger:hover{background:var(--dsw-alias-interactive-bg-hover)}.dsham_selectTrigger:focus-visible{outline:2px solid var(--dsw-alias-label-secondary);outline-offset:2px}.dsham_selectTrigger[aria-expanded='true']{border-color:var(--dsw-alias-label-tertiary)}.dsham_selectValue{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dsham_selectCaret{flex:none;width:12px;height:12px;color:var(--dsw-alias-label-tertiary)}.dsham_selectMenu{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:30;box-sizing:border-box;min-width:100%;max-height:280px;overflow:auto;padding:4px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2));box-shadow:var(--dsw-shadow-lv3)}.dsham_selectOption{box-sizing:border-box;display:flex;align-items:center;width:100%;min-height:32px;padding:0 10px;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;line-height:20px;text-align:left;cursor:pointer}.dsham_selectOption:hover,.dsham_selectOption[data-active='true']{background:var(--dsw-alias-interactive-bg-hover)}.dsham_selectOption[aria-selected='true']{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsGroup{margin:0 0 20px}.dsham_settingsGroupHeading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 14px}.dsham_settingsGroupTitle{display:flex;align-items:center;gap:8px;min-width:0;margin:0;color:var(--dsw-alias-label-primary);font-size:13px;font-weight:600}.dsham_settingsGroupTitle svg{flex:none;color:var(--dsw-alias-label-secondary)}.dsham_settingsCount{flex:none;color:var(--dsw-alias-label-tertiary);font-size:12px}.dsham_settingsList{overflow:hidden;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-2,var(--dsw-alias-button-elevated-fill))}.dsham_settingsRow{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:12px;min-height:64px;padding:10px 12px;border-bottom:1px solid var(--dsw-alias-border-l2)}.dsham_settingsRow:last-child{border-bottom:0}.dsham_settingsContent{min-width:0;flex:1}.dsham_settingsTitle{overflow:hidden;color:var(--dsw-alias-label-primary);font-size:13px;font-weight:600;line-height:18px;text-overflow:ellipsis;white-space:nowrap}.dsham_settingsMeta{margin-top:2px;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px}.dsham_settingsActions{display:flex;align-items:center;gap:4px;flex:none}.dsham_settingsAction{min-height:32px;padding:0 12px;color:var(--dsw-alias-label-primary);background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;cursor:pointer;font:inherit;font-size:13px;font-weight:500}.dsham_settingsAction:hover{filter:brightness(1.12)}.dsham_settingsDelete{display:flex;align-items:center;justify-content:center;width:28px;height:28px;color:var(--dsw-alias-label-tertiary);background:transparent;border:0;border-radius:8px;cursor:pointer}.dsham_settingsDelete:hover{color:var(--dsw-alias-state-error-primary);background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsEmpty{padding:28px 8px;color:var(--dsw-alias-label-secondary);text-align:center}.dsham_settingsError{margin-top:10px;color:var(--dsw-alias-state-error-primary);font-size:12px}@container(max-width:520px){.dsham_settingsHeader{margin-bottom:16px}.dsham_settingsToolbar{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:16px}.dsham_settingsSearch{grid-column:1/-1}.dsham_settingsFilter{flex:1;min-width:0}.dsham_settingsGroup{margin-bottom:32px}.dsham_settingsRow{padding:10px 12px}.dsham_settingsActions{gap:4px}}";
+		const ARCHIVE_SETTINGS_CSS = ".dsham_settings{container-type:inline-size;min-width:0;box-sizing:border-box;width:min(100%,760px);margin:0 auto;padding:0 0 32px;color:var(--dsw-alias-label-primary)}.dsham_settingsHeader{display:flex;flex-direction:column;align-items:stretch;gap:16px;margin-bottom:16px}.dsham_settings h2{margin:0;font-size:24px;line-height:32px;font-weight:600;letter-spacing:-.4px;white-space:nowrap}.dsham_settingsIntro{margin:12px 0 0;max-width:42em;color:var(--dsw-alias-label-tertiary);font-size:14px;line-height:22px}.dsham_settingsDanger{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;color:var(--dsw-alias-state-error-primary);background:transparent;border:1px solid var(--dsw-alias-state-error-primary);border-radius:8px;cursor:pointer;font:inherit;font-size:13px;font-weight:500}.dsham_settingsDanger:hover{background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 20%,transparent)}.dsham_settingsToolbar{display:grid;grid-template-columns:minmax(150px,1fr) repeat(3,minmax(0,126px));align-items:center;gap:8px;margin-bottom:16px}.dsham_settingsSearch{display:flex;align-items:center;gap:8px;min-width:0;flex:1;height:32px;padding:0 12px;color:var(--dsw-alias-label-tertiary);background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-button-elevated-fill));border:1px solid var(--dsw-alias-border-l2);border-radius:8px}.dsham_settingsSearch:focus-within{border-color:var(--dsw-alias-label-tertiary)}.dsham_settingsSearch input{width:100%;min-width:0;padding:0;color:var(--dsw-alias-label-primary);background:transparent;border:0;outline:0;font:inherit;font-size:12px}.dsham_settingsSearch input::placeholder{color:var(--dsw-alias-label-tertiary)}.dsham_settingsFilter{position:relative;min-width:0;flex:none}.dsham_selectTrigger{box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:32px;padding:0 10px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-button-elevated-fill));border:1px solid var(--dsw-alias-border-l2);border-radius:8px;cursor:pointer;font:inherit;font-size:13px;line-height:20px;text-align:left}.dsham_selectTrigger:hover{background:var(--dsw-alias-interactive-bg-hover)}.dsham_selectTrigger:focus-visible{outline:2px solid var(--dsw-alias-label-secondary);outline-offset:2px}.dsham_selectTrigger[aria-expanded='true']{border-color:var(--dsw-alias-label-tertiary)}.dsham_selectValue{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dsham_selectCaret{flex:none;width:12px;height:12px;color:var(--dsw-alias-label-tertiary)}.dsham_selectMenu{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:30;box-sizing:border-box;min-width:100%;max-height:280px;overflow:auto;padding:4px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background-color:var(--dsw-alias-bg-layer-2);background-image:linear-gradient(var(--dsw-specific-menu,transparent),var(--dsw-specific-menu,transparent));-webkit-backdrop-filter:var(--dsw-menu-backdrop-filter);backdrop-filter:var(--dsw-menu-backdrop-filter);box-shadow:var(--dsw-elevation-prominent,var(--dsw-shadow-lv3))}.dsham_selectOption{box-sizing:border-box;display:flex;align-items:center;width:100%;min-height:32px;padding:0 10px;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;line-height:20px;text-align:left;cursor:pointer}.dsham_selectOption:hover,.dsham_selectOption[data-active='true']{background:var(--dsw-alias-interactive-bg-hover)}.dsham_selectOption[aria-selected='true']{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsGroup{margin:0 0 20px}.dsham_settingsGroupHeading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 14px}.dsham_settingsGroupTitle{display:flex;align-items:center;gap:8px;min-width:0;margin:0;color:var(--dsw-alias-label-primary);font-size:13px;font-weight:600}.dsham_settingsGroupTitle svg{flex:none;color:var(--dsw-alias-label-secondary)}.dsham_settingsCount{flex:none;color:var(--dsw-alias-label-tertiary);font-size:12px}.dsham_settingsList{overflow:hidden;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-2,var(--dsw-alias-button-elevated-fill))}.dsham_settingsRow{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:12px;min-height:64px;padding:10px 12px;border-bottom:1px solid var(--dsw-alias-border-l2)}.dsham_settingsRow:last-child{border-bottom:0}.dsham_settingsContent{min-width:0;flex:1}.dsham_settingsTitle{overflow:hidden;color:var(--dsw-alias-label-primary);font-size:13px;font-weight:600;line-height:18px;text-overflow:ellipsis;white-space:nowrap}.dsham_settingsMeta{margin-top:2px;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px}.dsham_settingsActions{display:flex;align-items:center;gap:4px;flex:none}.dsham_settingsAction{min-height:32px;padding:0 12px;color:var(--dsw-alias-label-primary);background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;cursor:pointer;font:inherit;font-size:13px;font-weight:500}.dsham_settingsAction:hover{filter:brightness(1.12)}.dsham_settingsDelete{display:flex;align-items:center;justify-content:center;width:28px;height:28px;color:var(--dsw-alias-label-tertiary);background:transparent;border:0;border-radius:8px;cursor:pointer}.dsham_settingsDelete:hover{color:var(--dsw-alias-state-error-primary);background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsEmpty{padding:28px 8px;color:var(--dsw-alias-label-secondary);text-align:center}.dsham_settingsError{margin-top:10px;color:var(--dsw-alias-state-error-primary);font-size:12px}@container(max-width:520px){.dsham_settingsHeader{margin-bottom:16px}.dsham_settingsToolbar{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:16px}.dsham_settingsSearch{grid-column:1/-1}.dsham_settingsFilter{flex:1;min-width:0}.dsham_settingsGroup{margin-bottom:32px}.dsham_settingsRow{padding:10px 12px}.dsham_settingsActions{gap:4px}}";
 		const ARCHIVE_SETTINGS_BATCH_CSS = ".dsham_favorite,.dsham_restoreIcon{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;border:0;background:transparent;border-radius:6px;color:var(--dsw-alias-label-secondary);cursor:pointer}.dsham_favorite{font-size:22px}.dsham_favorite[aria-pressed=true]{color:var(--dsw-alias-state-warn-primary)}.dsham_favorite:hover,.dsham_restoreIcon:hover{background:var(--dsw-alias-interactive-bg-hover)}.dsham_favorite:disabled,.dsham_restoreIcon:disabled{opacity:.5;cursor:not-allowed}.dsham_settingsTitleLink{display:block;max-width:100%;padding:0;border:0;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;font-weight:600;line-height:20px;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.dsham_settingsTitleLink:hover:not(:disabled){text-decoration:underline;text-underline-offset:3px}.dsham_settingsTitleLink:disabled{cursor:default;opacity:.6}.dsham_groupToggle{display:flex;align-items:center;gap:8px;min-width:0;max-width:100%;padding:4px 0;border:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}.dsham_groupToggle span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dsham_settingsRow:hover{background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsRow[data-selected=true]{background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsTitleLink:focus-visible,.dsham_groupToggle:focus-visible,.dsham_favorite:focus-visible,.dsham_restoreIcon:focus-visible,.dsham_settingsGroupMenu:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary,#3b82f6);outline-offset:2px}.dsham_selectTrigger:disabled{opacity:.5;cursor:not-allowed}@container(max-width:620px){.dsham_settingsToolbar{grid-template-columns:repeat(3,minmax(0,1fr))}.dsham_settingsSearch{grid-column:1/-1}}@container(max-width:400px){.dsham_settingsRow{gap:8px;padding:10px 8px}.dsham_settingsActions{gap:0}.dsham_settingsMeta{font-size:11px}.dsham_selectTrigger{font-size:12px;padding:0 8px}}.dsham_settingsHeaderActions,.dsham_settingsGroupMeta{display:flex;align-items:center;gap:8px;flex:none;flex-wrap:wrap}.dsham_settingsRestoreAll{display:inline-flex;align-items:center;min-height:32px;padding:0 12px;color:var(--dsw-alias-label-primary);background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;cursor:pointer;font:inherit;font-size:13px;font-weight:500}.dsham_settingsRestoreAll:hover{background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsRestoreAll:disabled,.dsham_settingsDanger:disabled,.dsham_settingsGroupMenu:disabled{cursor:not-allowed;opacity:.5}.dsham_settingsGroupMenu{display:flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;color:var(--dsw-alias-label-tertiary);background:transparent;border:0;border-radius:8px;cursor:pointer}.dsham_settingsGroupMenu:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsStatus{margin-top:10px;color:var(--dsw-alias-label-secondary);font-size:12px}@media(max-width:720px){.dsham_settingsHeader{flex-direction:column}.dsham_settingsHeaderActions{align-self:flex-start}}";
 		const ARCHIVE_SETTINGS_EXTERNAL_LINK_CSS = ".dsham_settingsTitleRow{display:flex;align-items:center;gap:8px 12px;min-width:0;flex-wrap:wrap}.dsham_settingsLinks{display:flex;align-items:center;gap:4px;flex-wrap:wrap}.dsham_settingsExternalLink{display:inline-flex;align-items:center;gap:5px;min-height:28px;padding:0 8px;color:var(--dsw-alias-label-secondary);background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:7px;font-size:12px;font-weight:500;line-height:18px;text-decoration:none;white-space:nowrap}.dsham_settingsExternalLink:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsExternalLink:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}.dsham_settingsExternalLink svg{flex:none}@media(max-width:720px){.dsham_settingsTitleRow{flex-wrap:wrap}}";
 		const ARCHIVE_SETTINGS_DELETE_CONFIRM_CSS = ".dsham_settingsDeleteConfirm{color:var(--dsw-alias-state-error-primary)!important;background:transparent!important;border-color:var(--dsw-alias-state-error-primary)!important}.dsham_settingsDeleteConfirm:hover:not(:disabled){background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 20%,transparent)!important}.dsham_settingsDeleteConfirm:focus-visible{outline:2px solid var(--dsw-alias-state-error-secondary);outline-offset:2px}.dsham_settingsDeleteConfirm:disabled{cursor:not-allowed;opacity:.5}";
@@ -3715,6 +3802,11 @@ window.__ModuleLoader__.load({
 			"archives.unarchiveFailed": "取消归档失败：{detail}",
 			"archives.archiveUnknown": "会话已不存在，无法归档。",
 			"archives.archiveFailed": "归档失败：{detail}",
+			"archives.archiveActive": "会话仍在运行（{kinds}）。请先停止，或在侧栏选择停止并归档。",
+			"archiveActive.title": "停止并归档",
+			"archiveActive.desc": "“{name}”仍有正在进行的工作：{kinds}。归档前会停止这些工作。",
+			"archiveActive.confirm": "停止并归档",
+			"archiveActive.pending": "正在停止并归档…",
 			"archives.forkFailed": "分叉会话失败：{detail}",
 			"deleteSession.title": "删除会话",
 			"deleteSession.desc": "将永久删除会话“{name}”及其子代理（含正在运行的）和全部记录（对话内容、统计、缓存），此操作不可恢复。",
@@ -3866,6 +3958,11 @@ window.__ModuleLoader__.load({
 			"archives.unarchiveFailed": "Could not unarchive the session: {detail}",
 			"archives.archiveUnknown": "This session no longer exists, so it cannot be archived.",
 			"archives.archiveFailed": "Could not archive the session: {detail}",
+			"archives.archiveActive": "This conversation is still running ({kinds}). Stop it first, or choose Stop and archive in the sidebar.",
+			"archiveActive.title": "Stop and archive",
+			"archiveActive.desc": "“{name}” still has work in progress: {kinds}. Archiving stops that work first.",
+			"archiveActive.confirm": "Stop and archive",
+			"archiveActive.pending": "Stopping and archiving…",
 			"archives.forkFailed": "Could not fork the session: {detail}",
 			"deleteSession.title": "Delete session",
 			"deleteSession.desc": "This permanently deletes session “{name}”, its child agents (including any that are still running), and all of its records (conversation, stats, cache). This cannot be undone.",
@@ -4184,8 +4281,8 @@ window.__ModuleLoader__.load({
 				insertWorkspaceBefore: async (workspaceId, beforeWorkspaceId) => {
 					await ctx.workspaces.insertBefore(workspaceId, beforeWorkspaceId);
 				},
-				archiveSession: async (sessionId) => {
-					await ctx.workspaces.archiveSession(sessionId);
+				archiveSession: async (sessionId, options) => {
+					await ctx.workspaces.archiveSession(sessionId, options);
 				},
 				archiveWorkspaceSessions,
 				unarchiveSession,
@@ -4196,29 +4293,146 @@ window.__ModuleLoader__.load({
 				createWorkspace: (input) => ctx.workspaces.create(input),
 				hooks: { directoryFlow: browserFlowSource }
 			});
-			ctx.slots.inject("sidebar.workspaces", () => {
+			const sessionMenuSlot = "sidebar.workspaces.session.menu.item";
+			let deleteTarget: { sessionId: string; title: string } | null = null;
+			const deleteListeners = new Set<() => void>();
+			const publishDeleteTarget = (next: { sessionId: string; title: string } | null) => {
+				deleteTarget = next;
+				for (const listener of deleteListeners) listener();
+			};
+			function useDeleteRequest() {
+				return react.useSyncExternalStore(
+					(listener: () => void) => {
+						deleteListeners.add(listener);
+						return () => { deleteListeners.delete(listener); };
+					},
+					() => deleteTarget,
+					() => deleteTarget
+				);
+			}
+			function DeleteSessionMenuItem({ sessionId, displayTitle: title, useMenuOpenState, t }: { sessionId: string; displayTitle: string; useMenuOpenState: () => readonly [boolean, (open: boolean) => void]; t: Translate }) {
+				const [, setMenuOpen] = useMenuOpenState();
+				const Item = _deepseek_ai_dsh_client_ui_primitives.MenuItemButton;
+				const icon = (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconTrashOutlineRegular ?? _deepseek_ai_dsh_client_ui_primitives.IconTrashOutline16, { size: 14 });
+				const onSelect = () => {
+					setMenuOpen(false);
+					publishDeleteTarget({ sessionId, title });
+				};
+				if (typeof Item === "function") return (0, react_jsx_runtime.jsx)(Item, { danger: true, icon, onSelect, children: t("menu.deleteSession") });
+				return (0, react_jsx_runtime.jsx)("button", { type: "button", role: "menuitem", onClick: onSelect, children: t("menu.deleteSession") });
+			}
+			function DeleteSessionOverlay({ t }: { t: Translate }) {
+				const request = useDeleteRequest();
+				const [deleting, setDeleting] = (0, react.useState)(false);
+				const [error, setError] = (0, react.useState)<string | null>(null);
+				if (request === null) return null;
+				const close = () => {
+					if (deleting) return;
+					setError(null);
+					publishDeleteTarget(null);
+				};
+				const confirm = () => {
+					setDeleting(true);
+					setError(null);
+					deleteSession(request.sessionId).then(() => {
+						setDeleting(false);
+						publishDeleteTarget(null);
+					}).catch((reason) => {
+						setDeleting(false);
+						setError(formatDeleteError(reason, t));
+					});
+				};
+				return (0, react_jsx_runtime.jsxs)(_deepseek_ai_dsh_client_ui_primitives.Modal, {
+					open: true,
+					onClose: close,
+					closeLabel: t("close"),
+					title: t("deleteSession.title"),
+					description: t("deleteSession.desc", { name: request.title }),
+					footer: (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
+						(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, { variant: "outline", disabled: deleting, onClick: close, children: t("cancel") }),
+						(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, { variant: "outline", disabled: deleting, onClick: confirm, children: t("deleteSession.title") })
+					] }),
+					children: [
+						deleting && (0, react_jsx_runtime.jsx)("div", { role: "status", children: t("deleteSession.pending") }),
+						error !== null && (0, react_jsx_runtime.jsx)("div", { role: "alert", children: error })
+					]
+				});
+			}
+			/** 官方列表声明了会话菜单插槽时只追加删除；否则仍换成自有列表，旧宿主菜单没有扩展位。 */
+			function hostSidebarDeclaresSessionMenu() {
+				if (typeof ctx.slots.entries !== "function") return false;
+				return ctx.slots.entries("sidebar.workspaces").some((entry) => entry.children?.[sessionMenuSlot] !== undefined);
+			}
+			let sidebarMode: "menu" | "legacy" | undefined;
+			let disposeLegacy: (() => void) | undefined;
+			let disposeMirror: (() => void) | undefined;
+			let disposeMenu: (() => void) | undefined;
+			let disposeDialog: (() => void) | undefined;
+			const registerLegacySidebar = () => {
 				const common = {
 					name: "sidebar.workspaces",
-					// 低于官方 0，高于 Codex -1：必须盖住官方三项菜单才能露出删除。
+					// 低于官方 0，高于 Codex -1：旧宿主必须盖住官方三项菜单才能露出删除。
 					priority: -0.5,
 					store: createWorkspaceViewStore(),
 					inject: browserInjected,
 					locale: NS
 				};
-				try {
-					return ctx.slots.register({
-						...common,
-						children: { [DIRECTORY_FLOW_SLOT]: {
-							kind: "single",
-							scope: "root"
-						} }
-					}, WorkspaceBrowser);
-				} catch (error) {
-					console.warn("archive-manager: sidebar registration with directory child failed, retrying without children", error);
-					return ctx.slots.register(common, WorkspaceBrowser);
+				return ctx.slots.inject("sidebar.workspaces", () => {
+					try {
+						return ctx.slots.register({
+							...common,
+							children: { [DIRECTORY_FLOW_SLOT]: { kind: "single", scope: "root" } }
+						}, WorkspaceBrowser);
+					} catch (error) {
+						console.warn("archive-manager: sidebar registration with directory child failed, retrying without children", error);
+						return ctx.slots.register(common, WorkspaceBrowser);
+					}
+				});
+			};
+			const reconcileSidebar = () => {
+				const next = hostSidebarDeclaresSessionMenu() ? "menu" : "legacy";
+				if (next === sidebarMode) return;
+				sidebarMode = next;
+				if (next === "menu") {
+					disposeLegacy?.();
+					disposeLegacy = undefined;
+					disposeMirror?.();
+					disposeMirror = undefined;
+					disposeMenu ??= ctx.slots.inject(sessionMenuSlot, () => ctx.slots.register({
+						name: sessionMenuSlot,
+						id: "archive-manager.delete-session",
+						order: 500,
+						locale: NS,
+						inject: () => ({})
+					}, DeleteSessionMenuItem));
+					disposeDialog ??= ctx.slots.inject("shell.overlay", () => ctx.slots.register({
+						name: "shell.overlay",
+						id: "archive-manager.delete-session",
+						locale: NS,
+						inject: () => ({ t: ctx.locale.bind(NS) })
+					}, DeleteSessionOverlay));
+					return;
 				}
-			});
-			mirrorDirectoryFlow(ctx, DIRECTORY_FLOW_SLOT);
+				disposeMenu?.();
+				disposeMenu = undefined;
+				disposeDialog?.();
+				disposeDialog = undefined;
+				disposeLegacy ??= registerLegacySidebar();
+				disposeMirror ??= mirrorDirectoryFlow(ctx, DIRECTORY_FLOW_SLOT);
+			};
+			reconcileSidebar();
+			const unsubscribeSidebar = typeof ctx.on === "function" ? ctx.on("slots/changed", (key: string) => {
+				if (key !== "sidebar.workspaces") return;
+				try { reconcileSidebar(); }
+				catch (error) { console.warn("archive-manager: sidebar mode switch failed", error); }
+			}) : undefined;
+			ctx.effect(() => () => {
+				unsubscribeSidebar?.();
+				disposeLegacy?.();
+				disposeMirror?.();
+				disposeMenu?.();
+				disposeDialog?.();
+			}, "archive-manager: sidebar mode");
 
 			ctx.slots.inject("settings.section", () => ctx.slots.register({
 				name: "settings.section",
@@ -4271,6 +4485,7 @@ window.__ModuleLoader__.load({
 			archiveableWorkspaceSessionCount,
 			archiveWorkspaceDialogTarget,
 			archiveWorkspaceDialogFailureState,
+			activeSessionActivity,
 			archiveSessionsViaOfficial,
 			unarchiveSessionsViaOfficial,
 			createUnarchiveSession,

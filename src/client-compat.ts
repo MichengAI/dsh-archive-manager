@@ -16,7 +16,7 @@ export type Registry = { [K in keyof RegistryCalls]: (...args: Parameters<Regist
 };
 export interface Workspaces {
   list: Observable<WorkspaceSnapshot>;
-  archiveSession(id: string): Promise<unknown>;
+  archiveSession(id: string, options?: { readonly stopActivity?: boolean }): Promise<unknown>;
   unarchiveSession?(id: string): Promise<ArchiveState | undefined>;
   startSession(id: string): unknown;
   rename(id: string, title: string): Promise<unknown>;

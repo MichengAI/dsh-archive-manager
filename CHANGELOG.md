@@ -6,6 +6,11 @@ Published release notes are retained below; new versions are added without remov
 
 ## Unreleased
 
+- Support DeepSeek Harness `0.1.7-alpha.1` while remaining compatible with the previously supported hosts.
+- Keep the official session list when it provides a menu slot, and add Delete session there. Older hosts still use this plugin's session list.
+- Archiving a running session asks before stopping its work. A recorded pin is cleared in the same archive.
+- Legacy automation repair follows the host's current session generation, including fourth-generation logs.
+
 ## 1.0.2 - 2026-09-21
 
 - Fix legacy session repair incorrectly rejecting Windows short and extended paths while retaining protection against directory links.

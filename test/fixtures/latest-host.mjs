@@ -121,8 +121,8 @@ async function setup(t, compression = "none") {
 
 test("真实宿主旧自动化诊断修复使用写锁、代际编码和压缩复读", async t => {
 	const env = await setup(t, "zstd");
-	if (env.persistence.generationFormat?.currentVersion !== 3) {
-		t.skip("此宿主不使用第三代日志修复协议");
+	if (!Number.isInteger(env.persistence.generationFormat?.currentVersion) || env.persistence.generationFormat.currentVersion < 3) {
+		t.skip("此宿主不使用第三代及以后的日志修复协议");
 		return;
 	}
 	const id = "repair-legacy";
@@ -214,7 +214,7 @@ for (const compression of ["none", "zstd"]) {
 		const removed = [];
 		env.ctx.on("api-session/removed", (id) => removed.push(id));
 		// 紧接写入执行删除，不在两者之间主动 flush 或等待后台批量定时器。
-		const event = session.append("session/title", { title: "实时删除回归" });
+		const event = session.append("session/title", { title: "实时删除回归", messageSeqs: [], source: { kind: "user" } });
 		await env.registry.deleteSession(session.id);
 		assert.deepEqual(
 			flushedEvents,
@@ -308,7 +308,7 @@ for (const { previousCache, seeded } of ["缺失", "无版本", "旧代际"].fla
 		const parent = env.sessions.prepare("projection-parent", {
 			meta: { cwd: env.cwd },
 		});
-		const seed = [parent.append("session/title", { title: "父会话继承标题" })];
+		const seed = [parent.append("session/title", { title: "父会话继承标题", messageSeqs: [], source: { kind: "user" } })];
 		const session = env.sessions.prepare(
 			"projection-repair",
 			seeded
@@ -321,7 +321,7 @@ for (const { previousCache, seeded } of ["缺失", "无版本", "旧代际"].fla
 		);
 		const inheritedEventCount = seeded ? seed.length : 0;
 		assert.equal(session.inheritedEventCount, inheritedEventCount);
-		const event = session.append("session/title", { title: "从原文恢复的标题" });
+		const event = session.append("session/title", { title: "从原文恢复的标题", messageSeqs: [], source: { kind: "user" } });
 		const writer = await env.persistence.create(session.header, {
 			inheritedEventCount,
 		});
@@ -382,8 +382,10 @@ for (const { previousCache, seeded } of ["缺失", "无版本", "旧代际"].fla
 				rows: { title: { ver: 1, seq: event.seq, val: "旧代际标题" } },
 			});
 		}
+		const usesProjectionKeys = Function.prototype.toString.call(cache.cachedSnapshot).includes("lifecycleIdentityOf");
+		const snapshot = (header, count) => usesProjectionKeys ? cache.cachedSnapshot(header) : cache.cachedSnapshot(header, count);
 		assert.equal(
-			cache.cachedSnapshot(session.header, inheritedEventCount),
+			snapshot(session.header, inheritedEventCount),
 			void 0,
 		);
 		let reads = 0;
@@ -395,7 +397,7 @@ for (const { previousCache, seeded } of ["缺失", "无版本", "旧代际"].fla
 		const first = await env.registry.archivedSessionMetadata();
 		assert.deepEqual(first.repairedSessionIds, [session.id]);
 		assert.deepEqual(
-			cache.cachedSnapshot(session.header, inheritedEventCount),
+			snapshot(session.header, inheritedEventCount),
 			{ asOfSeq: event.seq, values: { title: "从原文恢复的标题" } },
 			"修复成功必须产生官方缓存可读取的标题和正确水位",
 		);
@@ -407,7 +409,7 @@ for (const { previousCache, seeded } of ["缺失", "无版本", "旧代际"].fla
 			records.get(session.id).identity.inheritedEventCount,
 			inheritedEventCount,
 		);
-		if (seeded)
+		if (seeded && !usesProjectionKeys)
 			assert.equal(
 				cache.cachedSnapshot(session.header, inheritedEventCount + 1),
 				void 0,
