@@ -5,12 +5,15 @@ export function hostTestOverrides(version) {
 	const names = [
 		"agent", "api-gateway", "brand", "client-connection", "client-locale", "client-store",
 		"client-ui-conversation", "client-ui-primitives", "client-ui-sidebar", "client-ui-slots", "client-ui-workspace",
-		"code-runtime", "credentials", "deque", "host-webserver", "invariants", "llm", "scope", "session",
+		"code-runtime", "compaction", "credentials", "deque", "host-webserver", "invariants", "llm",
+		"sandbox", "sandbox-policy", "scope", "session",
 		"session-format", "session-format-catalog", "session-format-v0-to-v1", "session-format-v1-to-v2", "session-format-v2-to-v3",
 		...(version === "0.1.7-alpha.1" ? ["session-format-v3-to-v4"] : []),
 		"session-persistence", "session-persistence-jsonl", "session-projection", "session-projection-cache", "session-query", "session-title",
 		"spill", "spill-local", "storage", "storage-domain", "system-prompt", "timeout", "tool-todo", "tools",
-		"typert-protocol", "typert-registry", "user-approval", "util-crypto", "util-values", "workspace"
+		"typert-protocol", "typert-registry", "user-approval", "util-crypto", "util-values", "workspace",
+		// 0.1.6 起才发布这两个包；0.1.5 两版把它们钉到 0.1.5-rc.x 会取不到版本。
+		...(["0.1.5-rc.1", "0.1.5-rc.2"].includes(version) ? [] : ["compaction-image-offload", "ptc-runtime"])
 	];
 	return Object.fromEntries(names.map((name) => [`@deepseek-ai/dsh-${name}`, version]));
 }

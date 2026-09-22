@@ -1,9 +1,11 @@
-type DomExtras = { createRoot?: (container: Element) => unknown; hydrateRoot?: (container: Element, node: unknown) => unknown };
-const reactDom = Function("return globalThis.__dshArchiveReactDOM")() as typeof import("react-dom") & DomExtras;
+type ClientRoot = { render(node: unknown): void; unmount(): void };
+type ClientDom = { createRoot?: (container: Element) => ClientRoot; hydrateRoot?: (container: Element, node: unknown) => ClientRoot };
+const reactDom = Function("return globalThis.__dshArchiveReactDOM")() as typeof import("react-dom");
+const reactDomClient = Function("return globalThis.__dshArchiveReactDOMClient")() as ClientDom | undefined;
 export const createPortal = reactDom.createPortal;
 export const flushSync = reactDom.flushSync;
-export const createRoot = reactDom.createRoot;
-export const hydrateRoot = reactDom.hydrateRoot;
+export const createRoot = reactDomClient?.createRoot;
+export const hydrateRoot = reactDomClient?.hydrateRoot;
 export const findDOMNode = reactDom.findDOMNode;
 export const unmountComponentAtNode = reactDom.unmountComponentAtNode;
 export const unstable_batchedUpdates = reactDom.unstable_batchedUpdates;

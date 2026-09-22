@@ -22,7 +22,7 @@ export function createOrganizerPanel(React: typeof import("react")) {
       (!archived || !ready) && h("div", { className: "dsham_organizer" }, h("div", { className: "dsham_organizerControls" },
         !ready && textButton(t("organizer.reloadFavorites"), { disabled: busy, onClick: onReload }),
         !archived && h(React.Fragment, null,
-          h("label", null, t("organizer.idleDays"), h(InputNumber, { min: 1, max: 36500, value: Number(days) || 1, disabled: busy, "aria-label": t("organizer.idleDays"), onChange: value => onDays(String(value ?? "")) })),
+          h("label", null, t("organizer.idleDays"), h(InputNumber, { min: 1, max: 36500, value: days === "" ? null : Number(days), disabled: busy, "aria-label": t("organizer.idleDays"), onChange: value => onDays(value == null ? "" : String(value)) })),
           textButton(t("organizer.preview", { n: count }), { disabled: busy || !ready || count === 0, onClick: onPreview }))),
       !archived && h("p", null, t("organizer.rules"))),
       (progress || result || undoCount > 0) && h("section", { className: "dsham_batchFeedback", "aria-label": t("organizer.feedback") },

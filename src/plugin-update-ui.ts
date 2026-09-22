@@ -3,7 +3,7 @@ import { antdLocaleFromDocument } from "./antd-locale.js";
 import { AntdProvider, Button, Modal, Progress } from "./antd-ui.js";
 import { createUpdateFlow, handlePluginUpdateEscape, manualPluginUpdateCommand, pluginUpdateCopy, ZH, EN, type UpdatePayload } from "./plugin-update-model.js";
 
-interface UpdateUiOptions { endpoint: string; packageName: string; titleRowSelector: string; linksSelector: string; zhName: string; enName: string; getLanguage?: () => string; createIcon: (name: "refresh" | "download" | "copy" | "close") => HTMLElement }
+interface UpdateUiOptions { endpoint: string; packageName: string; titleRowSelector: string; linksSelector: string; zhName: string; enName: string; createIcon: (name: "refresh" | "download" | "copy" | "close") => HTMLElement }
 
 type UpdateRoot = { render(node: React.ReactNode): void; unmount(): void };
 function mountRoot(container: Element): UpdateRoot {

@@ -43,9 +43,9 @@ export function startArchiveClient(require: HostRequire) {
 		function SettingsModal({ open, onClose, title, description, footer, children, className, width }: { open: boolean; onClose(): void; title: import("react").ReactNode; description?: import("react").ReactNode; footer?: import("react").ReactNode; children?: import("react").ReactNode; className?: string; width?: number }) {
 			return (0, react_jsx_runtime.jsx)(AntdModal, { open, onCancel: onClose, title, footer, className, width, children: description == null ? children : (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [(0, react_jsx_runtime.jsx)("p", { children: description }), children] }) });
 		}
-		function settingsButton({ variant = "outline", icon, children, danger = false, className, disabled, title, onClick, "aria-label": ariaLabel, "aria-pressed": ariaPressed, "aria-haspopup": ariaHaspopup }: { variant?: "primary" | "ghost" | "outline" | "toolbar"; icon?: import("react").ReactNode; danger?: boolean; className?: string; disabled?: boolean; title?: string; onClick?: () => void; "aria-label"?: string; "aria-pressed"?: boolean; "aria-haspopup"?: import("react").AriaAttributes["aria-haspopup"]; children?: import("react").ReactNode }) {
+		function settingsButton({ variant = "outline", icon, children, danger = false, className, disabled, title, onClick, "aria-label": ariaLabel, "aria-pressed": ariaPressed, "aria-expanded": ariaExpanded, "aria-haspopup": ariaHaspopup }: { variant?: "primary" | "ghost" | "outline" | "toolbar"; icon?: import("react").ReactNode; danger?: boolean; className?: string; disabled?: boolean; title?: string; onClick?: () => void; "aria-label"?: string; "aria-pressed"?: boolean; "aria-expanded"?: boolean; "aria-haspopup"?: import("react").AriaAttributes["aria-haspopup"]; children?: import("react").ReactNode }) {
 			const type = variant === "primary" ? "primary" : variant === "ghost" || variant === "toolbar" ? "text" : "default";
-			return (0, react_jsx_runtime.jsx)(AntdButton, { type, danger, shape: "round", icon, className, disabled, title, onClick, "aria-label": ariaLabel, "aria-pressed": ariaPressed, "aria-haspopup": ariaHaspopup, children });
+			return (0, react_jsx_runtime.jsx)(AntdButton, { type, danger, shape: "round", icon, className, disabled, title, onClick, "aria-label": ariaLabel, "aria-pressed": ariaPressed, "aria-expanded": ariaExpanded, "aria-haspopup": ariaHaspopup, children });
 		}
 		function tabsShell(locked: boolean, children: import("react").ReactNode) {
 			const props: { className?: string; inert?: ""; children: import("react").ReactNode } = { className: locked ? "dsham_archiveTabsLocked" : undefined, children };
@@ -646,7 +646,7 @@ export function startArchiveClient(require: HostRequire) {
 					block: true, "aria-label": t("archives.title"), value: archiveTab === "unarchived" ? "unarchived" : "archived", onChange: (value) => switchTab(String(value) === "unarchived" ? "unarchived" : "archived"),
 					options: [{ value: "archived", label: t("archives.tab.archived") }, { value: "unarchived", label: t("archives.tab.unarchived") }]
 					})))]
-				}), (0, react_jsx_runtime.jsxs)("div", { id: "dsham-archive-panel", role: "tabpanel", "aria-labelledby": "dsham-tab-" + archiveTab, children: [(0, react_jsx_runtime.jsxs)("div", {
+				}), (0, react_jsx_runtime.jsxs)("div", { id: "dsham-archive-panel", role: "region", "aria-label": t(archiveTab === "unarchived" ? "archives.tab.unarchived" : "archives.tab.archived"), children: [(0, react_jsx_runtime.jsxs)("div", {
 					className: "dsham_settingsToolbar",
 					children: [(0, react_jsx_runtime.jsxs)("div", {
 						className: "dsham_settingsSearch",
@@ -3385,7 +3385,7 @@ export function startArchiveClient(require: HostRequire) {
 		}
 		//#endregion
 		//#region dsh-archive-manager: settings section
-		const ARCHIVE_TABS_CSS = ".dsham_archiveTabs{display:flex;gap:24px;border-bottom:1px solid var(--dsw-alias-border-l2)}.dsham_archiveTab{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;padding:12px 2px;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-weight:600;cursor:pointer}.dsham_archiveTab[aria-selected=true]{border-bottom-color:var(--dsw-alias-button-primary-fill);color:var(--dsw-alias-label-primary)}.dsham_archiveTab:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}.dsham_archiveTab:disabled{opacity:.5;cursor:not-allowed}.dsham_archiveTabsLocked{opacity:.5}@container(max-width:520px){.dsham_archiveTabs{gap:16px}}";
+		const ARCHIVE_TABS_CSS = ".dsham_archiveTabsLocked{opacity:.5}";
 		const ARCHIVE_SETTINGS_CSS = ".dsham_settings{container-type:inline-size;min-width:0;box-sizing:border-box;width:min(100%,760px);margin:0 auto;padding:0 0 32px;color:var(--dsw-alias-label-primary)}.dsham_settingsHeader{display:flex;flex-direction:column;align-items:stretch;gap:16px;margin-bottom:16px}.dsham_settings h2{margin:0;font-size:24px;line-height:32px;font-weight:600;letter-spacing:-.4px;white-space:nowrap}.dsham_settingsIntro{margin:12px 0 0;max-width:42em;color:var(--dsw-alias-label-tertiary);font-size:14px;line-height:22px}.dsham_settingsToolbar{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}.dsham_settingsSearch{display:flex;align-items:center;gap:8px;min-width:0}.dsham_settingsFilters{display:flex;align-items:center;flex-wrap:nowrap;gap:8px;min-width:0}.dsham_settingsSort{display:flex;align-items:center;gap:8px;margin-left:auto;flex:none}.dsham_settingsSortLabel{color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:20px;white-space:nowrap}.dsham_settingsFilter{width:100%;min-width:0}.dsham_settingsSearch .dsham_settingsFilter{flex:none;width:128px}.dsham_settingsFilters>.dsham_settingsFilter{flex:1 1 112px;width:auto;min-width:96px;max-width:148px}.dsham_settingsFilters>.dsham_projectFilter{flex:none;width:128px;min-width:128px;max-width:128px}.dsham_projectFilter .ant-select-selection-item{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dsham_settingsSort .dsham_settingsFilter{flex:none;width:128px}@container(max-width:560px){.dsham_settingsFilters{flex-wrap:wrap}}.dsham_settingsSearch .ant-input-affix-wrapper,.dsham_settingsSearch .dsham_searchField{flex:1;min-width:0;width:auto}.dsham_menuLabel{display:inline-flex;align-items:center;gap:8px;line-height:22px}.dsham_menuLabel svg{position:static;display:block;width:16px;height:16px;flex:none}.dsham_settingsGroup{margin:0 0 20px}.dsham_settingsGroupHeading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 14px}.dsham_settingsGroupTitle{display:flex;align-items:center;gap:8px;min-width:0;margin:0;color:var(--dsw-alias-label-primary);font-size:13px;font-weight:600}.dsham_settingsGroupTitle svg{flex:none;color:var(--dsw-alias-label-secondary)}.dsham_settingsCount{flex:none;color:var(--dsw-alias-label-tertiary);font-size:12px}.dsham_settingsList{overflow:hidden;border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-2,var(--dsw-alias-button-elevated-fill))}.ant-list-item.dsham_settingsRow{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:12px;min-height:64px;padding:10px 12px;border-bottom:1px solid var(--dsw-alias-border-l2)}.ant-list-item.dsham_settingsRow:last-child{border-bottom:0}.dsham_settingsRow{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:12px;min-height:64px;padding:10px 12px;border-bottom:1px solid var(--dsw-alias-border-l2)}.dsham_settingsRow:last-child{border-bottom:0}.dsham_settingsContent{min-width:0;flex:1}.dsham_settingsTitle{overflow:hidden;color:var(--dsw-alias-label-primary);font-size:13px;font-weight:600;line-height:18px;text-overflow:ellipsis;white-space:nowrap}.dsham_settingsMeta{margin-top:2px;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:16px}.dsham_settingsActions{display:flex;align-items:center;gap:4px;flex:none}.dsham_settingsAction{min-height:32px;padding:0 12px;color:var(--dsw-alias-label-primary);background:transparent;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;cursor:pointer;font:inherit;font-size:13px;font-weight:500}.dsham_settingsAction:hover{filter:brightness(1.12)}.dsham_settingsDelete{display:flex;align-items:center;justify-content:center;width:28px;height:28px;color:var(--dsw-alias-label-tertiary);background:transparent;border:0;border-radius:8px;cursor:pointer}.dsham_settingsDelete:hover{color:var(--dsw-alias-state-error-primary);background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsEmpty{padding:28px 8px;color:var(--dsw-alias-label-secondary);text-align:center}.dsham_settingsError{margin-top:10px;color:var(--dsw-alias-state-error-primary);font-size:12px}@container(max-width:520px){.dsham_settingsHeader{margin-bottom:16px}.dsham_settingsToolbar{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:16px}.dsham_settingsSearch{grid-column:1/-1}.dsham_settingsFilter{flex:1;min-width:0}.dsham_settingsGroup{margin-bottom:32px}.dsham_settingsRow{padding:10px 12px}.dsham_settingsActions{gap:4px}}";
 		const ARCHIVE_SETTINGS_BATCH_CSS = ".dsham_settingsTitleLink{display:block;max-width:100%;padding:0;border:0;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;font-weight:600;line-height:20px;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.dsham_settingsTitleLink:hover:not(:disabled){text-decoration:underline;text-underline-offset:3px}.dsham_settingsTitleLink:disabled{cursor:default;opacity:.6}.dsham_groupToggle{display:flex;align-items:center;gap:8px;min-width:0;max-width:100%;padding:4px 0;border:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}.dsham_groupToggle span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dsham_settingsRow:hover{background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsRow[data-selected=true]{background:var(--dsw-alias-interactive-bg-hover)}.dsham_settingsTitleLink:focus-visible,.dsham_groupToggle:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary,#3b82f6);outline-offset:2px}@container(max-width:620px){.dsham_settingsToolbar{grid-template-columns:repeat(3,minmax(0,1fr))}.dsham_settingsSearch{grid-column:1/-1}}@container(max-width:400px){.dsham_settingsRow{gap:8px;padding:10px 8px}.dsham_settingsActions{gap:0}.dsham_settingsMeta{font-size:11px}}.dsham_settingsGroupMeta{display:flex;align-items:center;gap:8px;flex:none;flex-wrap:wrap}.dsham_settingsStatus{margin-top:10px;color:var(--dsw-alias-label-secondary);font-size:12px}.ant-btn.dsham_favoriteOn{--ant-btn-text-color:#e8b931;--ant-btn-text-color-hover:#e8b931;--ant-btn-text-color-active:#e8b931;color:#e8b931}";
 		const ARCHIVE_SETTINGS_EXTERNAL_LINK_CSS = ".dsham_settingsTitleRow{display:flex;align-items:center;gap:8px 12px;min-width:0;flex-wrap:wrap}.dsham_settingsLinks{display:flex;align-items:center;gap:8px;flex-wrap:wrap}@media(max-width:720px){.dsham_settingsTitleRow{flex-wrap:wrap}}";
@@ -3438,6 +3438,7 @@ export function startArchiveClient(require: HostRequire) {
 		}
 		/** 会话行上的更多操作，弹出层用 Ant Design 菜单。 */
 		function ArchivedSessionMenu({ busy, title, t, onPreview, onRestoreOpen, onDelete, onCopyId, onCopyPath }: { busy: boolean; title: string; t: Translate; onPreview?: () => void; onRestoreOpen?: () => void; onDelete?: () => void; onCopyId?: () => void; onCopyPath?: () => void }) {
+			const [open, setOpen] = (0, react.useState)(false);
 			const choose = (id: string) => { if (busy) return; if (id === "copyId") return onCopyId?.(); if (id === "copyPath") return onCopyPath?.(); if (id === "preview") return onPreview?.(); if (id === "restoreOpen") return onRestoreOpen?.(); if (id === "delete") onDelete?.(); };
 			const items = [
 				...onPreview ? [{ id: "preview", label: t("discovery.preview"), danger: false }] : [],
@@ -3447,9 +3448,9 @@ export function startArchiveClient(require: HostRequire) {
 				...onDelete ? [{ id: "delete", label: t("menu.deleteSession"), danger: true }] : []
 			];
 			return (0, react_jsx_runtime.jsx)(AntdDropdown, {
-				trigger: ["click"], placement: "bottomRight",
+				trigger: ["click"], placement: "bottomRight", open: busy ? false : open, onOpenChange: (next: boolean) => { if (!busy) setOpen(next); },
 				menu: { items: items.map((item) => ({ key: item.id, label: item.label, danger: item.danger, disabled: busy, onClick: () => choose(item.id) })) },
-				children: settingsButton({ variant: "ghost", disabled: busy, title: t("archives.moreActions"), "aria-label": t("archives.moreActions") + t("common.separator") + title, "aria-haspopup": "menu", icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconEllipsisOutline16, {}) })
+				children: settingsButton({ variant: "ghost", disabled: busy, title: t("archives.moreActions"), "aria-label": t("archives.moreActions") + t("common.separator") + title, "aria-haspopup": "menu", "aria-expanded": open && !busy, icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconEllipsisOutline16, {}) })
 			});
 		}
 		/** 项目标题右侧的批量菜单，向左展开，归档项保持危险色。 */
@@ -3469,6 +3470,7 @@ export function startArchiveClient(require: HostRequire) {
 				label: menuLabelNode((0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconTrashOutline16, { size: 16 }), t(ungrouped ? "archives.deleteUngrouped" : "archives.deleteProject")),
 				danger: true
 			}];
+			const [open, setOpen] = (0, react.useState)(false);
 			const menuLabel = t(ungrouped ? "archives.ungroupedActions" : "archives.projectActions", { name: group.title });
 			const choose = (id: string) => {
 				if (busy) return;
@@ -3477,10 +3479,10 @@ export function startArchiveClient(require: HostRequire) {
 				else if (id === "delete") onDelete?.();
 			};
 			return (0, react_jsx_runtime.jsx)(AntdDropdown, {
-				trigger: ["click"], placement: "bottomRight",
+				trigger: ["click"], placement: "bottomRight", open: busy ? false : open, onOpenChange: (next: boolean) => { if (!busy) setOpen(next); },
 				menu: { items: items.map((item) => ({ key: item.id, label: item.label, danger: item.danger, disabled: busy, onClick: () => choose(item.id) })) },
 				children: settingsButton({
-					variant: "ghost", disabled: busy, "aria-label": menuLabel, "aria-haspopup": "menu",
+					variant: "ghost", disabled: busy, "aria-label": menuLabel, "aria-haspopup": "menu", "aria-expanded": open && !busy,
 					icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconEllipsisOutline16, {})
 				})
 			});
@@ -4038,8 +4040,7 @@ export function startArchiveClient(require: HostRequire) {
 				linksSelector: ".dsham_settingsLinks",
 				zhName: "归档会话",
 				enName: "Archived sessions",
-				getLanguage: () => ctx.locale.bind(NS)("locale.language"),
-                createIcon: createPluginUpdateIcon
+				createIcon: createPluginUpdateIcon
 			}), "dsh-archive-manager: plugin update ui");
 			// 侧栏先注册；导航适配等官方 uiWorkspace 出现再绑，否则打开归档会被官方清掉。
 			const uiWorkspaceAt = () => ctx.get("uiWorkspace");
