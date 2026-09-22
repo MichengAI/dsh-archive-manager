@@ -41,6 +41,9 @@ try {
 		platform: "browser",
 		target: "es2022",
 		write: false,
+		minify: true,
+		keepNames: true,
+		legalComments: "none",
 		define: { "process.env.NODE_ENV": "\"production\"" },
 		alias: {
 			react: join(sourceDirectory, "host-react-shim.ts"),
