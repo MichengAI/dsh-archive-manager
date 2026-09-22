@@ -265,7 +265,26 @@ test("batch archive stops on failure and leaves earlier sessions archived", asyn
 	assert.deepEqual(archived, ["s1"]);
 });
 
+test("active archive errors keep the session id that was being archived", async () => {
+	const workspaces = {
+		list: { getSnapshot: () => ({ archivedSessionIds: [] }) },
+		async archiveSession() {
+			const error = new Error("active");
+			error.name = "WorkspaceActiveSessionError";
+			error.activity = [{ kind: "turn" }];
+			throw error;
+		}
+	};
+	await assert.rejects(() => t.archiveSessionsViaOfficial(workspaces, ["s9"]), (error) => {
+		assert.equal(error.sessionId, "s9");
+		assert.deepEqual(t.activeSessionRefusal(error), { sessionId: "s9", kinds: ["turn"] });
+		return true;
+	});
+});
+
 test("active archive refusals expose their activity kinds", () => {
+	assert.deepEqual(t.activeSessionRefusal({ name: "WorkspaceActiveSessionError", sessionId: "s2", activity: [{ kind: "turn" }] }), { sessionId: "s2", kinds: ["turn"] });
+	assert.deepEqual(t.activeArchiveFromMessage("s2", "cannot archive session 's2': the session is active (turn, job)"), { sessionId: "s2", kinds: ["turn", "job"] });
 	assert.deepEqual(t.activeSessionActivity({ name: "WorkspaceActiveSessionError", activity: [{ kind: "turn" }, { kind: "job" }] }), ["turn", "job"]);
 	assert.deepEqual(t.activeSessionActivity({
 		name: "WorkspaceArchiveError",

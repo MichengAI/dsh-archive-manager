@@ -73,6 +73,14 @@ async function regularDirectory(directory: string) {
     current = parent;
   }
 }
+/** 直属 subagent 的目录证据。空描述符表示子日志里没有可用的 descriptor。 */
+export function childCatalogFact(header: { id?: unknown; createdAt?: unknown }, events: readonly { type?: unknown; seq?: unknown; data?: unknown }[], inheritedEventCount: number) {
+  if (typeof header.id !== "string" || header.id.length === 0) return;
+  if (typeof header.createdAt !== "number" || !Number.isSafeInteger(header.createdAt) || header.createdAt < 0) return;
+  if (!Number.isSafeInteger(inheritedEventCount) || inheritedEventCount < 0) return;
+  const descriptors = events.filter(event => event.type === "subagent/descriptor" && typeof event.seq === "number" && event.seq >= inheritedEventCount);
+  return { childId: header.id, childCreatedAt: header.createdAt, descriptorCount: descriptors.length, descriptor: descriptors[0]?.data ?? null };
+}
 /** 保留旧代际，只生成经宿主转换器校验的新代际；仅允许纠正内容完全匹配的旧版单帧错误产物。 */
 export async function prepareAutomationRepair({ directory, target, sessionId, format }: { directory: string; target: string; sessionId: string; format: RepairFormat }) {
   if (!format || !Number.isInteger(format.currentVersion) || format.currentVersion < 3 || typeof format.createRestore !== 'function') throw new Error('当前宿主不支持此修复，请升级 DSH 后重试');

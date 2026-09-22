@@ -12,6 +12,7 @@ Published release notes are retained below; new versions are added without remov
 - Legacy automation repair follows the host's current session generation, including fourth-generation logs.
 - Settings controls use the host's buttons, inputs, tabs, and disclosures where those controls exist. Hosts without the segmented tabs supply the same control locally. Sort, project filter, and the half-selected checkbox stay as they are.
 - Archive tabs dim and ignore input while a batch is running. The search field keeps a single border. Older hosts no longer warn about unlabeled button icons.
+- The settings page asks before stopping a running session, instead of sending the user to the sidebar. Session repair passes the parent session's direct child evidence into the format catalog.
 
 ## 1.0.2 - 2026-09-21
 

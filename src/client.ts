@@ -352,13 +352,14 @@ window.__ModuleLoader__.load({
 		/**
 		* 归档管理设置页：集中处理筛选、多选、恢复、删除和原生会话导航。
 		*/
-		function ArchivedSessionsSection({ archiveSessions, sessionStore, workspaceStore, unarchiveSession, deleteSession, unarchiveSessions, deleteArchivedSessions, archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState, close, t, diagnoseSession, repairSession, sessionDetails, searchSessionContent, searchArchivedContent, previewArchivedSession, favoriteSessions, setSessionFavorite, organizeBatch, useSessionPendingInteraction, useSessionStatus }: ArchiveProps) {
+		function ArchivedSessionsSection({ archiveSessions, archiveSession, sessionStore, workspaceStore, unarchiveSession, deleteSession, unarchiveSessions, deleteArchivedSessions, archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState, close, t, diagnoseSession, repairSession, sessionDetails, searchSessionContent, searchArchivedContent, previewArchivedSession, favoriteSessions, setSessionFavorite, organizeBatch, useSessionPendingInteraction, useSessionStatus }: ArchiveProps) {
 			const sessions = (0, react.useSyncExternalStore)(sessionStore.subscribe, sessionStore.getSnapshot);
 			const workspaceState = (0, react.useSyncExternalStore)(workspaceStore.subscribe, workspaceStore.getSnapshot);
 			const [archiveTab, setArchiveTab] = (0, react.useState)("archived");
 			const isArchived = archiveTab === "archived";
 			const [archiveTarget, setArchiveTarget] = (0, react.useState)<string[] | null>(null);
 			const [archiveGroup, setArchiveGroup] = (0, react.useState)<ArchivedGroup | null>(null);
+			const [stopArchive, setStopArchive] = (0, react.useState)<{ sessionId: string; title: string; kinds: string } | null>(null);
 			const requestArchive = (ids: string[], group: ArchivedGroup | null = null) => { setError(null); setNotice(null); setIdleRequest(false); setArchiveGroup(group); setArchiveTarget(ids); };
 			const closeArchive = () => { if (!busy) { setArchiveTarget(null); setArchiveGroup(null); setError(null); } };
 			const archiveBusy = (0, react.useRef)(false);
@@ -469,6 +470,13 @@ window.__ModuleLoader__.load({
 					archiveBusy.current = true;
 					try {
 						const result = await executeBatch("archive", archiveTarget, { idle: idleRequest });
+						const active = result?.failures.map((failure) => activeArchiveFromMessage(failure.sessionId, failure.message)).find((item) => item !== undefined);
+						if (active !== undefined && typeof archiveSession === "function") {
+							const session = sessions.byId[active.sessionId];
+							setStopArchive({ sessionId: active.sessionId, title: session === undefined ? active.sessionId : displayTitle(session, t), kinds: active.kinds.join(", ") });
+							setArchiveTarget(null); setArchiveGroup(null); setError(null);
+							return;
+						}
 						if (result) { setArchiveTarget(null); setArchiveGroup(null); setIdleRequest(false); }
 					} finally { archiveBusy.current = false; }
 					return;
@@ -483,8 +491,15 @@ window.__ModuleLoader__.load({
 					setNotice(t("archives.archiveSuccess", { n: result.archivedSessionIdsAdded.length }));
 					setArchiveTarget(null); setArchiveGroup(null);
 				} catch (reason) {
-					const kinds = activeSessionActivity(reason);
-					setError(kinds === undefined ? t("archives.archiveBatchFailed", { detail: reason instanceof Error ? reason.message : String(reason) }) : t("archives.archiveActive", { kinds: kinds.join(", ") }));
+					const active = activeSessionRefusal(reason);
+					if (active !== undefined && typeof archiveSession === "function") {
+						const session = sessions.byId[active.sessionId];
+						setStopArchive({ sessionId: active.sessionId, title: session === undefined ? active.sessionId : displayTitle(session, t), kinds: active.kinds.join(", ") });
+						setArchiveTarget(null); setArchiveGroup(null); setError(null);
+					} else {
+						const kinds = activeSessionActivity(reason);
+						setError(kinds === undefined ? t("archives.archiveBatchFailed", { detail: reason instanceof Error ? reason.message : String(reason) }) : t("archives.archiveActive", { kinds: kinds.join(", ") }));
+					}
 				}
 				finally { archiveBusy.current = false; setBusy(false); }
 			};
@@ -713,6 +728,29 @@ window.__ModuleLoader__.load({
 						error !== null && (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsError", role: "alert", children: error })
 					] })
 					}), (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Modal, {
+					open: stopArchive !== null,
+					onClose: () => { if (!busy) { setStopArchive(null); setError(null); } },
+					closeLabel: t("close"),
+					title: t("archiveActive.title"),
+					...stopArchive === null ? {} : { description: t("archiveActive.desc", { name: stopArchive.title, kinds: stopArchive.kinds }) },
+					footer: (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
+						(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, { variant: "outline", disabled: busy, onClick: () => { if (!busy) { setStopArchive(null); setError(null); } }, children: t("cancel") }),
+						(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, { variant: "outline", className: "dsham_archiveWorkspaceConfirm", disabled: busy, onClick: async () => {
+							if (archiveBusy.current || busy || stopArchive === null || typeof archiveSession !== "function") return;
+							archiveBusy.current = true; setBusy(true); setError(null);
+							try {
+								await archiveSession(stopArchive.sessionId, { stopActivity: true });
+								setSelectedSessionIds((previous) => previous.filter((id) => stopArchive === null || id !== stopArchive.sessionId));
+								setArchiveTab("archived");
+								setNotice(t("archives.archiveSuccess", { n: 1 }));
+								setStopArchive(null);
+							} catch (reason) {
+								setError(reason instanceof Error ? reason.message : String(reason));
+							} finally { archiveBusy.current = false; setBusy(false); }
+						}, children: t("archiveActive.confirm") })
+					] }),
+					children: error !== null && (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsError", role: "alert", children: error })
+				}), (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Modal, {
 					open: deleteTarget !== null,
 					onClose: closeDelete,
 					closeLabel: t("close"),
@@ -805,6 +843,21 @@ window.__ModuleLoader__.load({
 				return typeof kind === "string" && kind.length > 0 ? [kind] : [];
 			});
 			return kinds.length > 0 ? kinds : undefined;
+		}
+		function activeSessionRefusal(reason: unknown) {
+			const kinds = activeSessionActivity(reason);
+			if (kinds === undefined || reason === null || typeof reason !== "object") return;
+			const error = record(reason);
+			const details = error.rpcError !== null && typeof error.rpcError === "object" ? record(error.rpcError).details : undefined;
+			const wrappedId = details !== null && typeof details === "object" ? record(details).sessionId : undefined;
+			const sessionId = typeof error.sessionId === "string" ? error.sessionId : typeof wrappedId === "string" ? wrappedId : undefined;
+			return sessionId === undefined ? undefined : { sessionId, kinds };
+		}
+		function activeArchiveFromMessage(sessionId: string, message: string) {
+			const match = /^cannot archive session '(?:[^'\\]|\\')*': the session is active \((.*)\)$/.exec(message);
+			if (match === null) return;
+			const kinds = match[1].split(", ").filter((kind) => kind.length > 0);
+			return kinds.length > 0 ? { sessionId, kinds } : undefined;
 		}
 		function formatForkError(reason: unknown, t: Translate) {
 			const detail = reason instanceof Error ? reason.message : String(reason);
@@ -3816,7 +3869,7 @@ window.__ModuleLoader__.load({
 			"archives.unarchiveFailed": "取消归档失败：{detail}",
 			"archives.archiveUnknown": "会话已不存在，无法归档。",
 			"archives.archiveFailed": "归档失败：{detail}",
-			"archives.archiveActive": "会话仍在运行（{kinds}）。请先停止，或在侧栏选择停止并归档。",
+			"archives.archiveActive": "会话仍在运行（{kinds}）。",
 			"archiveActive.title": "停止并归档",
 			"archiveActive.desc": "“{name}”仍有正在进行的工作：{kinds}。归档前会停止这些工作。",
 			"archiveActive.confirm": "停止并归档",
@@ -3972,7 +4025,7 @@ window.__ModuleLoader__.load({
 			"archives.unarchiveFailed": "Could not unarchive the session: {detail}",
 			"archives.archiveUnknown": "This session no longer exists, so it cannot be archived.",
 			"archives.archiveFailed": "Could not archive the session: {detail}",
-			"archives.archiveActive": "This conversation is still running ({kinds}). Stop it first, or choose Stop and archive in the sidebar.",
+			"archives.archiveActive": "This conversation is still running ({kinds}).",
 			"archiveActive.title": "Stop and archive",
 			"archiveActive.desc": "“{name}” still has work in progress: {kinds}. Archiving stops that work first.",
 			"archiveActive.confirm": "Stop and archive",
@@ -4081,7 +4134,12 @@ window.__ModuleLoader__.load({
 			for (const sessionId of sessionIds) {
 				if (typeof sessionId !== "string" || sessionId.length === 0 || seen.has(sessionId)) continue;
 				seen.add(sessionId);
-				await workspaces.archiveSession(sessionId);
+				try {
+					await workspaces.archiveSession(sessionId);
+				} catch (reason) {
+					if (reason !== null && typeof reason === "object" && activeSessionActivity(reason) !== undefined && typeof record(reason).sessionId !== "string") Object.assign(reason, { sessionId });
+					throw reason;
+				}
 			}
 			if (typeof refresh === "function") await refresh();
 			const archivedSessionIds = [...(workspaces.list?.getSnapshot?.()?.archivedSessionIds ?? [])];
@@ -4457,6 +4515,7 @@ window.__ModuleLoader__.load({
 				locale: NS,
 				inject: () => ({
 					archiveSessions,
+					archiveSession: (id: string, options?: { stopActivity?: boolean }) => ctx.workspaces.archiveSession(id, options),
 					sessionStore: bindObservable(ctx.sessions.list),
 					workspaceStore: bindObservable(ctx.workspaces.list),
 					unarchiveSession,
@@ -4500,6 +4559,8 @@ window.__ModuleLoader__.load({
 			archiveWorkspaceDialogTarget,
 			archiveWorkspaceDialogFailureState,
 			activeSessionActivity,
+			activeSessionRefusal,
+			activeArchiveFromMessage,
 			archiveSessionsViaOfficial,
 			unarchiveSessionsViaOfficial,
 			createUnarchiveSession,

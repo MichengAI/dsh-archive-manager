@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { zstdCompressSync } from "node:zlib";
-import { decodeRepairLog, normalizeAutomationSources, classifySessionError } from "../src/session-repair.ts";
+import { childCatalogFact, decodeRepairLog, normalizeAutomationSources, classifySessionError } from "../src/session-repair.ts";
+test("直属子会话证据保留创建时间和继承截点之后的描述符", () => {
+  const fact = childCatalogFact({ id: "child", createdAt: 5 }, [{ type: "subagent/descriptor", seq: 1, data: { old: true } }, { type: "subagent/descriptor", seq: 4, data: { mode: "one-shot" } }], 3);
+  assert.deepEqual(fact, { childId: "child", childCreatedAt: 5, descriptorCount: 1, descriptor: { mode: "one-shot" } });
+  assert.equal(childCatalogFact({ id: "child" }, [], 0), undefined);
+});
 test("连续压缩帧完整读取，残缺日志拒绝修复", () => {
   const bytes = Buffer.concat([zstdCompressSync(Buffer.from('{"type":"session","version":0}\n')), zstdCompressSync(Buffer.from('{"seq":0}\n'))]);
   assert.equal(decodeRepairLog(bytes, true).length, 2);

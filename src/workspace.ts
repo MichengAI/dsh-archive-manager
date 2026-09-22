@@ -7,7 +7,7 @@ import type { Schema, SessionDetail } from "./contracts.js";
 import type { TypertGatewayBinding } from "@deepseek-ai/dsh-typert-protocol";
 type BatchTarget = { scope: "all" | "ungrouped" } | { scope: "workspace"; workspaceId: string } | { scope: "sessions"; sessionIds: string[] };
 import * as SessionRuntime from "@deepseek-ai/dsh-session";
-import { prepareAutomationRepair, type RepairFormat } from "./session-repair.js";
+import { childCatalogFact, prepareAutomationRepair, type RepairFormat } from "./session-repair.js";
 import { repairInputSchema, classifySessionError, detailsInputSchema, countConversationTurns, discoveryInvocations, searchInputSchema, previewInputSchema, extractConversation, findContentMatch, previewConversation } from "./archive-discovery.js";
 import { lstat, rm } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
@@ -349,15 +349,16 @@ function registerHostRemote(ctx: HostContext) {
 		typertCtx.typert.register(ARCHIVE_MANAGER_TYPERT as TypertContribution);
 	});
 }
-/** 0.1.6 及更早的 generationFormat 自带 createRestore；0.1.7 起改由带空子会话证据的目录创建。 */
-async function hostRepairFormat(format: RepairFormat | undefined): Promise<RepairFormat> {
+/** 0.1.6 及更早的 generationFormat 自带 createRestore；0.1.7 起用本次修复收集到的直属子会话证据建目录。没有子会话时才传空数组。 */
+async function hostRepairFormat(format: RepairFormat | undefined, children: readonly Record<string, unknown>[] = []): Promise<RepairFormat> {
 	if (!format || !Number.isInteger(format.currentVersion) || format.currentVersion < 3) throw new Error("当前宿主不支持此修复，请升级 DSH 后重试");
 	if (typeof format.createRestore === "function") return format;
 	if (typeof format.encodeHeader !== "function" || typeof format.encodeEvent !== "function") throw new Error("当前宿主不支持此修复，请升级 DSH 后重试");
 	const catalog = await import("@deepseek-ai/dsh-session-format-catalog");
 	if (typeof catalog.createSessionFormatCatalogWithChildren !== "function") throw new Error("当前宿主不支持此修复，请升级 DSH 后重试");
+	const bound = catalog.createSessionFormatCatalogWithChildren(children as never);
 	return { ...format, createRestore(header: unknown) {
-		return catalog.createSessionFormatCatalogWithChildren([]).createRestore(header, { recovery: "recoverable", validation: "transformed" });
+		return bound.createRestore(header, { recovery: "recoverable", validation: "transformed" });
 	} } as unknown as RepairFormat;
 }
 let activeSessionError: (new (sessionId: string, activity: readonly unknown[]) => Error) | null | undefined;
@@ -490,7 +491,7 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Wo
         const version = persistence.generationFormat?.currentVersion;
         const currentGeneration = Number.isInteger(version) && version >= 3 ? new RegExp(`^session\\.v${version}\\.jsonl(?:\\.zstd)?$`) : undefined;
         if (!directory || currentGeneration === undefined || !currentGeneration.test(basename(location.path))) throw new Error("当前存储后端或格式不支持自动修复");
-        const format = await hostRepairFormat(persistence.generationFormat);
+        const format = await hostRepairFormat(persistence.generationFormat, await this.childCatalogFacts(sessionId));
         return prepareAutomationRepair({ directory, target: location.path, sessionId, format: { ...format, validateBytes: async bytes => {
             if (location.path.endsWith(".zstd")) {
                 if (typeof persistence.readZstdPrefix !== "function") throw new Error("当前宿主缺少压缩日志校验能力");
@@ -1235,6 +1236,37 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Wo
 			const entity = this.entities.get(workspaceId);
 			if (entity !== void 0) entity.record = next;
 		}
+	}
+	/** 修复父日志前收集直属 subagent 的目录证据。读不出来的子日志跳过，不把其他子会话一起丢掉。 */
+	async childCatalogFacts(sessionId: string) {
+		const ids = new Set<string>();
+		const sessions = this.ctx.get("sessions");
+		if (typeof sessions?.list === "function") {
+			for (const session of sessions.list()) {
+				const header = session?.header;
+				if (header?.parentSession === sessionId && header.origin === "subagent" && typeof session.id === "string") ids.add(session.id);
+			}
+		}
+		try {
+			for (const header of await this.listStoredHeaders()) {
+				if (header.parentSession === sessionId && header.origin === "subagent") ids.add(header.id);
+			}
+		} catch (error) {
+			this.ctx.logger.warn(`archive-manager: child header list for "${sessionId}" failed: ${String(error)}`);
+		}
+		const persistence = this.ctx.get("sessionPersistence");
+		const facts = [];
+		for (const childId of ids) {
+			try {
+				if (persistence === undefined) continue;
+				const stored = await this.readStoredProjectionSource(persistence, childId);
+				const fact = childCatalogFact(stored.meta, stored.events, stored.inheritedEventCount ?? 0);
+				if (fact !== undefined) facts.push(fact);
+			} catch (error) {
+				this.ctx.logger.warn(`archive-manager: child catalog fact for "${childId}" skipped: ${String(error)}`);
+			}
+		}
+		return facts;
 	}
 	/** 尽力而为的级联删除：删除 `sessionId` 的 SUBAGENT 子会话。
 	 * 仅头部标记 `origin: "subagent"` 的会话参与：单凭 `parentSession` 有歧义

@@ -45,6 +45,7 @@ export interface ArchivedGroup { key: string; title: string; ids?: Set<string>; 
 export interface ArchiveProps {
   sessionStore: Observable<ClientList>; workspaceStore: Observable<WorkspaceSnapshot>;
   archiveSessions(ids: string[]): Promise<{ archivedSessionIdsAdded: string[] }>;
+  archiveSession?(id: string, options?: { stopActivity?: boolean }): Promise<unknown>;
   unarchiveSession(id: string): Promise<unknown>; deleteSession(id: string): Promise<unknown>;
   unarchiveSessions(target: BatchTarget): Promise<{ unarchivedSessionIds: string[] }>;
   deleteArchivedSessions(target: BatchTarget): Promise<DeletedBatch>;
