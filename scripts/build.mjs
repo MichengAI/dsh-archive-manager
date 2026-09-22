@@ -1,7 +1,7 @@
 // 统一从 src 生成可发布的 lib，避免运行产物成为手工维护入口。
 // 先在同级暂存目录完成构建，成功后再替换，避免失败时破坏可安装产物。
 import { randomUUID } from "node:crypto";
-import { access, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { access, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { build } from "esbuild";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,16 +14,28 @@ const backupDirectory = join(root, `.dsh-archive-manager-build-backup-${randomUU
 let previousOutputMoved = false;
 let published = false;
 
-async function bundledLicenseNotice() {
-	const notices = [
-		["Ant Design", join(root, "node_modules/antd/LICENSE")],
-		["dayjs", join(root, "node_modules/dayjs/LICENSE")]
-	];
-	const lines = ["/*!", "Third-party notices for code bundled into this file.", ""];
-	for (const [name, path] of notices) {
-		lines.push(name, "", (await readFile(path, "utf8")).trim(), "");
+/**
+ * 被 minify 抹掉的第三方版权声明按 esbuild metafile 逐个补回文件尾部。
+ * 宿主在运行时提供的模块（@deepseek-ai/*、react/react-dom 别名到 shim）不进包，也就不列入。
+ */
+async function bundledLicenseNotice(metafile) {
+	const directories = new Map();
+	for (const input of Object.keys(metafile.inputs)) {
+		const match = input.replaceAll("\\", "/").match(/^(.*node_modules\/(?:\.pnpm\/[^/]+\/node_modules\/)?((?:@[^/]+\/)?[^/]+))\//);
+		if (match === null || match[2].startsWith("@deepseek-ai/")) continue;
+		if (!directories.has(match[2])) directories.set(match[2], match[1]);
 	}
-	lines.push("*/");
+	const blocks = [];
+	for (const [name, directory] of [...directories].sort(([left], [right]) => left < right ? -1 : 1)) {
+		const file = (await readdir(directory)).find((entry) => /^licen[sc]e/i.test(entry));
+		if (file === undefined) {
+			const manifest = JSON.parse(await readFile(join(directory, "package.json"), "utf8"));
+			blocks.push(`${name}\n\n${typeof manifest.license === "string" ? manifest.license : "see package.json"} (declared in package.json)`);
+			continue;
+		}
+		blocks.push(`${name}\n\n${(await readFile(join(directory, file), "utf8")).trim()}`);
+	}
+	const lines = ["/*!", `Third-party notices for the ${blocks.length} packages bundled into this file.`, "", blocks.join("\n\n"), "*/"];
 	return lines.join("\n");
 }
 
@@ -57,6 +69,7 @@ try {
 		minify: true,
 		keepNames: true,
 		legalComments: "none",
+		metafile: true,
 		define: { "process.env.NODE_ENV": "\"production\"" },
 		alias: {
 			react: join(sourceDirectory, "host-react-shim.ts"),
@@ -66,7 +79,7 @@ try {
 		}
 	});
 	const clientSource = clientBundle.outputFiles[0].text;
-	const thirdPartyNotices = await bundledLicenseNotice();
+	const thirdPartyNotices = await bundledLicenseNotice(clientBundle.metafile);
 	await writeFile(join(stagingDirectory, "client.js"), `window.__ModuleLoader__.load({
   id: "@michengai/dsh-archive-manager",
   factory: function(require) {

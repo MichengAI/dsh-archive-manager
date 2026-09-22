@@ -6,15 +6,13 @@ Published release notes are retained below; new versions are added without remov
 
 ## Unreleased
 
-- Support DeepSeek Harness `0.1.7-alpha.1` while remaining compatible with the previously supported hosts.
-- Keep the official session list when it provides a menu slot, and add Delete session there. Older hosts still use this plugin's session list.
-- Archiving a running session asks before stopping its work. A recorded pin is cleared in the same archive.
-- Legacy automation repair follows the host's current session generation, including fourth-generation logs.
-- Settings controls use Ant Design for buttons, inputs, tabs, dropdowns, menus, checkboxes, and dialogs. Sort, project, search scope, and favorites are selects. The half-selected checkbox uses the same checkbox.
-- The archive list panel has its own accessible name, and the project and session menus report whether they are open. Clearing the idle-day field leaves it empty.
-- The settings client is minified when the package is built. Ant Design and dayjs license notices stay at the end of that file.
-- Archive tabs dim and ignore input while a batch is running. The search field keeps a single border. Older hosts no longer warn about unlabeled button icons.
-- The settings page asks before stopping a running session, instead of sending the user to the sidebar. Session repair passes the parent session's direct child evidence into the format catalog.
+## 1.0.3 - 2026-09-23
+
+- Works with DSH 0.1.7-alpha.1. Versions that already worked still work.
+- The Archived sessions page is easier to scan: search, project, favorites, sort, and dates sit in two rows. A saved favorite shows a yellow star.
+- Archiving a session that is still running asks you before it stops that work.
+- When the session list already has its own menu, Delete is added there instead of replacing the list.
+- You cannot switch between Archived and Unarchived while a batch is running.
 
 ## 1.0.2 - 2026-09-21
 
