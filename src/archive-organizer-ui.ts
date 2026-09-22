@@ -1,20 +1,34 @@
 import type { Translate, BatchProgress, BatchResult, OrganizeKind } from "./contracts.js";
+import type { HostControls } from "./host-controls.js";
 interface OrganizerPanelProps {
  t: Translate; archived: boolean; busy: boolean; ready: boolean; days: string | number; onDays(value: string): void;
  count: number; onPreview(): void; progress?: BatchProgress | null; result?: (BatchResult & { kind?: OrganizeKind }) | null;
  onRetry(): void; undoCount: number; onUndo(): void; onReload(): void;
 }
 /** 整理控件沿用归档页按钮与颜色，避免复制完整设置页。 */
-export function createOrganizerPanel(React: typeof import("react")) {
+export function createOrganizerPanel(React: typeof import("react"), controls: HostControls = {}) {
   const h = React.createElement;
+  function textButton(label: string, props: { disabled?: boolean; onClick(): void }) {
+    const Button = controls.Button;
+    if (Button) return h(Button, { type: "button", variant: "outline", size: "sm", ...props }, label);
+    return h("button", { type: "button", className: "dsham_settingsAction", ...props }, label);
+  }
+  function FailureDetails({ title, failures, separator }: { title: string; failures: { sessionId: string; message: string }[]; separator: string }) {
+    const [open, setOpen] = React.useState(false);
+    const list = h("ul", null, failures.map(failure => h("li", { key: failure.sessionId }, failure.sessionId, separator, failure.message)));
+    const Row = controls.DisclosureRow;
+    if (!Row) return h("details", null, h("summary", null, title), list);
+    return h(Row, { icon: h("span", { "aria-hidden": true }), title, open, expandable: true, onToggle: () => setOpen(value => !value) }, list);
+  }
   return function OrganizerPanel({ t, archived, busy, ready, days, onDays, count, onPreview, progress, result, onRetry, undoCount, onUndo, onReload }: OrganizerPanelProps) {
+    const daysField = { type: "number" as const, min: 1, max: 36500, step: 1, value: days, disabled: busy, onChange: (event: { currentTarget: { value: string } }) => onDays(event.currentTarget.value), "aria-label": t("organizer.idleDays") };
     return h(React.Fragment, null,
-      h("style", null, ".dsham_organizer,.dsham_batchFeedback{display:grid;gap:12px;margin:0 0 16px;padding:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px}.dsham_organizerControls{display:flex;align-items:center;flex-wrap:wrap;gap:10px}.dsham_organizer label{display:inline-flex;align-items:center;gap:6px}.dsham_organizer input[type=number]{width:76px;padding:5px;color:inherit;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l2);border-radius:5px}.dsham_organizer p,.dsham_batchFeedback p{margin:0;font-size:12px;color:var(--dsw-alias-label-secondary)}.dsham_batchFeedback progress{width:100%}.dsham_batchFeedback details{font-size:12px;overflow-wrap:anywhere}.dsham_archivePreview{max-height:260px;overflow:auto;display:grid;gap:8px;padding:8px 0}.dsham_archivePreview label{display:flex;gap:8px;align-items:center;overflow-wrap:anywhere}"),
+      h("style", null, ".dsham_organizer,.dsham_batchFeedback{display:grid;gap:12px;margin:0 0 16px;padding:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px}.dsham_organizerControls{display:flex;align-items:center;flex-wrap:wrap;gap:10px}.dsham_organizer label{display:inline-flex;align-items:center;gap:6px}.dsham_organizer input[type=number]{width:76px;padding:5px;color:inherit;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l2);border-radius:5px}.dsham_organizer .dsham_idleDays{width:88px;box-sizing:border-box}.dsham_organizer p,.dsham_batchFeedback p{margin:0;font-size:12px;color:var(--dsw-alias-label-secondary)}.dsham_batchFeedback progress{width:100%}.dsham_batchFeedback details{font-size:12px;overflow-wrap:anywhere}.dsham_archivePreview{max-height:260px;overflow:auto;display:grid;gap:8px;padding:8px 0}.dsham_archivePreview label{display:flex;gap:8px;align-items:center;overflow-wrap:anywhere}"),
       (!archived || !ready) && h("div", { className: "dsham_organizer" }, h("div", { className: "dsham_organizerControls" },
-        !ready && h("button", { type: "button", className: "dsham_settingsAction", disabled: busy, onClick: onReload }, t("organizer.reloadFavorites")),
+        !ready && textButton(t("organizer.reloadFavorites"), { disabled: busy, onClick: onReload }),
         !archived && h(React.Fragment, null,
-          h("label", null, t("organizer.idleDays"), h("input", { type: "number", min: 1, max: 36500, step: 1, value: days, disabled: busy, onChange: (event) => onDays(event.currentTarget.value), "aria-label": t("organizer.idleDays") })),
-          h("button", { type: "button", className: "dsham_settingsAction", disabled: busy || !ready || count === 0, onClick: onPreview }, t("organizer.preview", { n: count })))),
+          h("label", null, t("organizer.idleDays"), controls.Input ? h(controls.Input, { className: "dsham_idleDays", ...daysField }) : h("input", daysField)),
+          textButton(t("organizer.preview", { n: count }), { disabled: busy || !ready || count === 0, onClick: onPreview }))),
       !archived && h("p", null, t("organizer.rules"))),
       (progress || result || undoCount > 0) && h("section", { className: "dsham_batchFeedback", "aria-label": t("organizer.feedback") },
       progress && h("div", { role: "status", "aria-live": "polite" },
@@ -23,11 +37,11 @@ export function createOrganizerPanel(React: typeof import("react")) {
       result && h("div", { role: "status" },
         h("strong", null, t(`organizer.${result.kind ?? "archive"}Result`)),
         h("p", null, t("organizer.result", { succeeded: result.succeeded.length, skipped: result.skipped.length, failed: result.failures.length, remaining: result.unprocessed.length })),
-        result.failures.length > 0 && h("details", null, h("summary", null, t("organizer.failureDetails")), h("ul", null, result.failures.map((failure) => h("li", { key: failure.sessionId }, failure.sessionId, t("common.separator"), failure.message)))),
+        result.failures.length > 0 && h(FailureDetails, { title: t("organizer.failureDetails"), failures: result.failures, separator: t("common.separator") }),
         result.refreshError && h("p", { role: "alert" }, t("organizer.refreshError", { detail: result.refreshError })),
-        result.remaining.length > 0 && h("button", { type: "button", className: "dsham_settingsAction", disabled: busy, onClick: onRetry }, t("organizer.retry", { n: result.remaining.length }))),
+        result.remaining.length > 0 && textButton(t("organizer.retry", { n: result.remaining.length }), { disabled: busy, onClick: onRetry })),
       undoCount > 0 && h("div", { className: "dsham_organizerControls" },
-        h("button", { type: "button", className: "dsham_settingsAction", disabled: busy, onClick: onUndo }, t("organizer.undo", { n: undoCount })),
+        textButton(t("organizer.undo", { n: undoCount }), { disabled: busy, onClick: onUndo }),
         h("p", null, t("organizer.undoHint")))));
   };
 }

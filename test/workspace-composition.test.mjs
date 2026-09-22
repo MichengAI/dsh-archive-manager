@@ -424,7 +424,7 @@ test("归档 TAB 默认与切换、多项目选择、确认提交和状态刷新
  const render=()=>{cursor=0;return client.__test.ArchivedSessionsSection(props);};
  const nodes=(node)=>Array.isArray(node)?node.flatMap(nodes):node?.props?[node,...nodes(node.props.children)]:[];
  let tree=render();
- const tab=(name)=>nodes(tree).find(n=>n.props.role==="tab" && n.props.children===`archives.tab.${name}`);
+ const tab=(name)=>{ const control=nodes(tree).find(n=>n.type?.name==="SegmentedTabs"); return nodes(control.type(control.props)).find(n=>n.props.role==="tab" && n.props.children===`archives.tab.${name}`); };
  assert.equal(tab("archived").props["aria-selected"],true);
  assert.equal(nodes(tree).some(n=>n.type==="header" && nodes(n.props.children).some(child=>child.props.role==="tablist")),false,"归档页签不得被 Codex UI 的 header [role=tablist] 会话顶栏适配器命中");
  assert.equal(nodes(tree).some(n=>n.props.children==="archives.restoreAll"),false);
@@ -518,7 +518,7 @@ test("整理页收藏、闲置预览、部分失败重试及撤回形成完整�
   let tree;
   const render = () => { cursor = 0; tree = client.__test.ArchivedSessionsSection(props); };
   const panel = () => nodes(tree).find(node => node.type?.name === "OrganizerPanel");
-  const tab = name => nodes(tree).find(node => node.props.role === "tab" && node.props.children === `archives.tab.${name}`);
+  const tab = name => { const control = nodes(tree).find(node => node.type?.name === "SegmentedTabs"); return { props: { onClick: () => control.props.onChange(name) } }; };
   render();
   await panel().props.onReload(); render();
   assert.equal(panel().props.ready, true);
@@ -559,9 +559,9 @@ test("整理页收藏、闲置预览、部分失败重试及撤回形成完整�
   assert.deepEqual(calls, ["a", "b"]);
   assert.deepEqual(panel().props.result.succeeded, ["a"]);
   assert.deepEqual(panel().props.result.remaining, ["b", "c"]);
-  nodes(tree).find(node => node.props.id === "dsham-tab-archived").props.onClick(); render();
+  nodes(tree).find(node => node.type?.name === "SegmentedTabs").props.onChange("archived"); render();
   assert.equal(panel().props.result, null, "归档结果不得出现在另一页签");
-  nodes(tree).find(node => node.props.id === "dsham-tab-unarchived").props.onClick(); render();
+  nodes(tree).find(node => node.type?.name === "SegmentedTabs").props.onChange("unarchived"); render();
   assert.deepEqual(panel().props.result.remaining, ["b", "c"], "返回原页签仍可重试失败项");
   assert.equal(panel().props.undoCount, 1);
   await panel().props.onRetry(); await tick(); render();
@@ -585,7 +585,7 @@ test("归档发现入口提供组合日期筛选及只读预览", async () => {
   assert.ok(filters, "日期筛选应接入真实设置页");
   const searchRow = nodes(tree).find(n => n.props.className === "dsham_settingsSearch");
   assert.ok(nodes(searchRow).includes(filters), "日期筛选应位于搜索框右侧");
-  assert.ok(nodes(searchRow).some(n => n.type?.name === "ArchiveProjectSelect" && n.props["aria-label"] === "discovery.scope"), "搜索框左侧常驻查找范围切换");
+  assert.ok(nodes(searchRow).some(n => n.type?.name === "SegmentedControl" && n.props.label === "discovery.scope"), "搜索框左侧常驻查找范围切换");
   filters.props.onFrom("2026-09-01"); tree = render();
   assert.equal(nodes(tree).filter(n => n.type === "article").length, 1);
   assert.equal(nodes(tree).find(n => n.props.className === "dsham_settingsCount").props.children, "1", "日期筛选后的数量必须与可见会话一致");
@@ -596,9 +596,9 @@ test("归档发现入口提供组合日期筛选及只读预览", async () => {
   assert.equal(nodes(tree).find(n => n.props.role === "alert").props.children, "copy.unavailable");
   menu.props.onSelect("preview"); tree = render();
   assert.ok(nodes(tree).some(n => n.props.open && n.props.title === "九月"), "预览弹窗应打开且仍保持归档列表");
-  nodes(tree).find(n => n.props.id === "dsham-tab-unarchived").props.onClick(); tree = render();
+  nodes(tree).find(n => n.type?.name === "SegmentedTabs").props.onChange("unarchived"); tree = render();
   assert.equal(nodes(tree).some(n => n.props.open), false, "未主动关闭预览，切页签也应关闭");
-  nodes(tree).find(n => n.props.id === "dsham-tab-archived").props.onClick(); tree = render();
+  nodes(tree).find(n => n.type?.name === "SegmentedTabs").props.onChange("archived"); tree = render();
   assert.equal(nodes(tree).some(n => n.props.open), false, "切回已归档不能重新打开预览");
   const reopenedMenu = nodes(tree).find(n => n.type?.name === "ArchivedSessionMenu");
   reopenedMenu.type(reopenedMenu.props).props.onSelect("preview"); tree = render();
@@ -607,7 +607,7 @@ test("归档发现入口提供组合日期筛选及只读预览", async () => {
   assert.equal(nodes(tree).some(n => n.props.open), false);
   nodes(tree).find(n => n.type?.name === "DiscoveryFilters").props.onClear(); tree = render();
   assert.equal(nodes(tree).filter(n => n.type === "article").length, 2);
-  nodes(tree).find(n => n.props.id === 'dsham-tab-unarchived').props.onClick(); tree = render();
+  nodes(tree).find(n => n.type?.name === "SegmentedTabs").props.onChange("unarchived"); tree = render();
   assert.ok(nodes(tree).some(n => n.props.id === 'dsham-search-scope'), '未归档同样提供标题与正文范围');
   assert.ok(nodes(tree).find(n => n.props.id === 'dsham-sort-filter').props.options.some(option => option.value === 'created'), '未归档同样支持创建时间排序');
 });

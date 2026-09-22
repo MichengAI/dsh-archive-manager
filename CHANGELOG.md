@@ -10,6 +10,7 @@ Published release notes are retained below; new versions are added without remov
 - Keep the official session list when it provides a menu slot, and add Delete session there. Older hosts still use this plugin's session list.
 - Archiving a running session asks before stopping its work. A recorded pin is cleared in the same archive.
 - Legacy automation repair follows the host's current session generation, including fourth-generation logs.
+- Settings controls use the host's buttons, inputs, tabs, and disclosures where those controls exist. Hosts without the segmented tabs supply the same control locally. Sort, project filter, and the half-selected checkbox stay as they are.
 
 ## 1.0.2 - 2026-09-21
 

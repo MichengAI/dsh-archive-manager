@@ -124,8 +124,8 @@ test("快速预览默认使用宿主排版并允许切换原文高亮", () => {
   const nodes = node => Array.isArray(node) ? node.flatMap(nodes) : node && typeof node === "object" ? [node, ...nodes(node.children)] : [];
   let tree = env.render(() => env.tools.PreviewContent(props));
   assert.ok(nodes(tree).some(node => node.type === MarkdownText && node.props.text === "# 标题"));
-  const raw = nodes(tree).find(node => node.type === "button" && node.children.includes("discovery.raw"));
-  assert.ok(raw); raw.props.onClick();
+  const modes = nodes(tree).find(node => node.type?.name === "SegmentedControl" && node.props.id === "dsham-preview-mode");
+  assert.ok(modes); modes.props.onChange("raw");
   tree = env.render(() => env.tools.PreviewContent(props));
   assert.equal(nodes(tree).some(node => node.type === MarkdownText), false);
   assert.ok(nodes(tree).some(node => node.type?.name === "HighlightedText"));

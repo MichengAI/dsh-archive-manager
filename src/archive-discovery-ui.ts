@@ -1,5 +1,7 @@
 import { errorMessage } from "./contracts.js";
 import type { Translate, SearchInput, SearchHit, Failure, SessionDetail, SessionSummary } from "./contracts.js";
+import type { HostControls } from "./host-controls.js";
+import { createSegmentedControls } from "./segmented.js";
 interface SearchState { key?: string; status: string; items: SearchHit[]; failures: Failure[]; done?: number; total?: number; error?: string }
 type PreviewValue = ReturnType<typeof import("./archive-discovery.js").previewResultSchema.parse>;
 interface PreviewTarget { session: SessionSummary; query: string }
@@ -8,7 +10,8 @@ interface MarkdownProps { text: string; streaming: boolean; labels: { code: { co
 import { searchArchiveBatches, detailsResultSchema, findTextRange } from "./archive-discovery.js";
 
 /** 搜索异步状态和预览展示独立于页面业务操作，防止旧请求覆盖新筛选。 */
-export function createDiscoveryTools(React: typeof import("react")) {
+export function createDiscoveryTools(React: typeof import("react"), controls: HostControls = {}) {
+  const SegmentedControl = controls.SegmentedControl ?? createSegmentedControls(React).SegmentedControl;
   const h = React.createElement;
   function HighlightedText({ text, query = "" }: { text: string; query?: string }) {
     const match = findTextRange(text, query);
@@ -96,6 +99,23 @@ export function createDiscoveryTools(React: typeof import("react")) {
     }, [key, available, call, revision]);
     return { target: available ? target : null, ...(state.key === key ? state : { status: "loading" }), open: (session: SessionSummary, query = "") => setTarget({ session, query }), close: () => setTarget(null), retry: () => setRevision(value => value + 1) };
   }
+  function FailureDetails({ title, failures, separator }: { title: string; failures: Failure[]; separator: string }) {
+    const [open, setOpen] = React.useState(false);
+    const list = h("ul", null, failures.map(row => h("li", { key: row.sessionId }, row.sessionId, separator, row.message)));
+    const Row = controls.DisclosureRow;
+    if (!Row) return h("details", null, h("summary", null, title), list);
+    return h(Row, { icon: h("span", { "aria-hidden": true }), title, open, expandable: true, onToggle: () => setOpen(value => !value) }, list);
+  }
+  function textButton(label: string, props: { disabled?: boolean; onClick(): void }) {
+    const Button = controls.Button;
+    if (Button) return h(Button, { type: "button", variant: "outline", size: "sm", ...props }, label);
+    return h("button", { type: "button", className: "dsham_settingsAction", ...props }, label);
+  }
+  function dateInput(props: { type: "date"; value: string; min?: string; max?: string; onChange(event: { currentTarget: { value: string } }): void }) {
+    const Input = controls.Input;
+    if (Input) return h(Input, { className: "dsham_dateField", ...props });
+    return h("input", props);
+  }
   function DiscoveryFilters({ t, from, to, onFrom, onTo, invalid, onClear }: { t: Translate; from: string; to: string; onFrom(value: string): void; onTo(value: string): void; invalid: boolean; onClear(): void }) {
     const rootRef = React.useRef<HTMLDetailsElement>(null);
     React.useEffect(() => {
@@ -121,31 +141,33 @@ export function createDiscoveryTools(React: typeof import("react")) {
           h("rect", { x: 2, y: 3.5, width: 12, height: 10.5, rx: 2 }), h("path", { d: "M5 1.5v4M11 1.5v4M2 7h12" })),
         h("span", null, active ? t("discovery.dateActive") : t("discovery.date"))),
       h("div", { className: "dsham_datePanel" },
-        h("label", null, t("discovery.from"), h("input", { type: "date", value: from, max: to || undefined, onChange: event => onFrom(event.currentTarget.value) })),
-        h("label", null, t("discovery.to"), h("input", { type: "date", value: to, min: from || undefined, onChange: event => onTo(event.currentTarget.value) })),
+        h("label", null, t("discovery.from"), dateInput({ type: "date", value: from, max: to || undefined, onChange: event => onFrom(event.currentTarget.value) })),
+        h("label", null, t("discovery.to"), dateInput({ type: "date", value: to, min: from || undefined, onChange: event => onTo(event.currentTarget.value) })),
         invalid && h("p", { role: "alert" }, t("discovery.invalidDate")),
-        h("button", { type: "button", className: "dsham_settingsAction", disabled: !active, onClick: onClear }, t("discovery.clearDate"))));
+        textButton(t("discovery.clearDate"), { disabled: !active, onClick: onClear })));
   }
   function SearchStatus({ state, t }: { state: SearchState & { retry(): void }; t: Translate }) {
     if (state.status === "idle") return null;
     return h("div", { className: "dsham_discoveryStatus", role: "status", "aria-live": "polite" },
       h("p", null, t(state.status === "loading" ? "discovery.searching" : state.status === "error" ? "discovery.searchError" : "discovery.searched", { done: state.done ?? 0, total: state.total ?? 0 })),
       state.status === "error" && h("p", null, state.error),
-      state.failures.length > 0 && h("details", null, h("summary", null, t("discovery.failed", { n: state.failures.length })), h("ul", null, state.failures.map(row => h("li", { key: row.sessionId }, row.sessionId, t("common.separator"), row.message)))),
-      (state.status === "error" || (state.status === "ready" && state.failures.length > 0)) && h("button", { type: "button", className: "dsham_settingsAction", onClick: state.retry }, t("discovery.retry")));
+      state.failures.length > 0 && h(FailureDetails, { title: t("discovery.failed", { n: state.failures.length }), failures: state.failures, separator: t("common.separator") }),
+      (state.status === "error" || (state.status === "ready" && state.failures.length > 0)) && textButton(t("discovery.retry"), { onClick: state.retry }));
   }
   function PreviewContent({ preview, t, MarkdownText }: { preview: PreviewState & { target?: PreviewTarget | null; retry(): void }; t: Translate; MarkdownText?: import("react").ComponentType<MarkdownProps> }) {
     const [raw, setRaw] = React.useState(false);
     if (preview.status === "loading") return h("p", { role: "status" }, t("discovery.loading"));
-    if (preview.status === "error") return h("div", null, h("p", { role: "alert" }, preview.error), h("button", { type: "button", className: "dsham_settingsAction", onClick: preview.retry }, t("discovery.retry")));
+    if (preview.status === "error") return h("div", null, h("p", { role: "alert" }, preview.error), textButton(t("discovery.retry"), { onClick: preview.retry }));
     const value = preview.value;
     if (!value) return null;
     return h("div", { className: "dsham_previewMessages" },
       h("div", { className: "dsham_previewToolbar" },
         h("span", { title: t("discovery.previewHint") }, t("discovery.readOnly"), " · ", t("discovery.messageCount", { n: value.messages.length })),
-        MarkdownText && h("div", { className: "dsham_previewModes", role: "group", "aria-label": t("discovery.displayMode") },
-          h("button", { type: "button", "aria-pressed": !raw, onClick: () => setRaw(false) }, t("discovery.formatted")),
-          h("button", { type: "button", "aria-pressed": raw, onClick: () => setRaw(true) }, t("discovery.raw")))),
+        MarkdownText && h(SegmentedControl, {
+          id: "dsham-preview-mode", value: raw ? "raw" : "formatted", label: t("discovery.displayMode"),
+          options: [{ value: "formatted", label: t("discovery.formatted") }, { value: "raw", label: t("discovery.raw") }],
+          onChange: value => setRaw(value === "raw")
+        })),
       value.hasEarlier && h("p", null, t("discovery.earlier")),
       !value.messages.length && h("p", null, t("discovery.empty")),
       value.messages.map(row => h("article", { key: row.seq, className: "dsham_previewMessage" }, h("div", { className: "dsham_previewRole", "data-role": row.role }, h("span", { "aria-hidden": true }, t(row.role === "user" ? "discovery.you" : "discovery.ai")), h("strong", null, t("discovery." + row.role))), raw || !MarkdownText ? h("pre", { className: "dsham_previewRaw" }, h(HighlightedText, { text: row.text, query: preview.target?.query })) : h(MarkdownText, { text: row.text, streaming: false, labels: { code: { copyLabel: t("discovery.copyCode"), copiedLabel: t("details.copied") }, footnotes: t("discovery.footnotes") } }), row.truncated && h("small", null, t("discovery.truncated")))),
@@ -154,7 +176,7 @@ export function createDiscoveryTools(React: typeof import("react")) {
   return { HighlightedText, useSessionDetails, useArchiveSearch, useArchivePreview, DiscoveryFilters, SearchStatus, PreviewContent };
 }
 
-export const discoveryCss = ".dsham_settingsToolbar{grid-template-columns:repeat(3,minmax(0,1fr))}.dsham_settingsSearch{grid-column:1/-1;gap:8px;padding:0 8px;height:36px}.dsham_searchScope{flex:none;width:112px;border-right:1px solid var(--dsw-alias-border-l2);padding-right:4px}.dsham_searchScope .dsham_selectTrigger{min-height:26px;padding:0 4px;border:0;border-radius:4px;background:transparent;font-size:12px}.dsham_searchScope .dsham_selectMenu{width:144px;right:auto;top:calc(100% + 8px)}.dsham_dateFilter{position:relative;flex:none;color:var(--dsw-alias-label-secondary);font-size:12px}.dsham_dateFilter summary{display:flex;align-items:center;gap:5px;list-style:none;cursor:pointer;padding:5px 2px 5px 8px;border-left:1px solid var(--dsw-alias-border-l2);white-space:nowrap}.dsham_dateFilter summary::-webkit-details-marker{display:none}.dsham_dateFilter summary[data-active=true]{color:var(--dsw-alias-state-business-primary)}.dsham_datePanel{position:absolute;right:0;top:calc(100% + 8px);z-index:35;display:grid;gap:12px;width:240px;box-sizing:border-box;padding:14px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2));box-shadow:var(--dsw-shadow-lv3)}.dsham_datePanel label{display:grid;gap:6px}.dsham_settingsSearch .dsham_datePanel input{box-sizing:border-box;max-width:100%;min-width:0;height:32px;padding:4px 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2);font:inherit}.dsham_datePanel p{margin:0}.dsham_searchScope:focus-visible,.dsham_dateFilter summary:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}.dsham_discoveryStatus{font-size:12px;margin-bottom:12px;overflow-wrap:anywhere}.dsham_settingsSnippet{display:block;width:100%;padding:0;margin:4px 0 0;border:0;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}.dsham_previewDialog[role=dialog]{width:min(900px,calc(100vw - 48px));max-height:calc(100dvh - 48px);gap:12px}.dsham_previewDialogContent{min-height:0;overflow:auto}.dsham_previewMessages{max-height:65vh;overflow:auto;overflow-wrap:anywhere;padding-right:8px}.dsham_previewToolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;color:var(--dsw-alias-label-secondary);font-size:12px}.dsham_previewModes{display:flex;gap:4px}.dsham_previewModes button{padding:5px 10px;border:1px solid transparent;border-radius:6px;background:transparent;color:inherit;font:inherit;cursor:pointer;white-space:nowrap}.dsham_previewModes button[aria-pressed=true]{background:var(--dsw-alias-bg-layer-3);border-color:var(--dsw-alias-border-l2);color:var(--dsw-alias-label-primary)}.dsham_previewRole{display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:13px}.dsham_previewRole>span{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:var(--dsw-alias-bg-layer-3);font-size:11px}.dsham_previewRole[data-role=user]>span{color:var(--dsw-alias-state-business-primary)}.dsham_previewRaw{white-space:pre-wrap;font:13px/1.8 ui-monospace,monospace;overflow-wrap:anywhere}.dsham_previewMessage pre:not(.dsham_previewRaw){white-space:pre;overflow-x:auto;max-width:100%}.dsham_previewMessage table{display:block;max-width:100%;overflow-x:auto}.dsham_previewMessage img{max-width:100%}@media(max-width:520px){.dsham_previewDialog[role=dialog]{width:calc(100vw - 32px)}.dsham_previewToolbar{align-items:flex-start;flex-wrap:wrap}}.dsham_previewMessage{padding:18px 0;border-bottom:1px solid var(--dsw-alias-border-l2)}.dsham_previewMessage p{font-size:14px;line-height:1.8}.dsham_previewHint,.dsham_previewMessage small{color:var(--dsw-alias-label-secondary);font-size:12px}.dsham_settings mark,.dsham_previewMessages mark{background:var(--dsw-alias-state-warn-tertiary);color:inherit;border-radius:2px}.dsham_settingsSnippet:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}";
+export const discoveryCss = ".dsham_settingsToolbar{grid-template-columns:repeat(3,minmax(0,1fr))}.dsham_settingsSearch{grid-column:1/-1;gap:8px;padding:0 8px;height:36px}.dsham_searchScope{flex:none;width:112px;border-right:1px solid var(--dsw-alias-border-l2);padding-right:4px}.dsham_searchScope:has(.dsham_scopeSegments){width:auto}.dsham_settingsSearch .dsham_searchField{flex:1;min-width:0;height:auto;padding:0;border:0;background:transparent;border-radius:0}.dsham_settingsSearch .dsham_searchField:focus-within{border-color:transparent}.dsham_favoriteSegments{width:100%;min-width:0}.dsham_dateField{width:100%;box-sizing:border-box}.dsham_searchScope .dsham_selectTrigger{min-height:26px;padding:0 4px;border:0;border-radius:4px;background:transparent;font-size:12px}.dsham_searchScope .dsham_selectMenu{width:144px;right:auto;top:calc(100% + 8px)}.dsham_dateFilter{position:relative;flex:none;color:var(--dsw-alias-label-secondary);font-size:12px}.dsham_dateFilter summary{display:flex;align-items:center;gap:5px;list-style:none;cursor:pointer;padding:5px 2px 5px 8px;border-left:1px solid var(--dsw-alias-border-l2);white-space:nowrap}.dsham_dateFilter summary::-webkit-details-marker{display:none}.dsham_dateFilter summary[data-active=true]{color:var(--dsw-alias-state-business-primary)}.dsham_datePanel{position:absolute;right:0;top:calc(100% + 8px);z-index:35;display:grid;gap:12px;width:240px;box-sizing:border-box;padding:14px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;background-color:var(--dsw-alias-bg-layer-2);background-image:linear-gradient(var(--dsw-specific-menu,transparent),var(--dsw-specific-menu,transparent));-webkit-backdrop-filter:var(--dsw-menu-backdrop-filter);backdrop-filter:var(--dsw-menu-backdrop-filter);box-shadow:var(--dsw-elevation-prominent,var(--dsw-shadow-lv3))}.dsham_datePanel label{display:grid;gap:6px}.dsham_datePanel label>input{box-sizing:border-box;max-width:100%;min-width:0;height:32px;padding:4px 8px;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2);font:inherit}.dsham_datePanel p{margin:0}.dsham_searchScope:focus-visible,.dsham_dateFilter summary:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}.dsham_discoveryStatus{font-size:12px;margin-bottom:12px;overflow-wrap:anywhere}.dsham_settingsSnippet{display:block;width:100%;padding:0;margin:4px 0 0;border:0;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}.dsham_previewDialog[role=dialog]{width:min(900px,calc(100vw - 48px));max-height:calc(100dvh - 48px);gap:12px}.dsham_previewDialogContent{min-height:0;overflow:auto}.dsham_previewMessages{max-height:65vh;overflow:auto;overflow-wrap:anywhere;padding-right:8px}.dsham_previewToolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;color:var(--dsw-alias-label-secondary);font-size:12px}.dsham_previewModes{display:flex;gap:4px}.dsham_previewModes button{padding:5px 10px;border:1px solid transparent;border-radius:6px;background:transparent;color:inherit;font:inherit;cursor:pointer;white-space:nowrap}.dsham_previewModes button[aria-pressed=true]{background:var(--dsw-alias-bg-layer-3);border-color:var(--dsw-alias-border-l2);color:var(--dsw-alias-label-primary)}.dsham_previewRole{display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:13px}.dsham_previewRole>span{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:var(--dsw-alias-bg-layer-3);font-size:11px}.dsham_previewRole[data-role=user]>span{color:var(--dsw-alias-state-business-primary)}.dsham_previewRaw{white-space:pre-wrap;font:13px/1.8 ui-monospace,monospace;overflow-wrap:anywhere}.dsham_previewMessage pre:not(.dsham_previewRaw){white-space:pre;overflow-x:auto;max-width:100%}.dsham_previewMessage table{display:block;max-width:100%;overflow-x:auto}.dsham_previewMessage img{max-width:100%}@media(max-width:520px){.dsham_previewDialog[role=dialog]{width:calc(100vw - 32px)}.dsham_previewToolbar{align-items:flex-start;flex-wrap:wrap}}.dsham_previewMessage{padding:18px 0;border-bottom:1px solid var(--dsw-alias-border-l2)}.dsham_previewMessage p{font-size:14px;line-height:1.8}.dsham_previewHint,.dsham_previewMessage small{color:var(--dsw-alias-label-secondary);font-size:12px}.dsham_settings mark,.dsham_previewMessages mark{background:var(--dsw-alias-state-warn-tertiary);color:inherit;border-radius:2px}.dsham_settingsSnippet:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}";
 export const discoveryZh = {
   "common.separator": "：", "details.notReturned": "宿主未返回会话详情",
   "copy.empty": "没有可复制的内容", "copy.unavailable": "当前环境不支持剪贴板，请在 HTTPS 或本机地址中打开页面", "copy.denied": "复制失败，请允许浏览器访问剪贴板后重试", "discovery.you": "你", "discovery.ai": "AI",

@@ -1,5 +1,6 @@
 import { errorMessage } from "./contracts.js";
 import type { Translate, SessionDetail, SessionSummary } from "./contracts.js";
+import type { HostControls } from "./host-controls.js";
 type HealthResult = Partial<ReturnType<typeof import("./archive-discovery.js").repairResultSchema.parse>> & { repairable: boolean };
 interface HealthProps {
  items: SessionDetail[]; sessions: (SessionSummary & { displayTitle?: string })[]; t?: Translate; isArchived?: boolean;
@@ -37,9 +38,20 @@ export const sessionHealthCss = `
 `;
 
 /** 异常默认折叠；只在服务端完成诊断后提供确认修复。 */
-export function createSessionHealthPanel(React: typeof import("react"), icons: Record<string, import("react").ComponentType<{ size?: number; className?: string; width?: number; height?: number }>> = {}) {
+export function createSessionHealthPanel(React: typeof import("react"), icons: Record<string, import("react").ComponentType<{ size?: number; className?: string; width?: number; height?: number }>> = {}, controls: HostControls = {}) {
   const h = React.createElement;
   const icon = (name: string, className?: string) => icons[name] ? h('span', { className, 'aria-hidden': true }, h(icons[name], { width: 16, height: 16 })) : null;
+  function actionButton(label: string, options: { primary?: boolean; subtle?: boolean; disabled?: boolean; onClick(): void }, glyph: import("react").ReactNode) {
+    const Button = controls.Button;
+    if (Button) return h(Button, { type: "button", size: "sm", variant: options.primary ? "primary" : options.subtle ? "ghost" : "outline", disabled: options.disabled, onClick: options.onClick, icon: glyph ?? undefined }, label);
+    return h("button", { type: "button", className: "dsham_healthButton", "data-primary": options.primary || undefined, "data-subtle": options.subtle || undefined, disabled: options.disabled, onClick: options.onClick }, glyph, label);
+  }
+  function TechnicalDetails({ title, glyph, children }: { title: string; glyph: import("react").ReactNode; children?: import("react").ReactNode }) {
+    const [open, setOpen] = React.useState(false);
+    const Row = controls.DisclosureRow;
+    if (!Row) return h("details", { className: "dsham_healthTech" }, h("summary", null, glyph, title), children);
+    return h(Row, { className: "dsham_healthTech", icon: glyph ?? h("span", { "aria-hidden": true }), title, open, expandable: true, onToggle: () => setOpen(value => !value) }, children);
+  }
   return function SessionHealthPanel({ items, sessions, t = defaultT, isArchived = true, diagnoseSession, repairSession, retry, pending }: HealthProps) {
     const [results, setResults] = React.useState<Record<string, HealthResult>>({});
     const [busyId, setBusyId] = React.useState('');
@@ -64,7 +76,7 @@ export function createSessionHealthPanel(React: typeof import("react"), icons: R
           h('span', { className: 'dsham_healthSummaryHint' }, t('health.heading')), icon('chevron', 'dsham_healthChevron')),
         h('div', { className: 'dsham_healthBody' },
           h('div', { className: 'dsham_healthIntro' }, h('span', null, t(isArchived ? 'health.scopeArchived' : 'health.scopeUnarchived')),
-            h('button', { type: 'button', className: 'dsham_healthButton', 'data-subtle': true, disabled: pending || Boolean(busyId), onClick: retry }, icon('refresh'), t('health.retry'))),
+            actionButton(t('health.retry'), { subtle: true, disabled: pending || Boolean(busyId), onClick: retry }, icon('refresh'))),
           errors.map(row => {
             const diagnostic = classifySessionError(row.error);
             const result = results[row.sessionId];
@@ -76,11 +88,10 @@ export function createSessionHealthPanel(React: typeof import("react"), icons: R
                 h('div', { className: 'dsham_healthCopy' }, h('strong', { className: 'dsham_healthTitle' }, title?.displayTitle || title?.title || row.sessionId),
                   h('div', { className: 'dsham_healthState', 'data-state': result?.repaired ? 'success' : repairing ? 'ready' : 'pending', role: result ? 'status' : undefined },
                     icon(result?.repaired ? 'check' : 'info'), t('health.' + code + '.reason', { n: result?.count ?? 0 }))),
-                diagnoseSession && h('button', { type: 'button', className: 'dsham_healthButton', 'data-primary': Boolean(repairing), disabled: Boolean(busyId), onClick: () => run(row, Boolean(repairing)) },
-                  icon(busyId === row.sessionId ? 'refresh' : repairing ? 'check' : 'search'), t(busyId === row.sessionId ? 'health.busy' : repairing ? 'health.confirm' : 'health.diagnose'))),
+                diagnoseSession && actionButton(t(busyId === row.sessionId ? 'health.busy' : repairing ? 'health.confirm' : 'health.diagnose'), { primary: Boolean(repairing), disabled: Boolean(busyId), onClick: () => run(row, Boolean(repairing)) }, icon(busyId === row.sessionId ? 'refresh' : repairing ? 'check' : 'search'))),
               result && h('p', { className: 'dsham_healthAdvice' }, t('health.' + code + '.advice')),
               !result && diagnostic.code !== 'legacy-source' && h('p', { className: 'dsham_healthAdvice' }, t('health.' + code + '.advice')),
-              h('details', { className: 'dsham_healthTech' }, h('summary', null, icon('chevron', 'dsham_healthChevron'), t('health.technical')),
+              h(TechnicalDetails, { title: t('health.technical'), glyph: icon('chevron', 'dsham_healthChevron') },
                 h('div', { className: 'dsham_healthLog' }, h('p', null, row.sessionId), h('p', null, row.error), result?.reason && h('p', null, result.reason), result?.advice && h('p', null, result.advice))));
           }))));
   };
