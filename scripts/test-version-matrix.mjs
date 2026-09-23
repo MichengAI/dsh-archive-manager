@@ -14,9 +14,7 @@ const profiles = [
 	{ version: "0.1.2-rc.1", cordis: "4.0.2" },
 	{ version: "0.1.5-rc.1", cordis: "4.0.2", latest: true },
 	{ version: "0.1.5-rc.2", cordis: "4.0.2", latest: true },
-	{ version: "0.1.6-alpha.1", cordis: "4.0.2", latest: true },
-	{ version: "0.1.6-alpha.2", cordis: "4.0.2", latest: true },
-	{ version: manifest.devDependencies["@deepseek-ai/dsh-session"], cordis: "4.0.3", latest: true }
+	{ version: manifest.devDependencies["@deepseek-ai/dsh-session"], cordis: "4.0.4", latest: true }
 ];
 const npm = process.platform === "win32" ? process.execPath : "npm";
 const npmPrefix = process.platform === "win32" ? [join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js")] : [];

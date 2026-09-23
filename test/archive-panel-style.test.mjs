@@ -20,12 +20,38 @@ test("设置页 antd 别名令牌映射到宿主 --dsw-alias-*，不沿用 antd 
 
   // 面色、边框、文字必须走宿主令牌：antd 暗色层阶方向与宿主相反。
   assert.match(antdUi, /colorBgContainer:\s*"var\(--dsw-alias-bg-layer-3\)"/);
-  assert.match(antdUi, /colorBgElevated:\s*"var\(--dsw-alias-bg-layer-3\)"/);
+  assert.match(antdUi, /colorBgElevated:\s*"var\(--dsw-alias-button-elevated-fill\)"/);
+  assert.doesNotMatch(antdUi, /colorBgElevated:\s*"var\(--dsw-alias-bg-layer-3\)"/);
   assert.match(antdUi, /colorText:\s*"var\(--dsw-alias-label-primary\)"/);
   assert.match(antdUi, /colorBorder:\s*"var\(--dsw-alias-border-l3\)"/);
   // 主色是颜色推导种子，必须是具体色值：给 CSS 变量会让 hover/active 退化成近黑。
-  assert.match(antdUi, /hostPrimary = \{ light: "#4176e6", dark: "#7aaaff" \}/);
+  assert.match(antdUi, /hostPrimary = \{ light: "#4176e6", dark: "#7aaaff", active: "#4868b2" \}/);
   assert.doesNotMatch(antdUi, /colorPrimary:\s*"var\(/);
+});
+
+test("深色主色在算法之后仍是宿主 info 色，浮层比输入框亮一级", async () => {
+  const [{ default: getDesignToken }, theme] = await Promise.all([
+    import("antd/es/theme/getDesignToken.js"),
+    import("../src/antd-ui.ts"),
+  ]);
+  const dark = getDesignToken({
+    algorithm: theme.hostThemeAlgorithm(true),
+    token: { ...theme.hostAliasTokens, colorPrimary: theme.hostPrimary.dark },
+  });
+  const light = getDesignToken({
+    algorithm: theme.hostThemeAlgorithm(false),
+    token: { ...theme.hostAliasTokens, colorPrimary: theme.hostPrimary.light },
+  });
+
+  assert.equal(dark.colorPrimary, "#7aaaff");
+  assert.equal(dark.colorPrimaryHover, "#4176e6");
+  assert.equal(dark.colorPrimaryActive, "#4868b2");
+  assert.equal(dark.colorLink, "#7aaaff");
+  assert.equal(light.colorPrimary, "#4176e6");
+  assert.equal(light.colorPrimaryHover, "#7aaaff");
+  assert.equal(dark.colorBgElevated, "var(--dsw-alias-button-elevated-fill)");
+  assert.equal(dark.colorBgContainer, "var(--dsw-alias-bg-layer-3)");
+  assert.notEqual(dark.colorBgElevated, dark.colorBgContainer);
 });
 
 test("分段控件轨道与选中块分属不同层级，选中态在亮暗下都可见", async () => {

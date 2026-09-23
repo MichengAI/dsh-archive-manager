@@ -8,6 +8,7 @@ import CheckboxImport from "antd/es/checkbox/index.js";
 import type { CollapseProps } from "antd/es/collapse/index.js";
 import CollapseImport from "antd/es/collapse/index.js";
 import type { ConfigProviderProps } from "antd/es/config-provider/index.js";
+import type { MappingAlgorithm } from "antd/es/theme/interface/index.js";
 import ConfigProviderImport from "antd/es/config-provider/index.js";
 import type { DropdownProps } from "antd/es/dropdown/dropdown.js";
 import DropdownImport from "antd/es/dropdown/index.js";
@@ -54,8 +55,8 @@ const DatePicker = unwrap<React.ComponentType<unknown> & { RangePicker: React.Co
 export const RangePicker = DatePicker.RangePicker;
 const ListItem = unwrap<React.ComponentType<ListItemProps>>(ListItemImport);
 export const List = Object.assign(unwrap<React.ComponentType<ListProps<unknown>>>(ListImport), { Item: ListItem });
-const darkAlgorithm = unwrap<NonNullable<ConfigProviderProps["theme"]> extends { algorithm?: infer Algorithm } ? Algorithm : never>(darkAlgorithmImport);
-const defaultAlgorithm = unwrap<NonNullable<ConfigProviderProps["theme"]> extends { algorithm?: infer Algorithm } ? Algorithm : never>(defaultAlgorithmImport);
+const darkAlgorithm = unwrap<MappingAlgorithm>(darkAlgorithmImport);
+const defaultAlgorithm = unwrap<MappingAlgorithm>(defaultAlgorithmImport);
 
 /**
  * antd 的层阶方向与宿主相反：antd 暗色越往上越黑（容器 #000、浮层 #1f1f1f），
@@ -71,7 +72,9 @@ const defaultAlgorithm = unwrap<NonNullable<ConfigProviderProps["theme"]> extend
  */
 export const hostAliasTokens = {
 	colorBgContainer: "var(--dsw-alias-bg-layer-3)",
-	colorBgElevated: "var(--dsw-alias-bg-layer-3)",
+	// 下拉、日期和对话框走 colorBgElevated。暗色 layer-3 与输入框同为 #353638，
+	// 而 antd 暗色阴影几乎是透明白，浮层会贴在控件上。再亮一级才分得开。
+	colorBgElevated: "var(--dsw-alias-button-elevated-fill)",
 	colorBgLayout: "var(--dsw-alias-bg-layer-2)",
 	colorBgSpotlight: "var(--dsw-alias-button-elevated-fill)",
 	colorBorder: "var(--dsw-alias-border-l3)",
@@ -91,8 +94,34 @@ export const hostAliasTokens = {
 	controlItemBgActive: "var(--dsw-alias-button-ghost-active-fill)",
 };
 
-/** 主色是颜色推导种子，必须给具体色值；取值对齐宿主 --dsw-alias-state-business-primary。 */
-export const hostPrimary = { light: "#4176e6", dark: "#7aaaff" } as const;
+/**
+ * 对齐宿主 info 按钮：亮色填充 deepseek-500、悬停 deepseek-400，暗色对调。
+ * 按下用 deepseek-600。这些必须是具体色值，不能是 CSS 变量。
+ */
+export const hostPrimary = { light: "#4176e6", dark: "#7aaaff", active: "#4868b2" } as const;
+
+/**
+ * darkAlgorithm 会把种子色改写成调色板第 6 阶（#7aaaff → #6b94dc）。
+ * formatToken 又会丢掉 theme.token 里的种子覆盖，所以要在算法返回值里写回。
+ * 悬停对齐 button-info-hover，而不是 antd 往上提亮的那一档。
+ */
+export function hostThemeAlgorithm(dark: boolean): MappingAlgorithm {
+	const algorithm = dark ? darkAlgorithm : defaultAlgorithm;
+	const primary = dark ? hostPrimary.dark : hostPrimary.light;
+	const hover = dark ? hostPrimary.light : hostPrimary.dark;
+	return (token, mapToken) => ({
+		...algorithm(token, mapToken),
+		colorPrimary: primary,
+		colorPrimaryHover: hover,
+		colorPrimaryActive: hostPrimary.active,
+		colorInfo: primary,
+		colorInfoHover: hover,
+		colorInfoActive: hostPrimary.active,
+		colorLink: primary,
+		colorLinkHover: hover,
+		colorLinkActive: hostPrimary.active,
+	});
+}
 
 /**
  * 分段控件的轨道与选中块必须落在相邻两级上，否则选中态会消失。
@@ -137,7 +166,7 @@ export function AntdProvider(props: { locale?: Locale; children?: React.ReactNod
 		locale: props.locale ?? antdLocale(lang),
 		button: { autoInsertSpace: false },
 		theme: {
-			algorithm: dark ? darkAlgorithm : defaultAlgorithm,
+			algorithm: hostThemeAlgorithm(dark),
 			token: { ...hostAliasTokens, colorPrimary: dark ? hostPrimary.dark : hostPrimary.light },
 			components: hostAliasComponents,
 		},
