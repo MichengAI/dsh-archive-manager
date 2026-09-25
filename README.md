@@ -14,7 +14,7 @@
   [![npm package](https://img.shields.io/npm/v/%40michengai%2Fdsh-archive-manager.svg?label=npm%20package)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
   [![npm downloads](https://img.shields.io/npm/dt/%40michengai%2Fdsh-archive-manager.svg?label=npm%20downloads)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
   [![DSH Web Plugin](https://img.shields.io/badge/DSH%20Web-Plugin-0f766e.svg)](https://github.com/MichengAI/dsh-archive-manager)
-  [![DSH supported through 0.1.7-rc.1](https://img.shields.io/badge/DSH-up%20to%200.1.7--rc.1-2563eb.svg)](#prerequisites)
+  [![DSH supported through 0.1.7-rc.2](https://img.shields.io/badge/DSH-up%20to%200.1.7--rc.2-2563eb.svg)](#prerequisites)
 </div>
 
 > DSH Archive Manager is a community-maintained DeepSeek Harness (DSH) plugin, not an official DeepSeek AI product.
@@ -67,7 +67,7 @@ Switch to **Unarchived** for the same filters, idle cleanup previews, and projec
 ## Prerequisites
 
 - A working [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web installation with `dsh` available in your terminal.
-- Supported DSH versions: `0.1.0-rc.8`, `0.1.1-rc.2`, `0.1.2-rc.1`, `0.1.5-rc.1`, `0.1.5-rc.2`, and `0.1.7-rc.1`. Other versions are not currently supported.
+- Supported DSH versions: `0.1.0-rc.8`, `0.1.1-rc.2`, `0.1.2-rc.1`, `0.1.5-rc.1`, `0.1.5-rc.2`, `0.1.7-rc.1`, and `0.1.7-rc.2`. Other versions are not currently supported.
 - Node.js matching `^22.19.0 || >=24.0.0`. Source installation also requires pnpm.
 
 ## Installation

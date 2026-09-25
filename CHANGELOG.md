@@ -4,6 +4,11 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 1.0.5 - 2026-09-25
+
+- Works with DSH 0.1.7-rc.2. Versions that already worked still work.
+- Supported DSH versions are 0.1.0-rc.8, 0.1.1-rc.2, 0.1.2-rc.1, 0.1.5-rc.1, 0.1.5-rc.2, 0.1.7-rc.1, and 0.1.7-rc.2.
+
 ## 1.0.4 - 2026-09-24
 
 - The Archived sessions page follows the host palette. In dark mode the primary color stays the host info blue, and menus sit one step lighter than the fields.
