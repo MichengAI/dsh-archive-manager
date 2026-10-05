@@ -4,6 +4,10 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## Unreleased
+
+- Installing from GitHub now includes the compiled runtime, so no manual build is required.
+
 ## 1.0.11 - 2026-10-01
 
 - Batch delete of archived sessions now uses one storage listing and one host call. Deleted sessions are not put back into the in-memory index.

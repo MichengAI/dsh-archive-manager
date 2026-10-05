@@ -189,7 +189,7 @@ pnpm build
 dsh plugin --profile web add .
 ```
 
-Restart DSH Web and hard-refresh your browser afterward. Source code in [src](src) uses strict TypeScript. Generated `lib` files are excluded from Git; `prepack` rebuilds them automatically. Published JavaScript entry points and runtime modules remain unchanged; installing the npm package does not require TypeScript. Run `pnpm typecheck` for type checking, `pnpm test` to validate changes, or `pnpm verify` for the full checks.
+Restart DSH Web and hard-refresh your browser afterward. Source code in [src](src) uses strict TypeScript. Both GitHub and npm include a ready-to-run `lib`. After changing source, run `pnpm build` before committing, or a source install keeps the previous runtime. Published JavaScript entry points and runtime modules remain unchanged; installing the npm package does not require TypeScript. Run `pnpm typecheck` for type checking, `pnpm test` to validate changes, or `pnpm verify` for the full checks.
 
 </details>
 
