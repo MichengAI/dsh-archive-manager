@@ -473,11 +473,9 @@ test("归档 TAB 默认与切换、多项目选择、确认提交和状态刷新
  state.archivedSessionIds=["old"];
  tab("unarchived").props.onClick();tree=render();
  assert.equal(nodes(tree).some(n=>n.props.role==="status" && n.props.children==="archives.archiveSuccess"),false,"切换页签清除上次成功提示");
- nodes(tree).find(n=>n.props["aria-label"]==="archives.archiveSelected").props.onClick();tree=render();
- assert.equal(nodes(tree).some(n=>n.props.role==="status" && n.props.children==="archives.archiveSuccess"),false,"新归档清除上次成功提示");
- const freshDialog=nodes(tree).find(n=>n.props.open===true && n.props.description==="archives.archiveSelectedDesc");
- freshDialog.props.onClose();tree=render();
- assert.equal(nodes(tree).some(n=>n.props.open===true),false,"取消关闭确认框");
+ await nodes(tree).find(n=>n.props["aria-label"]==="archives.archiveSelected").props.onClick();tree=render();
+ assert.equal(nodes(tree).some(n=>n.props.open===true),false,"单条归档直接提交，无需确认");
+ assert.deepEqual(calls.at(-1),["one"]);
  state.archivedSessionIds=["old","one","two"];tree=render();
  tab("archived").props.onClick();tree=render();
  assert.equal(nodes(tree).find(n=>n.props.onToggle).props.selectedCount,0);
@@ -585,18 +583,76 @@ test("整理页收藏、闲置预览、部分失败重试及撤回形成完整�
   assert.deepEqual(state.archivedSessionIds, ["previous"]);
   assert.equal(panel().props.undoCount, 0);
   assert.deepEqual([...favorites], ["protected"]);
-  // 撤回后继续使用同一个面板，第二次行归档仍须打开新的确认框并能提交。
-  nodes(tree).find(node => node.props["aria-label"] === "archives.archiveSelected").props.onClick(); render();
-  const reopened = nodes(tree).find(node => node.props.open === true && node.props.description === "archives.archiveSelectedDesc");
-  assert.ok(reopened, "撤回后再次点击归档应重新打开确认框");
-  assert.equal(nodes(reopened.props.children).find(node => node.props.checked === true)?.props.checked, true);
-  await nodes(reopened.props.footer).find(node => node.props.children === "archives.archiveSelected").props.onClick(); render();
+  // 撤回后可连续一键归档，保留结果及撤回，不打开普通确认框。
+  const rowClick = nodes(tree).find(node => node.props["aria-label"] === "archives.archiveSelected").props.onClick;
+  await Promise.all([rowClick(), rowClick()]); render();
+  assert.equal(nodes(tree).some(node => node.props.open === true), false);
   assert.deepEqual(panel().props.result.succeeded, ["a"]);
-  nodes(tree).find(node => node.props["aria-label"] === "archives.archiveSelected").props.onClick(); render();
-  const nextDialog = nodes(tree).find(node => node.props.open === true && node.props.description === "archives.archiveSelectedDesc");
-  assert.ok(nextDialog, "连续归档下一条也须重新打开确认框");
-  assert.equal(nodes(nextDialog.props.children).some(node => node.type === "label" && node.props.children.includes("b")), true);
-  nextDialog.props.onClose(); render();
+  assert.equal(panel().props.undoCount, 1);
+  await nodes(tree).find(node => node.props["aria-label"] === "archives.archiveSelected").props.onClick(); render();
+  assert.deepEqual(panel().props.result.succeeded, ["b"]);
+  assert.equal(nodes(tree).some(node => node.props.open === true), false);
+  await panel().props.onUndo(); render();
+  assert.equal(state.archivedSessionIds.includes("b"), false);
+  let stopped = 0;
+  props.organizeBatch = async (_kind, ids) => ({ succeeded: [], skipped: [], failures: [{ sessionId: ids[0], message: `cannot archive session '${ids[0]}': the session is active (turn)` }], remaining: ids, unprocessed: [] });
+  props.archiveSession = async (_id, options) => { assert.equal(options.stopActivity, true); stopped++; };
+  render();
+  await nodes(tree).find(node => node.props["aria-label"] === "archives.archiveSelected").props.onClick(); render();
+  const stopDialog = nodes(tree).find(node => node.props.open === true && node.props.title === "archiveActive.title");
+  assert.ok(stopDialog, "运行中的会话仍须确认停止活动");
+  assert.equal(stopped, 0, "确认前不能停止运行");
+  await nodes(stopDialog.props.footer).find(node => node.props.children === "archiveActive.confirm").props.onClick();
+  assert.equal(stopped, 1);
+
+});
+
+test("删除确认框显示失败原因、允许重试，并阻止重复提交", async () => {
+  const values = []; let cursor = 0;
+  const hooks = { ...statics.react,
+    useSyncExternalStore: (_subscribe, snapshot) => snapshot(),
+    useState: initial => { const i = cursor++; if (!(i in values)) values[i] = typeof initial === "function" ? initial() : initial; return [values[i], next => { values[i] = typeof next === "function" ? next(values[i]) : next; }]; },
+    useRef: initial => { const i = cursor++; return values[i] ??= { current: initial }; },
+    useMemo: fn => fn(), useEffect: () => {}
+  };
+  const client = factories.get("@michengai/dsh-archive-manager")(name => name === "react" ? hooks : statics[name]);
+  let calls = 0, rejectDelete, resolveDelete;
+  const props = {
+    sessionStore: source({ byId: { a: { id: "a", title: "a" } } }),
+    workspaceStore: source({ items: [], archivedSessionIds: ["a"] }),
+    archivedSessionMetadata: async () => ({ items: [] }),
+    deleteSession: () => { calls++; return new Promise((resolve, reject) => { resolveDelete = resolve; rejectDelete = reject; }); },
+    deleteArchivedSessions: async () => { throw new Error("batch backend failed"); },
+    t: (key, args) => args?.detail ? `${key}: ${args.detail}` : key
+  };
+  const nodes = node => Array.isArray(node) ? node.flatMap(nodes) : node?.props ? [node, ...nodes(node.props.children)] : [];
+  let tree;
+  const render = () => { cursor = 0; tree = client.__test.ArchivedSessionsSection(props); };
+  const dialog = () => nodes(tree).find(node => node.props.open === true && node.props.title === "deleteSession.title");
+  const confirm = () => nodes(dialog().props.footer).find(node => node.props.danger);
+  const alerts = () => nodes(dialog().props.children).filter(node => node.props.role === "alert");
+  const open = () => { nodes(tree).find(node => node.type?.name === "ArchivedSessionMenu").props.onDelete(); render(); };
+  render(); open();
+  const click = confirm().props.onClick;
+  const pending = click(); await click(); render();
+  assert.equal(calls, 1, "同一帧连续点击只发出一次删除请求");
+  assert.equal(confirm().props.disabled, true);
+  assert.ok(nodes(dialog().props.children).some(node => node.props.role === "status"));
+  dialog().props.onClose(); render(); assert.ok(dialog(), "处理中不能关闭确认框");
+  rejectDelete(new Error("backend unavailable")); await pending; render();
+  assert.equal(alerts()[0].props.children, "deleteSession.failed: backend unavailable");
+  assert.equal(confirm().props.disabled, false);
+  const retry = confirm().props.onClick(); render();
+  assert.equal(alerts().length, 0, "重试清除旧错误");
+  resolveDelete(); await retry; render();
+  assert.equal(dialog(), undefined, "成功后关闭确认框");
+  open(); assert.equal(alerts().length, 0, "再次打开不带上次错误");
+  dialog().props.onClose(); render();
+  nodes(tree).find(node => node.type?.name === "ArchivedGroupActions").props.onDelete(); render();
+  const batchDialog = nodes(tree).find(node => node.props.open === true);
+  await nodes(batchDialog.props.footer).find(node => node.props.danger).props.onClick(); render();
+  const failedBatch = nodes(tree).find(node => node.props.open === true);
+  assert.equal(nodes(failedBatch.props.children).find(node => node.props.role === "alert").props.children, "deleteSession.failed: batch backend failed");
 });
 
 test("归档确认框挂在所属设置页内，普通独立弹窗仍回退到 body", () => {
