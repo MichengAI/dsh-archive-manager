@@ -351,6 +351,45 @@ var ArchiveProjectionCache = class extends CacheBase {
 	}
 };
 //#endregion
+/** 安全域无法打开时仍须安装删除墓碑和写入屏障，复用官方缓存表。 */
+export function installArchiveProjectionCacheGuards(cache: object): () => Promise<void> {
+	const target = cache as CacheCompat & Record<string | symbol, unknown>;
+	const fields: Record<string, unknown> = {
+		deletedSessionIds: new Set<string>(),
+		deletedSessionOrder: [] as string[],
+		deletedSessionTombstoneLimit: 4096,
+		writeTail: Promise.resolve(),
+	};
+	const addedFields: string[] = [];
+	for (const [key, value] of Object.entries(fields)) {
+		if (!Object.hasOwn(target, key)) {
+			target[key] = value;
+			addedFields.push(key);
+		}
+	}
+	const restoredMethods: { name: string; hadOwn: boolean; previous: unknown }[] = [];
+	for (const name of Object.getOwnPropertyNames(ArchiveProjectionCache.prototype)) {
+		if (name === "constructor") continue;
+		const method = Reflect.get(ArchiveProjectionCache.prototype, name);
+		if (typeof method !== "function") continue;
+		restoredMethods.push({ name, hadOwn: Object.hasOwn(target, name), previous: target[name] });
+			target[name] = method;
+	}
+	let disposal: Promise<void> | undefined;
+	return () => disposal ??= (async () => {
+		// 写入完成后仍会访问墓碑和当前表；等待期间的新写入也必须落定。
+		while (true) {
+			const tail = target.writeTail as Promise<void>;
+			await tail;
+			if (target.writeTail === tail) break;
+		}
+		for (const item of restoredMethods.reverse()) {
+			if (item.hadOwn) target[item.name] = item.previous;
+			else delete target[item.name];
+		}
+		for (const key of addedFields) delete target[key];
+	})();
+}
 const projectionOverlay = Symbol.for("dsh-archive-manager.projcache-overlay");
 /**
  * 把安全缓存域装到官方 `sessionProjectionCache` 实例上。
@@ -365,45 +404,15 @@ export async function installArchiveProjectionCache(cache: object): Promise<() =
 		const table = new SafeSessionTable(domain.table("sessions"));
 		const previousTable = target.table;
 		await importPreviousProjectionCache(target.ctx, table, previousTable);
-		const fields: Record<string, unknown> = {
-			deletedSessionIds: new Set<string>(),
-			deletedSessionOrder: [] as string[],
-			deletedSessionTombstoneLimit: 4096,
-			writeTail: Promise.resolve(),
-		};
-		const addedFields: string[] = [];
-		for (const [key, value] of Object.entries(fields)) {
-			if (!Object.hasOwn(target, key)) {
-				target[key] = value;
-				addedFields.push(key);
-			}
-		}
-		const restoredMethods: { name: string; hadOwn: boolean; previous: unknown }[] = [];
-		for (const name of Object.getOwnPropertyNames(ArchiveProjectionCache.prototype)) {
-			if (name === "constructor") continue;
-			const method = Reflect.get(ArchiveProjectionCache.prototype, name);
-			if (typeof method !== "function") continue;
-			restoredMethods.push({ name, hadOwn: Object.hasOwn(target, name), previous: target[name] });
-				target[name] = method;
-		}
+		const uninstallGuards = installArchiveProjectionCacheGuards(cache);
 		target.table = table;
 		target[projectionOverlay] = true;
 		installed = true;
 		let disposal: Promise<void> | undefined;
 		return () => disposal ??= (async () => {
 			if (target[projectionOverlay] !== true) return;
-			// 写入完成后仍会访问墓碑和当前表；等待期间的新写入也必须落定。
-			while (true) {
-				const tail = target.writeTail as Promise<void>;
-				await tail;
-				if (target.writeTail === tail) break;
-			}
+			await uninstallGuards();
 			target.table = previousTable;
-			for (const item of restoredMethods.reverse()) {
-				if (item.hadOwn) target[item.name] = item.previous;
-				else delete target[item.name];
-			}
-			for (const key of addedFields) delete target[key];
 			delete target[projectionOverlay];
 			await domain.close();
 		})();

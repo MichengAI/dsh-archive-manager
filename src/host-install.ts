@@ -1,6 +1,6 @@
 import type { Context } from "@deepseek-ai/cordis";
 import { bindArchiveManagerRemote, installArchiveWorkspace, tolerateStaleFileUploadResolver } from "./workspace.js";
-import { installArchiveProjectionCache } from "./projcache.js";
+import { installArchiveProjectionCache, installArchiveProjectionCacheGuards } from "./projcache.js";
 
 /**
  * 根宿主安装入口。官方 workspace 与 sessionProjectionCache 保持运行，
@@ -20,6 +20,7 @@ async function apply(ctx: Context) {
 		uninstallCache = await installArchiveProjectionCache(cache);
 	} catch (error) {
 		ctx.logger?.warn?.(`archive-manager: projection cache overlay skipped: ${String(error)}`);
+		uninstallCache = installArchiveProjectionCacheGuards(cache);
 	}
 	const unbindRemote = bindArchiveManagerRemote(ctx);
 	return async () => {

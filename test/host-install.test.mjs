@@ -136,6 +136,34 @@ test("停用后重新启用仍能派发归档端点", async () => {
 	assert.equal(Reflect.get(host.registry, "typertRemote"), undefined);
 });
 
+test("安全缓存域打开失败时，官方缓存仍支持删除且停用后恢复", async () => {
+	const host = await mountOfficialHost();
+	const officialTable = host.cache.table;
+	const officialPut = host.cache.put;
+	const open = host.ctx.storageDomain.open;
+	host.ctx.storageDomain.open = async () => { throw new Error("safe cache domain unavailable"); };
+	await officialTable.put("stale", { rows: {} });
+	const fiber = await host.enable();
+	try {
+		assert.equal(host.cache.table, officialTable, "安全域不可用时保留官方表");
+		assert.equal(typeof host.cache.delete, "function", "不能暴露一个无法清缓存的删除入口");
+		assert.deepEqual(await host.call("workspaceRegistry/deleteSession", { sessionId: "stale" }), { ok: true, value: { deleted: true } });
+		assert.equal(officialTable.has("stale"), false);
+		await host.cache.delete("deleted");
+		await host.cache.put("deleted", { formatVersion: 4, createdAt: 1 }, {});
+		assert.equal(officialTable.has("deleted"), false, "墓碑阻止删除后的缓存写回复活");
+	} finally {
+		await fiber.dispose();
+		host.ctx.storageDomain.open = open;
+	}
+	assert.equal(host.cache.delete, undefined);
+	assert.equal(host.cache.put, officialPut);
+	assert.equal(host.cache.table, officialTable);
+	const reenabled = await host.enable();
+	assert.notEqual(host.cache.table, officialTable, "恢复存储后可以重新启用安全域");
+	await reenabled.dispose();
+});
+
 test("安装入口容忍热重载遗留的文件上传解析器", async () => {
 	const uploads = {
 		agentResolver: undefined,
