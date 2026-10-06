@@ -41,7 +41,14 @@ export function startArchiveClient(require: HostRequire) {
 			},
 		});
 		function SettingsModal({ open, onClose, title, description, footer, children, className, width }: { open: boolean; onClose(): void; title: import("react").ReactNode; description?: import("react").ReactNode; footer?: import("react").ReactNode; children?: import("react").ReactNode; className?: string; width?: number }) {
-			return (0, react_jsx_runtime.jsx)(AntdModal, { open, onCancel: onClose, title, footer, className, width, children: description == null ? children : (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [(0, react_jsx_runtime.jsx)("p", { children: description }), children] }) });
+			const anchor = react.useRef<HTMLSpanElement>(null);
+			// 设置壳会隔离 body 下的外部分支。留在 body 的旧弹窗容器可能被标成
+			// inert，下一次打开仍不可见；将弹窗挂在所属归档页内，随设置页一起受保护。
+			const getContainer = react.useCallback(() => anchor.current?.closest<HTMLElement>(".dsham_settings") ?? document.body, []);
+			return (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
+				(0, react_jsx_runtime.jsx)("span", { hidden: true, ref: anchor }),
+				(0, react_jsx_runtime.jsx)(AntdModal, { open, onCancel: onClose, title, footer, className, width, getContainer, destroyOnHidden: true, children: description == null ? children : (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [(0, react_jsx_runtime.jsx)("p", { children: description }), children] }) })
+			] });
 		}
 		function settingsButton({ variant = "outline", icon, children, danger = false, className, disabled, title, onClick, "aria-label": ariaLabel, "aria-pressed": ariaPressed, "aria-expanded": ariaExpanded, "aria-haspopup": ariaHaspopup }: { variant?: "primary" | "ghost" | "outline" | "toolbar"; icon?: import("react").ReactNode; danger?: boolean; className?: string; disabled?: boolean; title?: string; onClick?: () => void; "aria-label"?: string; "aria-pressed"?: boolean; "aria-expanded"?: boolean; "aria-haspopup"?: import("react").AriaAttributes["aria-haspopup"]; children?: import("react").ReactNode }) {
 			const type = variant === "primary" ? "primary" : variant === "ghost" || variant === "toolbar" ? "text" : "default";

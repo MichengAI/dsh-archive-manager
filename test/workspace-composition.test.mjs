@@ -585,6 +585,41 @@ test("整理页收藏、闲置预览、部分失败重试及撤回形成完整�
   assert.deepEqual(state.archivedSessionIds, ["previous"]);
   assert.equal(panel().props.undoCount, 0);
   assert.deepEqual([...favorites], ["protected"]);
+  // 撤回后继续使用同一个面板，第二次行归档仍须打开新的确认框并能提交。
+  nodes(tree).find(node => node.props["aria-label"] === "archives.archiveSelected").props.onClick(); render();
+  const reopened = nodes(tree).find(node => node.props.open === true && node.props.description === "archives.archiveSelectedDesc");
+  assert.ok(reopened, "撤回后再次点击归档应重新打开确认框");
+  assert.equal(nodes(reopened.props.children).find(node => node.props.checked === true)?.props.checked, true);
+  await nodes(reopened.props.footer).find(node => node.props.children === "archives.archiveSelected").props.onClick(); render();
+  assert.deepEqual(panel().props.result.succeeded, ["a"]);
+  nodes(tree).find(node => node.props["aria-label"] === "archives.archiveSelected").props.onClick(); render();
+  const nextDialog = nodes(tree).find(node => node.props.open === true && node.props.description === "archives.archiveSelectedDesc");
+  assert.ok(nextDialog, "连续归档下一条也须重新打开确认框");
+  assert.equal(nodes(nextDialog.props.children).some(node => node.type === "label" && node.props.children.includes("b")), true);
+  nextDialog.props.onClose(); render();
+});
+
+test("归档确认框挂在所属设置页内，普通独立弹窗仍回退到 body", () => {
+  const values = []; let cursor = 0;
+  const hooks = { ...statics.react,
+    useSyncExternalStore: (_subscribe, snapshot) => snapshot(),
+    useState: initial => { const i = cursor++; if (!(i in values)) values[i] = typeof initial === "function" ? initial() : initial; return [values[i], next => { values[i] = typeof next === "function" ? next(values[i]) : next; }]; },
+    useRef: initial => { const i = cursor++; return values[i] ??= { current: initial }; },
+    useMemo: fn => fn(), useEffect: () => {}, useCallback: fn => fn,
+  };
+  const client = factories.get("@michengai/dsh-archive-manager")(name => name === "react" ? hooks : statics[name]);
+  const tree = client.__test.ArchivedSessionsSection({ sessionStore: source({ byId: {} }), workspaceStore: source({ items: [], archivedSessionIds: [] }), archivedSessionMetadata: async () => ({ items: [] }), t: key => key });
+  const nodes = node => Array.isArray(node) ? node.flatMap(nodes) : node?.props ? [node, ...nodes(node.props.children)] : [];
+  const modal = nodes(tree).find(node => node.type?.name === "SettingsModal");
+  const rendered = modal.type(modal.props);
+  const anchor = rendered.props.children[0].ref;
+  const dialog = nodes(rendered).find(node => typeof node.props.getContainer === "function");
+  const settings = { className: "dsham_settings" };
+  anchor.current = { closest: selector => selector === ".dsham_settings" ? settings : null };
+  assert.equal(dialog.props.getContainer(), settings, "弹窗须留在当前设置页受保护的分支内");
+  assert.equal(dialog.props.destroyOnHidden, true, "关闭后不保留可能被设置壳隔离的旧内容");
+  anchor.current = { closest: () => null };
+  assert.equal(dialog.props.getContainer(), document.body, "没有归档页的独立弹窗保留 body 入口");
 });
 
 test("归档发现入口提供组合日期筛选及只读预览", async () => {
