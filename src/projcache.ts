@@ -346,6 +346,60 @@ var ArchiveProjectionCache = class extends CacheBase {
 	}
 };
 //#endregion
+const projectionOverlay = Symbol.for("dsh-archive-manager.projcache-overlay");
+/**
+ * 把安全缓存域装到官方 `sessionProjectionCache` 实例上。
+ * 停用时恢复官方表，不关掉官方服务。
+ */
+export async function installArchiveProjectionCache(cache: object): Promise<() => void> {
+	const target = cache as CacheCompat & Record<string | symbol, unknown>;
+	if (target[projectionOverlay] === true) return () => {};
+	const domain = await target.ctx.storageDomain.open(safeProjectionCacheDomainSpec);
+	let installed = false;
+	try {
+		const table = new SafeSessionTable(domain.table("sessions"));
+		await importPreviousProjectionCache(target.ctx, table);
+		const previousTable = target.table;
+		const fields: Record<string, unknown> = {
+			deletedSessionIds: new Set<string>(),
+			deletedSessionOrder: [] as string[],
+			deletedSessionTombstoneLimit: 4096,
+			writeTail: Promise.resolve(),
+		};
+		const addedFields: string[] = [];
+		for (const [key, value] of Object.entries(fields)) {
+			if (!Object.hasOwn(target, key)) {
+				target[key] = value;
+				addedFields.push(key);
+			}
+		}
+		const restoredMethods: { name: string; hadOwn: boolean; previous: unknown }[] = [];
+		for (const name of Object.getOwnPropertyNames(ArchiveProjectionCache.prototype)) {
+			if (name === "constructor") continue;
+			const method = Reflect.get(ArchiveProjectionCache.prototype, name);
+			if (typeof method !== "function") continue;
+			restoredMethods.push({ name, hadOwn: Object.hasOwn(target, name), previous: target[name] });
+				target[name] = method;
+		}
+		target.table = table;
+		target[projectionOverlay] = true;
+		installed = true;
+		return () => {
+			if (target[projectionOverlay] !== true) return;
+			target.table = previousTable;
+			for (const item of restoredMethods.reverse()) {
+				if (item.hadOwn) target[item.name] = item.previous;
+				else delete target[item.name];
+			}
+			for (const key of addedFields) delete target[key];
+			delete target[projectionOverlay];
+			void domain.close();
+		};
+	} catch (error) {
+		if (!installed) await domain.close();
+		throw error;
+	}
+}
 export {
 	ArchiveProjectionCache,
 	ArchiveProjectionCache as default,

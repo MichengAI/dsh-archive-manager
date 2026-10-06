@@ -163,7 +163,7 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 dsh --profile web --dump-config
 ```
 
-配置中应包含 `workspace-archive-manager` 和 `ui-workspace-archive-manager`。DSH 0.1.6+ 上官方 `ui-settings-unarchive-sessions` 应为 `disabled: true`，设置里只保留本插件的「归档会话」。若曾在 profile 的 `cordis.patch.yml` 中手动将官方 `ui-workspace` 设为 `disabled: true`，请移除该禁用覆盖，再重启。
+配置中应包含 `archive-manager-host` 和 `ui-workspace-archive-manager`，且不应再禁用官方 `workspace` 或 `session-projection-cache`。DSH 0.1.6+ 上官方 `ui-settings-unarchive-sessions` 应为 `disabled: true`，设置里只保留本插件的「归档会话」。若 profile 的 `cordis.patch.yml` 仍禁用 `workspace`、`session-projection-cache` 或 `ui-workspace`，请移除这些覆盖，再重启。
 
 ### 归档和删除有什么区别？
 

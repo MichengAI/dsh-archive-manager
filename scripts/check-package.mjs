@@ -13,6 +13,7 @@ const required = [
   "cordis.patch.yml",
   "lib/workspace.js",
   "lib/projcache.js",
+  "lib/host-install.js",
   "lib/client.js",
   "lib/tombstone.js",
   "lib/plugin-updater.js",

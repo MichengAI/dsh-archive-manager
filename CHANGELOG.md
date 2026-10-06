@@ -6,6 +6,7 @@ Published release notes are retained below; new versions are added without remov
 
 ## Unreleased
 
+- Disabling this plugin no longer disables the official workspace or projection cache, so creating a workspace keeps working. Archive behavior is installed on those live services and removed when this plugin stops.
 - Installing from GitHub now includes the compiled runtime, so no manual build is required.
 
 ## 1.0.11 - 2026-10-01

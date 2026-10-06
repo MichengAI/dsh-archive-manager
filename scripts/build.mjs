@@ -50,7 +50,7 @@ async function exists(path) {
 
 try {
 	await build({
-		entryPoints: ["contracts.ts", "index.ts", "workspace.ts", "projcache.ts", "tombstone.ts", "plugin-updater.ts", "archive-experience.ts", "archive-organizer.ts", "archive-discovery.ts", "session-repair.ts"].map((file) => join(sourceDirectory, file)),
+		entryPoints: ["contracts.ts", "index.ts", "workspace.ts", "projcache.ts", "host-install.ts", "tombstone.ts", "plugin-updater.ts", "archive-experience.ts", "archive-organizer.ts", "archive-discovery.ts", "session-repair.ts"].map((file) => join(sourceDirectory, file)),
 		outdir: stagingDirectory,
 		outbase: sourceDirectory,
 		bundle: false,

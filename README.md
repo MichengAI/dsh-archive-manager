@@ -159,7 +159,7 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 dsh --profile web --dump-config
 ```
 
-The configuration should include `workspace-archive-manager` and `ui-workspace-archive-manager`. On DSH 0.1.6+, official `ui-settings-unarchive-sessions` should be `disabled: true` so Settings keeps only this plugin's Archived sessions page. If you previously set the official `ui-workspace` to `disabled: true` in your profile's `cordis.patch.yml`, remove that disabling override and restart.
+The configuration should include `archive-manager-host` and `ui-workspace-archive-manager`. It must not disable official `workspace` or `session-projection-cache`. On DSH 0.1.6+, official `ui-settings-unarchive-sessions` should be `disabled: true` so Settings keeps only this plugin's Archived sessions page. If your profile's `cordis.patch.yml` still disables `workspace`, `session-projection-cache`, or `ui-workspace`, remove those overrides and restart.
 
 ### How is archiving different from deletion?
 

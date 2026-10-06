@@ -349,6 +349,15 @@ function registerHostRemote(ctx: HostContext) {
 		typertCtx.typert.register(ARCHIVE_MANAGER_TYPERT as TypertContribution);
 	});
 }
+/** 把归档远程方法挂到调用方自己的 fiber 上，服务停用时由该 fiber 卸下。 */
+export function bindArchiveManagerRemote(ctx: Context): () => void {
+	const typert = ctx.get("typert") as { register?(value: TypertContribution): unknown } | undefined;
+	if (typert === undefined || typeof typert.register !== "function") {
+		throw new Error("archive-manager: typert is unavailable");
+	}
+	const dispose = typert.register(ARCHIVE_MANAGER_TYPERT as TypertContribution);
+	return typeof dispose === "function" ? () => { dispose(); } : () => {};
+}
 /** 0.1.6 及更早的 generationFormat 自带 createRestore；0.1.7 起用本次修复收集到的直属子会话证据建目录。没有子会话时才传空数组。 */
 async function hostRepairFormat(format: RepairFormat | undefined, children: readonly Record<string, unknown>[] = []): Promise<RepairFormat> {
 	if (!format || !Number.isInteger(format.currentVersion) || format.currentVersion < 3) throw new Error("当前宿主不支持此修复，请升级 DSH 后重试");
@@ -436,19 +445,7 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Wo
 	constructor(ctx: Context) {
 		super(ctx);
 		tolerateStaleFileUploadResolver(ctx);
-		const indexedPath = this.host.sessionPath;
-		this.host.sessionPath = (id) => {
-			const path = indexedPath(id);
-			if (path !== undefined) return path;
-			// 只保护仍在归档集合里、但路径索引还没编上的记账，避免官方 mutate 把归档会话写丢。
-			// 未归档会话仍走官方过滤，不改工作区成员语义。
-			if (this.invalidSessionPaths.has(id)) return undefined;
-			try {
-				return this.archivedWorkspacePath(id);
-			} catch {
-				return undefined;
-			}
-		};
+		protectArchivedSessionPath(this as unknown as WorkspaceOverlayHost);
 		this.typertRemote = bindTypertRemote(this, this.name);
 		markRemoteMethod(this, "unarchiveSession");
 		markRemoteMethod(this, "deleteSession");
@@ -1368,4 +1365,73 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Wo
 	}
 };
 //#endregion
+const workspaceOverlay = Symbol.for("dsh-archive-manager.workspace-overlay");
+interface WorkspaceOverlayHost {
+	host: { sessionPath(id: string): string | undefined };
+	invalidSessionPaths: { has(id: string): boolean };
+	archivedWorkspacePath(sessionId: string): string | undefined;
+	[workspaceOverlay]?: boolean;
+}
+/** 只保护仍在归档集合里、但路径索引还没编上的记账，避免官方 mutate 把归档会话写丢。 */
+function protectArchivedSessionPath(registry: WorkspaceOverlayHost): () => void {
+	const indexedPath = registry.host.sessionPath;
+	registry.host.sessionPath = (id) => {
+		const path = indexedPath(id);
+		if (path !== undefined) return path;
+		// 未归档会话仍走官方过滤，不改工作区成员语义。
+		if (registry.invalidSessionPaths.has(id)) return undefined;
+		try {
+			return registry.archivedWorkspacePath(id);
+		} catch {
+			return undefined;
+		}
+	};
+	return () => {
+		registry.host.sessionPath = indexedPath;
+	};
+}
+/**
+ * 把归档能力装到官方 `workspaceRegistry` 实例上。
+ * 不替换服务对象，因此停用时卸下后，已持有该实例的 workspaceController 仍能创建工作区。
+ */
+export function installArchiveWorkspace(registry: object): () => void {
+	const overlay = registry as WorkspaceOverlayHost;
+	if (overlay[workspaceOverlay] === true) return () => {};
+	const target = overlay as WorkspaceOverlayHost & Record<string, unknown>;
+	const fields: Record<string, unknown> = {
+		deletedSessionIds: new Set<string>(),
+		deletedSessionOrder: [] as string[],
+		deletedSessionTombstoneLimit: 4096,
+		deletedIdentities: new Map(),
+		archivedSessionPathIndex: new Map<string, string>(),
+		archivedSessionPathIndexKey: undefined,
+	};
+	const addedFields: string[] = [];
+	for (const [key, value] of Object.entries(fields)) {
+		if (!Object.hasOwn(target, key)) {
+			target[key] = value;
+			addedFields.push(key);
+		}
+	}
+	const restorePath = protectArchivedSessionPath(overlay);
+	const restoredMethods: { name: string; hadOwn: boolean; previous: unknown }[] = [];
+	for (const name of Object.getOwnPropertyNames(ArchiveWorkspaceRegistry.prototype)) {
+		if (name === "constructor") continue;
+		const method = Reflect.get(ArchiveWorkspaceRegistry.prototype, name);
+		if (typeof method !== "function") continue;
+		restoredMethods.push({ name, hadOwn: Object.hasOwn(target, name), previous: target[name] });
+		target[name] = method;
+	}
+	target[workspaceOverlay] = true;
+	return () => {
+		if (target[workspaceOverlay] !== true) return;
+		restorePath();
+		for (const item of restoredMethods.reverse()) {
+			if (item.hadOwn) target[item.name] = item.previous;
+			else delete target[item.name];
+		}
+		for (const key of addedFields) delete target[key];
+		delete target[workspaceOverlay];
+	};
+}
 export { ArchiveWorkspaceRegistry, ArchiveWorkspaceRegistry as default };
