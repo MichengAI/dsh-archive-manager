@@ -187,3 +187,28 @@ test("安装入口容忍热重载遗留的文件上传解析器", async () => {
 		await fiber.dispose();
 	}
 });
+
+test("远程注册失败回滚已安装的工作区与缓存扩展", async () => {
+	const host = await mountOfficialHost();
+	const table = host.cache.table;
+	const path = host.registry.host.sessionPath;
+	host.ctx.typert.register = () => { throw new Error("register failed"); };
+	await assert.rejects(apply(host.ctx), /register failed/);
+	assert.equal(host.cache.table, table);
+	assert.equal(host.cache.delete, undefined);
+	assert.equal(host.registry.deleteSession, undefined);
+	assert.equal(host.registry.host.sessionPath, path);
+	assert.equal(Reflect.get(host.registry, "typertRemote"), undefined);
+});
+
+test("远程解绑失败也必须恢复工作区和缓存扩展", async () => {
+	const host = await mountOfficialHost();
+	const table = host.cache.table;
+	host.ctx.typert.register = () => () => { throw new Error("unbind failed"); };
+	const dispose = await apply(host.ctx);
+	await assert.rejects(dispose(), /unbind failed/);
+	assert.equal(host.cache.table, table);
+	assert.equal(host.cache.delete, undefined);
+	assert.equal(host.registry.deleteSession, undefined);
+	assert.equal(Reflect.get(host.registry, "typertRemote"), undefined);
+});

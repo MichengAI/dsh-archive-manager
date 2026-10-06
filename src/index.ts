@@ -23,10 +23,19 @@ async function apply(ctx: Context) {
 	} catch (error) {
 		ctx.logger?.warn?.(`archive-manager: update route skipped: ${String(error)}`);
 	}
-	const disposeHost = await installHost(ctx);
-	return async () => {
+	let disposeHost: () => Promise<void>;
+	try {
+		disposeHost = await installHost(ctx);
+	} catch (error) {
 		disposeUpdater();
-		await disposeHost();
+		throw error;
+	}
+	return async () => {
+		try {
+			disposeUpdater();
+		} finally {
+			await disposeHost();
+		}
 	};
 }
 //#endregion

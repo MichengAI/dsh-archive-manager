@@ -162,3 +162,34 @@ test("根插件 fiber 停用等待缓存写入和域关闭后才完成", async (
 		await host.domains.get("session_projcache")?.close();
 	}
 });
+
+for (const failure of ["install", "dispose"]) {
+	test(`根入口${failure === "install" ? "安装失败移除更新路由" : "更新路由卸载失败仍清理宿主扩展"}`, async () => {
+		const host = await mountCache();
+		const table = host.cache.table;
+		host.ctx.provide("workspaceRegistry", { host: { sessionPath: () => undefined }, invalidSessionPaths: new Set() });
+		host.ctx.provide("typert", { register: () => {
+			if (failure === "install") throw new Error("register failed");
+			return () => {};
+		} });
+		let removed = false;
+		host.ctx.provide("webServer", { register: () => () => {
+			removed = true;
+			if (failure === "dispose") throw new Error("route cleanup failed");
+		} });
+		try {
+			if (failure === "install") await assert.rejects(apply(host.ctx), /register failed/);
+			else {
+				const dispose = await apply(host.ctx);
+				await assert.rejects(dispose(), /route cleanup failed/);
+			}
+			assert.equal(removed, true);
+			assert.equal(host.cache.table, table);
+			assert.equal(host.cache.delete, undefined);
+			assert.equal(host.ctx.workspaceRegistry.deleteSession, undefined);
+			assert.equal(host.closed.includes(safeProjectionCacheDomainSpec.name), true);
+		} finally {
+			await host.domains.get("session_projcache")?.close();
+		}
+	});
+}
