@@ -6,6 +6,10 @@ Published release notes are retained below; new versions are added without remov
 
 ## Unreleased
 
+## 1.0.13 - 2026-10-06
+
+- The plugin list keeps the product name Archive Manager in Chinese as well as English, matching the other plugins. The settings page title is unchanged.
+
 ## 1.0.12 - 2026-10-06
 
 - Disabling this plugin no longer disables the official workspace or projection cache, so creating a workspace keeps working. Archive behavior is installed on those live services and removed when this plugin stops.
