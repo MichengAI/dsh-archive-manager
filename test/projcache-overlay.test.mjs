@@ -4,7 +4,7 @@ import { Context, Service } from "@deepseek-ai/cordis";
 import { DomainFacility } from "@deepseek-ai/dsh-storage-domain";
 import { SessionProjectionCache } from "@deepseek-ai/dsh-session-projection-cache";
 import { apply, inject } from "../lib/index.js";
-import { installArchiveProjectionCache, SafeSessionTable, safeProjectionCacheDomainSpec } from "../lib/projcache.js";
+import { installArchiveProjectionCache, installArchiveProjectionCacheGuards, SafeSessionTable, safeProjectionCacheDomainSpec } from "../lib/projcache.js";
 
 function deferred() {
 	let resolve;
@@ -77,54 +77,90 @@ test("overlay 从官方已打开的缓存表补缺迁入，不覆盖安全域记
 	}
 });
 
-test("overlay 卸载等待在途及等待期间新增的写入，重复卸载共享同一任务", async () => {
-	const host = await mountCache();
-	const officialTable = host.cache.table;
-	const uninstall = await installArchiveProjectionCache(host.cache);
-	const safeTable = host.cache.table;
-	const first = deferred();
-	const second = deferred();
-	const firstStarted = deferred();
-	const secondStarted = deferred();
-	let writes = 0;
-	host.delayPut(async (name) => {
-		if (name !== safeProjectionCacheDomainSpec.name) return;
-		if (writes++ === 0) {
-			firstStarted.resolve();
-			await first.promise;
-		} else {
-			secondStarted.resolve();
-			await second.promise;
-		}
-	});
-	const pending = host.cache.put("first", identity, rows("first title"));
-	await firstStarted.promise;
-	const stopping = uninstall();
-	assert.equal(uninstall(), stopping);
-	let stopped = false;
-	stopping.then(() => { stopped = true; });
-	const added = host.cache.put("second", identity, rows("second title"));
-	try {
-		first.resolve();
-		await pending;
-		await secondStarted.promise;
-		assert.equal(stopped, false);
-		assert.equal(host.cache.table, safeTable);
-		second.resolve();
-		await added;
-		await stopping;
-		assert.equal(host.cache.table, officialTable);
-		assert.equal(host.closed.filter((name) => name === safeProjectionCacheDomainSpec.name).length, 1);
-		assert.equal(Object.hasOwn(host.cache, "deletedSessionIds"), false);
-		const persisted = await host.domains.open(safeProjectionCacheDomainSpec);
-		assert.equal(new SafeSessionTable(persisted.table("sessions")).get("second").rows.title.val, "second title");
-		await persisted.close();
-	} finally {
-		first.resolve();
-		second.resolve();
-		await Promise.allSettled([pending, added, stopping]);
-		await host.domains.get("session_projcache")?.close();
-	}
+for (const overlay of [true, false]) {
+ test(overlay ? "overlay 卸载只等旧写入，新写入立即回到官方表" : "兜底 guards 卸载不追逐后续官方写入", async () => {
+  const host = await mountCache(); const table = host.cache.table;
+  const uninstall = overlay ? await installArchiveProjectionCache(host.cache) : installArchiveProjectionCacheGuards(host.cache);
+  const first = deferred(), second = deferred(), started = deferred(), secondStarted = deferred();
+  let writes = 0;
+  host.delayPut(async () => { if (writes++ === 0) { started.resolve(); await first.promise; } else { secondStarted.resolve(); await second.promise; } });
+  const pending = host.cache.put("first", identity, rows("first")); await started.promise;
+  const stalePut = host.cache.put;
+  const stopping = uninstall(); assert.equal(uninstall(), stopping);
+  assert.equal(host.cache.table, table, "卸载同步恢复官方表");
+  const added = stalePut("second", identity, rows("second"));
+  try {
+   first.resolve(); await pending; await secondStarted.promise;
+   await stopping; // second 未完成也不阻止插件卸载。
+   assert.equal(host.cache.delete, undefined);
+   if (overlay) {
+    assert.equal(host.closed.filter(name => name === safeProjectionCacheDomainSpec.name).length, 1);
+    const persisted = await host.domains.open(safeProjectionCacheDomainSpec);
+    assert.equal(new SafeSessionTable(persisted.table("sessions")).get("first").rows.title.val, "first");
+    assert.equal(new SafeSessionTable(persisted.table("sessions")).has("second"), false);
+    await persisted.close();
+   }
+  } finally {
+   first.resolve(); second.resolve(); await Promise.allSettled([pending, added, stopping]);
+   await host.domains.get("session_projcache")?.close();
+  }
+ });
+}
+
+test("卸载前的 write 在异步 flush 后仍向原安全表 put", async () => {
+ const host = await mountCache(); const official = host.cache.table;
+ const uninstall = await installArchiveProjectionCache(host.cache);
+ const started = deferred(), finish = deferred();
+ const session = { id: "late-put", header: { id: "late-put", version: 4, createdAt: 1 }, inheritedEventCount: 0 };
+ host.ctx.sessionProjections.checkpoint = () => rows("old write");
+ host.ctx.sessions.get = () => session;
+ host.ctx.sessions.flush = async () => { started.resolve(); await finish.promise; };
+ const pending = host.cache.write(session); await started.promise;
+ const stopping = uninstall();
+ assert.equal(host.cache.table, official);
+ try {
+  await host.cache.put("fresh", identity, rows("official"));
+  finish.resolve(); await pending; await stopping;
+  assert.equal(official.get("late-put"), undefined);
+  assert.equal(official.get("fresh").rows.title.val, "official");
+  const persisted = await host.domains.open(safeProjectionCacheDomainSpec);
+  assert.equal(new SafeSessionTable(persisted.table("sessions")).get("late-put").rows.title.val, "old write");
+  await persisted.close();
+ } finally { finish.resolve(); await Promise.allSettled([pending, stopping]); await host.domains.get("session_projcache")?.close(); }
+});
+
+test("卸载中的旧写入保留墓碑，补删不影响官方表的新写入", async () => {
+ const host = await mountCache(); const official = host.cache.table;
+ const uninstall = await installArchiveProjectionCache(host.cache);
+ const started = deferred(), finish = deferred();
+ host.delayPut(async name => { if (name === safeProjectionCacheDomainSpec.name) { started.resolve(); await finish.promise; } });
+ const pending = host.cache.put("same", identity, rows("old")); await started.promise;
+ const deleting = host.cache.delete("same"); const stopping = uninstall();
+ try {
+  await host.cache.put("same", identity, rows("new lifecycle"));
+  finish.resolve(); await Promise.all([pending, deleting, stopping]);
+  assert.equal(official.get("same").rows.title.val, "new lifecycle");
+  const persisted = await host.domains.open(safeProjectionCacheDomainSpec);
+  assert.equal(new SafeSessionTable(persisted.table("sessions")).has("same"), false);
+  await persisted.close();
+ } finally { finish.resolve(); await Promise.allSettled([pending, deleting, stopping]); await host.domains.get("session_projcache")?.close(); }
+});
+
+test("guards 幂等，部分 overlay 安装失败回滚后兜底可以完整卸载", async () => {
+ const host = await mountCache(); const official = host.cache.table; const originalPut = host.cache.put;
+ let fail = true;
+ const cache = new Proxy(host.cache, { set(target, key, value) {
+  if (key === Symbol.for("dsh-archive-manager.projcache-overlay") && fail) { fail = false; throw new Error("marker assignment failed"); }
+  return Reflect.set(target, key, value);
+ } });
+ try {
+  await assert.rejects(installArchiveProjectionCache(cache), /marker assignment failed/);
+  assert.equal(host.cache.table, official); assert.equal(host.cache.put, originalPut); assert.equal(host.cache.delete, undefined);
+  assert.equal(host.closed.includes(safeProjectionCacheDomainSpec.name), true);
+  const uninstall = installArchiveProjectionCacheGuards(host.cache);
+  assert.equal(installArchiveProjectionCacheGuards(host.cache), uninstall);
+  await uninstall(); assert.equal(host.cache.put, originalPut); assert.equal(host.cache.delete, undefined);
+ } finally { await host.domains.get("session_projcache")?.close(); }
 });
 
 test("根插件 fiber 停用等待缓存写入和域关闭后才完成", async () => {

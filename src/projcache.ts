@@ -19,7 +19,7 @@ interface CacheCompat extends Omit<SessionProjectionCache, "write"> {
 const CacheBase = SessionProjectionCache as unknown as { new(ctx: Context, config: Config): CacheCompat; prototype: CacheCompat } & Pick<typeof SessionProjectionCache, "Config" | "inject">;
 type StoredCheckpoint = CheckpointRecord & { sessionId: string };
 import { createHash } from "node:crypto";
-import { Service } from "@deepseek-ai/cordis";
+import { Service, symbols } from "@deepseek-ai/cordis";
 import {
 	SessionProjectionCache,
 	checkpointIdentity,
@@ -351,44 +351,62 @@ var ArchiveProjectionCache = class extends CacheBase {
 	}
 };
 //#endregion
+// 独立接收对象把在途任务固定在安装时的表和墓碑上；恢复官方实例不改变其异步续体。
+const projectionGuards = new WeakMap<object, () => Promise<void>>();
 /** 安全域无法打开时仍须安装删除墓碑和写入屏障，复用官方缓存表。 */
-export function installArchiveProjectionCacheGuards(cache: object): () => Promise<void> {
-	const target = cache as CacheCompat & Record<string | symbol, unknown>;
-	const fields: Record<string, unknown> = {
-		deletedSessionIds: new Set<string>(),
-		deletedSessionOrder: [] as string[],
-		deletedSessionTombstoneLimit: 4096,
-		writeTail: Promise.resolve(),
+export function installArchiveProjectionCacheGuards(cache: object, table?: CacheTable): () => Promise<void> {
+	const target = ((Reflect.get(cache, symbols.original) as object | undefined) ?? cache) as CacheCompat & Record<string | symbol, unknown>;
+	const existing = projectionGuards.get(target);
+	if (existing) return existing;
+	const fields = {
+		table: table ?? target.table,
+		deletedSessionIds: new Set<string>(), deletedSessionOrder: [] as string[],
+		deletedSessionTombstoneLimit: 4096, writeTail: Promise.resolve(),
 	};
-	const addedFields: string[] = [];
-	for (const [key, value] of Object.entries(fields)) {
-		if (!Object.hasOwn(target, key)) {
-			target[key] = value;
-			addedFields.push(key);
-		}
-	}
-	const restoredMethods: { name: string; hadOwn: boolean; previous: unknown }[] = [];
-	for (const name of Object.getOwnPropertyNames(ArchiveProjectionCache.prototype)) {
-		if (name === "constructor") continue;
-		const method = Reflect.get(ArchiveProjectionCache.prototype, name);
-		if (typeof method !== "function") continue;
-		restoredMethods.push({ name, hadOwn: Object.hasOwn(target, name), previous: target[name] });
-			target[name] = method;
-	}
-	let disposal: Promise<void> | undefined;
-	return () => disposal ??= (async () => {
-		// 写入完成后仍会访问墓碑和当前表；等待期间的新写入也必须落定。
-		while (true) {
-			const tail = target.writeTail as Promise<void>;
-			await tail;
-			if (target.writeTail === tail) break;
-		}
-		for (const item of restoredMethods.reverse()) {
-			if (item.hadOwn) target[item.name] = item.previous;
+	const receiver = Object.create(target, Object.fromEntries(Object.entries(fields).map(([name, value]) => [name, { value, writable: true, configurable: true }]))) as CacheCompat & Record<string, unknown>;
+	const restoredMethods: { name: string; descriptor: PropertyDescriptor | undefined }[] = [];
+	let active = true;
+	const restore = () => {
+		active = false;
+		for (const item of [...restoredMethods].reverse()) {
+			if (item.descriptor) Object.defineProperty(target, item.name, item.descriptor);
 			else delete target[item.name];
 		}
-		for (const key of addedFields) delete target[key];
-	})();
+	};
+	try {
+		for (const name of Object.getOwnPropertyNames(ArchiveProjectionCache.prototype)) {
+			if (name === "constructor") continue;
+			const method = Reflect.get(ArchiveProjectionCache.prototype, name);
+			if (typeof method !== "function") continue;
+			Object.defineProperty(receiver, name, { value: method, writable: true, configurable: true });
+			const previous = target[name];
+			restoredMethods.push({ name, descriptor: Object.getOwnPropertyDescriptor(target, name) });
+			target[name] = (...args: unknown[]) => {
+				// 已保存的旧入口也不能在卸载后继续向即将关闭的安全域写入。
+				if (!active) {
+					if (typeof previous === "function") return Reflect.apply(previous, target, args);
+					throw new Error("archive-manager: projection cache guards are stopped");
+				}
+				const result = Reflect.apply(method, receiver, args);
+				if (name === "delete") receiver.writeTail = Promise.allSettled([receiver.writeTail, result]).then(() => void 0);
+				return result;
+			};
+		}
+	} catch (error) {
+		restore();
+		throw error;
+	}
+	let disposal: Promise<void> | undefined;
+	const uninstall = () => {
+		if (disposal) return disposal;
+		const drain = receiver.writeTail as Promise<void>;
+		restore();
+		projectionGuards.delete(target);
+		// 外层 write 的任务也覆盖其 await 之后才进入的嵌套 put，无需追逐新队尾。
+		return disposal = drain;
+	};
+	projectionGuards.set(target, uninstall);
+	return uninstall;
 }
 const projectionOverlay = Symbol.for("dsh-archive-manager.projcache-overlay");
 /**
@@ -400,24 +418,31 @@ export async function installArchiveProjectionCache(cache: object): Promise<() =
 	if (target[projectionOverlay] === true) return async () => {};
 	const domain = await target.ctx.storageDomain.open(safeProjectionCacheDomainSpec);
 	let installed = false;
+	const previousTable = target.table;
+	let uninstallGuards: (() => Promise<void>) | undefined;
 	try {
 		const table = new SafeSessionTable(domain.table("sessions"));
-		const previousTable = target.table;
 		await importPreviousProjectionCache(target.ctx, table, previousTable);
-		const uninstallGuards = installArchiveProjectionCacheGuards(cache);
+		uninstallGuards = installArchiveProjectionCacheGuards(cache, table);
 		target.table = table;
 		target[projectionOverlay] = true;
 		installed = true;
 		let disposal: Promise<void> | undefined;
 		return () => disposal ??= (async () => {
 			if (target[projectionOverlay] !== true) return;
-			await uninstallGuards();
+			const drain = uninstallGuards!();
 			target.table = previousTable;
 			delete target[projectionOverlay];
+			await drain;
 			await domain.close();
 		})();
 	} catch (error) {
-		if (!installed) await domain.close();
+		if (!installed) {
+			const drain = uninstallGuards?.();
+			target.table = previousTable;
+			delete target[projectionOverlay];
+			try { await drain; } finally { await domain.close(); }
+		}
 		throw error;
 	}
 }
