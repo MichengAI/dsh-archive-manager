@@ -8,9 +8,26 @@ import { TypertRegistry } from "@deepseek-ai/dsh-typert-registry";
 import { TypertGatewayService } from "@deepseek-ai/dsh-api-gateway";
 import { WorkspaceRegistry } from "@deepseek-ai/dsh-workspace";
 import { SessionProjectionCache } from "@deepseek-ai/dsh-session-projection-cache";
+import { remoteMethods } from "@deepseek-ai/dsh-typert-protocol";
 import { apply, inject } from "../lib/host-install.js";
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+/** 归档入口对网关暴露的全部方法；其余内部方法（删目录、墓碑维护等）不得成为 RPC。 */
+const ARCHIVE_ENDPOINTS = [
+	"archivedSessionMetadata",
+	"deleteArchivedSessions",
+	"deleteSession",
+	"diagnoseSession",
+	"favoriteSessions",
+	"previewArchivedSession",
+	"repairSession",
+	"searchArchivedContent",
+	"searchSessionContent",
+	"sessionDetails",
+	"setSessionFavorite",
+	"unarchiveSession",
+];
 
 /** Map 支撑的存储域表 + 全局状态，满足 storage-domain 契约。 */
 function fakeDomain() {
@@ -91,8 +108,14 @@ test("归档能力经真实网关从官方 workspace 实例派发", async () => 
 	assert.equal(captured.matches("workspaceRegistry/archivedSessionMetadata"), true);
 	assert.equal(captured.matches("workspaceRegistry/sessionDetails"), true);
 	assert.equal(captured.matches("workspaceRegistry/diagnoseSession"), true);
+	// 暴露面必须与子类入口一致：只有归档方法，内部方法（删目录、墓碑维护等）不得成为 RPC。
+	assert.deepEqual(remoteMethods(registry).map((marker) => marker.method).sort(), ARCHIVE_ENDPOINTS);
+	for (const internal of ["removeTranscriptDirectory", "cleanSpill", "deleteDescendants", "indexHeader", "deleteSessionCore"]) {
+		assert.equal(captured.matches(`workspaceRegistry/${internal}`), false, `内部方法 ${internal} 不得成为远程端点`);
+	}
 	assert.deepEqual(await call("workspaceRegistry/archivedSessionMetadata", {}), { ok: true, value: { items: [] } });
 	assert.deepEqual(await call("workspaceRegistry/favoriteSessions", {}), { ok: true, value: { favoriteSessionIds: [] } });
+	assert.equal((await call("workspaceRegistry/diagnoseSession", { input: { sessionId: "missing" } })).ok, true);
 	assert.notEqual(cache.table, officialTable);
 
 	await fiber.dispose();

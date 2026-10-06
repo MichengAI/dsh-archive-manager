@@ -49,6 +49,27 @@ test('再次启用会替换残留的更新路由，而不是因为重复路由�
   recovered()
 })
 
+test('迟到的旧卸载函数不会删掉新装的更新路由', () => {
+  const exact = new Map()
+  const webServer = {
+    exact,
+    register(route) {
+      if (exact.has(route.path)) throw new Error(`webserver: duplicate exact route "${route.path}"`)
+      exact.set(route.path, route)
+      return () => { exact.delete(route.path) }
+    },
+  }
+  const ctx = { webServer, logger: { warn() {} } }
+  const options = { endpoint: '/api/michengai/dsh-archive-manager/update', packageName: '@michengai/dsh-archive-manager', manifestUrl: new URL('../package.json', import.meta.url) }
+  const first = registerPluginUpdater(ctx, options)
+  const second = registerPluginUpdater(ctx, options)
+  assert.equal(exact.has(options.endpoint), true)
+  first()
+  assert.equal(exact.has(options.endpoint), true, '旧 fiber 的卸载不得删掉新路由')
+  second()
+  assert.equal(exact.has(options.endpoint), false)
+})
+
 test('归档更新弹窗消费 ESC，避免继续关闭底层设置页', () => {
   const calls = []
   assert.equal(handlePluginUpdateEscape({

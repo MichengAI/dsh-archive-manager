@@ -219,17 +219,22 @@ async function importMissingRecords(ctx: Context, target: CacheTable, records: r
  * 合并归档管理器旧名 v2、旧名 v1、官方新版逐会话与旧版整文件缓存。目标域记录
  * 最高优先，随后按新旧顺序只补缺失记录；任一来源失败时仍继续尝试另一个来源。
  */
-async function importPreviousProjectionCache(ctx: Context, target: CacheTable) {
-	const legacySafeV2 = await readLegacySafeRecords(ctx, legacySafeV2ProjectionCacheDomainSpec, "archive-manager v2");
-	const legacySafe = await readLegacySafeRecords(ctx, legacySafeProjectionCacheDomainSpec, "archive-manager v1");
-	const legacy = await readSourceRecords(ctx, legacyProjectionCacheDomainSpec, "legacy v3");
+async function importPreviousProjectionCache(ctx: Context, target: CacheTable, currentTable?: CacheTable) {
 	const sameSpec = projectionCacheDomainSpec.version === legacyProjectionCacheDomainSpec.version
 		&& projectionCacheDomainSpec.layout === (legacyProjectionCacheDomainSpec as DomainSpec).layout;
+	const legacySafeV2 = await readLegacySafeRecords(ctx, legacySafeV2ProjectionCacheDomainSpec, "archive-manager v2");
+	const legacySafe = await readLegacySafeRecords(ctx, legacySafeProjectionCacheDomainSpec, "archive-manager v1");
+	// overlay 安装时官方域仍在使用，直接借用其表，不重复打开或关闭宿主持有的域。
+	const legacy = sameSpec && currentTable !== undefined
+		? { opened: true, records: [...currentTable.entries()] }
+		: await readSourceRecords(ctx, legacyProjectionCacheDomainSpec, "legacy v3");
 	let imported = 0;
 	if (legacySafeV2.opened) imported += await importMissingRecords(ctx, target, legacySafeV2.records, "archive-manager v2");
 	if (legacySafe.opened) imported += await importMissingRecords(ctx, target, legacySafe.records, "archive-manager v1");
 	if (!sameSpec) {
-		const current = await readSourceRecords(ctx, projectionCacheDomainSpec, "current");
+		const current = currentTable !== undefined
+			? { opened: true, records: [...currentTable.entries()] }
+			: await readSourceRecords(ctx, projectionCacheDomainSpec, "current");
 		if (current.opened) imported += await importMissingRecords(ctx, target, current.records, "current");
 	}
 	if (legacy.opened) imported += await importMissingRecords(ctx, target, legacy.records, "legacy v3");
@@ -351,15 +356,15 @@ const projectionOverlay = Symbol.for("dsh-archive-manager.projcache-overlay");
  * 把安全缓存域装到官方 `sessionProjectionCache` 实例上。
  * 停用时恢复官方表，不关掉官方服务。
  */
-export async function installArchiveProjectionCache(cache: object): Promise<() => void> {
+export async function installArchiveProjectionCache(cache: object): Promise<() => Promise<void>> {
 	const target = cache as CacheCompat & Record<string | symbol, unknown>;
-	if (target[projectionOverlay] === true) return () => {};
+	if (target[projectionOverlay] === true) return async () => {};
 	const domain = await target.ctx.storageDomain.open(safeProjectionCacheDomainSpec);
 	let installed = false;
 	try {
 		const table = new SafeSessionTable(domain.table("sessions"));
-		await importPreviousProjectionCache(target.ctx, table);
 		const previousTable = target.table;
+		await importPreviousProjectionCache(target.ctx, table, previousTable);
 		const fields: Record<string, unknown> = {
 			deletedSessionIds: new Set<string>(),
 			deletedSessionOrder: [] as string[],
@@ -384,8 +389,15 @@ export async function installArchiveProjectionCache(cache: object): Promise<() =
 		target.table = table;
 		target[projectionOverlay] = true;
 		installed = true;
-		return () => {
+		let disposal: Promise<void> | undefined;
+		return () => disposal ??= (async () => {
 			if (target[projectionOverlay] !== true) return;
+			// 写入完成后仍会访问墓碑和当前表；等待期间的新写入也必须落定。
+			while (true) {
+				const tail = target.writeTail as Promise<void>;
+				await tail;
+				if (target.writeTail === tail) break;
+			}
 			target.table = previousTable;
 			for (const item of restoredMethods.reverse()) {
 				if (item.hadOwn) target[item.name] = item.previous;
@@ -393,8 +405,8 @@ export async function installArchiveProjectionCache(cache: object): Promise<() =
 			}
 			for (const key of addedFields) delete target[key];
 			delete target[projectionOverlay];
-			void domain.close();
-		};
+			await domain.close();
+		})();
 	} catch (error) {
 		if (!installed) await domain.close();
 		throw error;

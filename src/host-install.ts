@@ -15,17 +15,20 @@ async function apply(ctx: Context) {
 	const registry = ctx.workspaceRegistry;
 	const cache = ctx.sessionProjectionCache;
 	const uninstallWorkspace = installArchiveWorkspace(registry);
-	let uninstallCache: () => void = () => {};
+	let uninstallCache: () => Promise<void> = async () => {};
 	try {
 		uninstallCache = await installArchiveProjectionCache(cache);
 	} catch (error) {
 		ctx.logger?.warn?.(`archive-manager: projection cache overlay skipped: ${String(error)}`);
 	}
 	const unbindRemote = bindArchiveManagerRemote(ctx);
-	return () => {
+	return async () => {
 		unbindRemote();
-		uninstallCache();
-		uninstallWorkspace();
+		try {
+			await uninstallCache();
+		} finally {
+			uninstallWorkspace();
+		}
 	};
 }
 

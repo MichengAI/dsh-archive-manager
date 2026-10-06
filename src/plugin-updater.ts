@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Context } from "@deepseek-ai/cordis";
+import { symbols } from "@deepseek-ai/cordis";
 import type {} from "@deepseek-ai/dsh-host-webserver";
 import { record } from "./contracts.js";
 interface DesktopPnpm { runPlugin(args: string[], directory: string): { done: Promise<{ exitCode: number }> } }
@@ -207,7 +208,7 @@ function updateRouteBag(server: object): Map<string, () => void> {
 }
 /** 停用没撤掉的更新路由会让下一次启用直接失败。先撤自己的，再清宿主表里的同名残留。 */
 function rawService(service: object): object {
-  const original = Reflect.get(service, Symbol.for("cordis.original"));
+  const original = Reflect.get(service, symbols.original);
   return original !== null && typeof original === "object" ? original : service;
 }
 function releaseUpdateRoute(server: object, path: string) {
@@ -282,7 +283,9 @@ function registerPluginUpdater(ctx: Context, options: UpdateOptions) {
   });
   const wrapped = () => {
     const bag = updateRouteBag(server);
-    if (bag.get(options.endpoint) === wrapped) bag.delete(options.endpoint);
+    // 只有仍归本次安装所有的路由才能撤：迟到的旧 fiber 卸载不能删掉新装的路由。
+    if (bag.get(options.endpoint) !== wrapped) return;
+    bag.delete(options.endpoint);
     dispose();
   };
   updateRouteBag(server).set(options.endpoint, wrapped);

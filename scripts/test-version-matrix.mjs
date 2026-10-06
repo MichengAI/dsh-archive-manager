@@ -58,7 +58,7 @@ for (const profile of profiles) {
 			const installed = JSON.parse(await readFile(join(isolated, "node_modules", name, "package.json"), "utf8"));
 			if (installed.version !== version) throw new Error(`${name} 版本混用：期望 ${version}，实际 ${installed.version}`);
 		}
-		for (const directory of ["src", "lib", "scripts", "test"]) {
+		for (const directory of ["src", "lib", "scripts", "test", "locale"]) {
 			await cp(join(root, directory), join(isolated, directory), { recursive: true, filter: (source) => basename(source) !== "node_modules" });
 		}
 		// 安装清单只用于装载宿主；测试仍审查真实插件清单，不伪造发布依赖。

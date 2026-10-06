@@ -70,7 +70,7 @@ test("停用安装入口后，官方工作区实例仍能创建目录", async ()
 		assert.notEqual(cache.table, officialTable);
 		assert.equal((await registry.create(project)).id, created.id);
 
-		uninstall();
+		await uninstall();
 		assert.equal(registry.deleteSession, undefined);
 		assert.equal(cache.table, officialTable);
 		assert.equal((await registry.create(project)).id, created.id);

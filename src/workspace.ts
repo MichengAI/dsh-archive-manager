@@ -110,6 +110,21 @@ function strictCodec(typeSymbol: string, schema: Schema<unknown>) {
 	};
 }
 
+/** 经 typert Gateway 暴露的方法。子类与 overlay 共用一份，避免把内部方法（删除目录、墓碑维护等）也变成 RPC 端点。 */
+const ARCHIVE_REMOTE_METHODS = [
+	"unarchiveSession",
+	"deleteSession",
+	"deleteArchivedSessions",
+	"archivedSessionMetadata",
+	"favoriteSessions",
+	"setSessionFavorite",
+	"searchArchivedContent",
+	"searchSessionContent",
+	"previewArchivedSession",
+	"sessionDetails",
+	"diagnoseSession",
+	"repairSession",
+] as const;
 function markRemoteMethod(instance: object, method: string) {
 	// 模拟 TS 装饰器管线 `@Remote(method)`：`Remote` 返回标准方法装饰器，
 	// 这里构造一个 addInitializer 立即以 `this` = instance 执行的装饰器上下文。
@@ -455,18 +470,7 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Wo
 		tolerateStaleFileUploadResolver(ctx);
 		protectArchivedSessionPath(this as unknown as WorkspaceOverlayHost);
 		this.typertRemote = bindTypertRemote(this, this.name);
-		markRemoteMethod(this, "unarchiveSession");
-		markRemoteMethod(this, "deleteSession");
-		markRemoteMethod(this, "deleteArchivedSessions");
-		markRemoteMethod(this, "archivedSessionMetadata");
-		markRemoteMethod(this, "favoriteSessions");
-		markRemoteMethod(this, "setSessionFavorite");
-		markRemoteMethod(this, "searchArchivedContent");
-        markRemoteMethod(this, "searchSessionContent");
-		markRemoteMethod(this, "previewArchivedSession");
-        markRemoteMethod(this, "sessionDetails");
-        markRemoteMethod(this, "diagnoseSession");
-        markRemoteMethod(this, "repairSession");
+		for (const method of ARCHIVE_REMOTE_METHODS) markRemoteMethod(this, method);
 		registerHostRemote(this.ctx);
 	}
 	/** 只读取归档日志；已有实时实例读取快照，不调用 prepare、enter 或恢复接口。 */
@@ -1406,13 +1410,24 @@ function protectArchivedSessionPath(registry: WorkspaceOverlayHost): () => void 
  * 指向的宿主实例做比较，所以绑定必须落在原始实例上。
  */
 const remoteMethodDescriptor = "@deepseek-ai/dsh-typert-protocol/remote-methods";
-/** 网关的源码扫描只认原型上的 Remote 标记。不打上标记时，诊断接口会一直 404。 */
+/**
+ * 网关的源码扫描只认原型上的 Remote 标记；缺标记时新加的方法不会被认领。
+ * 标记落在官方类原型上（全进程共用），所以只标本插件自己的归档方法，
+ * 且跳过宿主已经标过的同名方法，避免标记冲突抛错或覆盖宿主语义。
+ */
 function markOverlayMethods(registry: object, methods: readonly string[]): () => void {
 	const raw = (Reflect.get(registry, symbols.original) as object | undefined) ?? registry;
 	const prototype = Object.getPrototypeOf(raw) as object | null;
 	if (prototype === null) return () => {};
 	const before = Object.getOwnPropertyDescriptor(prototype, remoteMethodDescriptor);
-	for (const method of methods) markRemoteMethod(raw, method);
+	const marked = new Set<string>();
+	for (const marker of (Reflect.get(before?.value ?? {}, "methods") as { method?: unknown }[] | undefined) ?? []) {
+		if (typeof marker.method === "string") marked.add(marker.method);
+	}
+	for (const method of methods) {
+		if (marked.has(method)) continue;
+		markRemoteMethod(raw, method);
+	}
 	return () => {
 		if (before === undefined) delete (prototype as Record<string, unknown>)[remoteMethodDescriptor];
 		else Object.defineProperty(prototype, remoteMethodDescriptor, before);
@@ -1465,7 +1480,7 @@ export function installArchiveWorkspace(registry: object): () => void {
 		target[name] = method;
 		copiedMethods.push(name);
 	}
-	const restoreMarkers = markOverlayMethods(registry, copiedMethods);
+	const restoreMarkers = markOverlayMethods(registry, ARCHIVE_REMOTE_METHODS.filter((method) => copiedMethods.includes(method)));
 	target[workspaceOverlay] = true;
 	return () => {
 		if (target[workspaceOverlay] !== true) return;
