@@ -222,7 +222,8 @@ test("安装补丁关闭官方已归档设置页，但不关掉宿主 workspace"
 	assert.match(patch, /id: ui-settings-unarchive-sessions\s+disabled: true/);
 	assert.doesNotMatch(patch, /id: workspace\s+disabled: true/);
 	assert.doesNotMatch(patch, /id: session-projection-cache\s+disabled: true/);
-	assert.match(patch, /id: archive-manager-host/);
+	assert.doesNotMatch(patch, /id: archive-manager-host/);
+	assert.match(patch, /id: ui-workspace-archive-manager/);
 });
 
 for (const archiveFirst of [false, true]) test(`官方选择器和导航保持唯一，侧栏覆盖可恢复（归档先加载=${archiveFirst}）`, async () => {

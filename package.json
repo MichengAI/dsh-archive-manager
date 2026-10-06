@@ -1,7 +1,7 @@
 {
   "name": "@michengai/dsh-archive-manager",
   "version": "1.0.11",
-  "description": "NPM-installable DSH Web plugin for managing archived sessions.",
+  "description": "归档、恢复、收藏和永久删除会话，并诊断损坏的会话日志。 · Archive, restore, favorite, and permanently delete sessions, and diagnose damaged session logs.",
   "type": "module",
   "packageManager": "pnpm@11.22.0",
   "engines": {
@@ -14,11 +14,13 @@
     "./projcache": "./lib/projcache.js",
     "./host": "./lib/host-install.js",
     "./client": "./lib/client.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "files": [
     "lib",
     "assets",
+    "locale",
     "cordis.patch.yml",
     "README.md",
     "README.zh-CN.md",

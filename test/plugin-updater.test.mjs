@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { handlePluginUpdateEscape, manualPluginUpdateCommand } from '../src/plugin-update-model.ts'
-import { isDshCliEntry, isNewerVersion, isTrustedUpdateRequest, PLUGIN_UPDATE_HEADER } from '../src/plugin-updater.ts'
+import { isDshCliEntry, isNewerVersion, isTrustedUpdateRequest, PLUGIN_UPDATE_HEADER, registerPluginUpdater } from '../src/plugin-updater.ts'
 
 test('归档会话独立更新只接受同源专用请求', () => {
   assert.equal(isNewerVersion('0.1.30', '0.1.31'), true)
@@ -17,6 +17,36 @@ test('归档会话独立更新只接受同源专用请求', () => {
   assert.equal(isDshCliEntry('C:/tools/dsh/lib/bin.js', { name: '@deepseek-ai/dsh', bin: { dsh: 'lib/bin.js' } }, 'C:/tools/dsh'), true)
   assert.equal(isDshCliEntry('C:/tools/dsh/lib/bin.js', { name: '@deepseek-ai/dsh', bin: { dsh: 'lib/other.js' } }, 'C:/tools/dsh'), false)
   assert.equal(isDshCliEntry('C:/tools/dsh/lib/bin.js', { name: 'other-cli', bin: { dsh: 'lib/bin.js' } }, 'C:/tools/dsh'), false)
+})
+
+test('再次启用会替换残留的更新路由，而不是因为重复路由失败', () => {
+  const exact = new Map()
+  const webServer = {
+    exact,
+    register(route) {
+      if (exact.has(route.path)) throw new Error(`webserver: duplicate exact route "${route.path}"`)
+      exact.set(route.path, route)
+      return () => { exact.delete(route.path) }
+    },
+  }
+  const ctx = { webServer, logger: { warn() {} } }
+  const options = { endpoint: '/api/michengai/dsh-archive-manager/update', packageName: '@michengai/dsh-archive-manager', manifestUrl: new URL('../package.json', import.meta.url) }
+  exact.set(options.endpoint, { leaked: true })
+  const dispose = registerPluginUpdater(ctx, options)
+  assert.equal(exact.get(options.endpoint).leaked, undefined)
+  dispose()
+  assert.equal(exact.has(options.endpoint), false)
+  const again = registerPluginUpdater(ctx, options)
+  assert.equal(exact.has(options.endpoint), true)
+  again()
+  const hidden = new Map([[options.endpoint, { leaked: true }]])
+  const proxied = {
+    [Symbol.for('cordis.original')]: { exact: hidden, register(route) { if (hidden.has(route.path)) throw new Error('duplicate'); hidden.set(route.path, route); return () => hidden.delete(route.path) } },
+    register(route) { return this[Symbol.for('cordis.original')].register(route) },
+  }
+  const recovered = registerPluginUpdater({ webServer: proxied, logger: { warn() {} } }, options)
+  assert.equal(hidden.get(options.endpoint).leaked, undefined)
+  recovered()
 })
 
 test('归档更新弹窗消费 ESC，避免继续关闭底层设置页', () => {

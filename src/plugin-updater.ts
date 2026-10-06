@@ -200,10 +200,35 @@ function publicError(error: unknown) {
   const message = error instanceof Error ? error.message : "\u66F4\u65B0\u6682\u4E0D\u53EF\u7528\u3002";
   return /[A-Za-z]:[\\/]|\/(?:home|root|Users|var|tmp)\//.test(message) ? "\u66F4\u65B0\u5931\u8D25\uFF0C\u8BF7\u67E5\u770B\u670D\u52A1\u7AEF\u65E5\u5FD7\u3002" : message;
 }
+const updateRoutes = Symbol.for("dsh-archive-manager.update-routes");
+function updateRouteBag(server: object): Map<string, () => void> {
+  const owner = server as Record<symbol, Map<string, () => void>>;
+  return owner[updateRoutes] ?? (owner[updateRoutes] = new Map());
+}
+/** 停用没撤掉的更新路由会让下一次启用直接失败。先撤自己的，再清宿主表里的同名残留。 */
+function rawService(service: object): object {
+  const original = Reflect.get(service, Symbol.for("cordis.original"));
+  return original !== null && typeof original === "object" ? original : service;
+}
+function releaseUpdateRoute(server: object, path: string) {
+  const raw = rawService(server);
+  const bag = updateRouteBag(raw);
+  const owned = bag.get(path);
+  if (owned !== undefined) {
+    bag.delete(path);
+    owned();
+  }
+  for (const key of ["exact", "prefixes"]) {
+    const table = Reflect.get(raw, key);
+    if (table instanceof Map && table.has(path)) table.delete(path);
+  }
+}
 function registerPluginUpdater(ctx: Context, options: UpdateOptions) {
   const host = ctx;
   let installing = false;
-  return host.webServer.register({
+  const server = rawService(host.webServer);
+  releaseUpdateRoute(server, options.endpoint);
+  const dispose = host.webServer.register({
     kind: "exact",
     path: options.endpoint,
     handler: async (request, response) => {
@@ -255,6 +280,13 @@ function registerPluginUpdater(ctx: Context, options: UpdateOptions) {
       }
     }
   });
+  const wrapped = () => {
+    const bag = updateRouteBag(server);
+    if (bag.get(options.endpoint) === wrapped) bag.delete(options.endpoint);
+    dispose();
+  };
+  updateRouteBag(server).set(options.endpoint, wrapped);
+  return wrapped;
 }
 export {
   PLUGIN_UPDATE_HEADER,

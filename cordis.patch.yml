@@ -2,7 +2,8 @@
 # 这两个服务分别撑着 workspaceController 和会话投影。
 # 禁用本插件时如果把它们关掉，官方实现又不会回来，侧栏工作区会消失，
 # 创建工作区会报 workspaceController unavailable。
-# 归档能力由 archive-manager-host 装到正在运行的实例上，停用时卸下。
+# 归档能力由 ui-workspace-archive-manager 这一条入口装上，停用时卸下。
+# 不要再插入单独的 host 行：插件页可以只关掉那一行，界面还在，诊断就会 404。
 # 自定义侧栏通过优先级覆盖插槽；发布后的安装命令：
 #   dsh plugin --profile web add @michengai/dsh-archive-manager
 #
@@ -13,7 +14,5 @@
 - id: ui-workspace
   disabled: false
 - insert:
-    - id: archive-manager-host
-      name: '@michengai/dsh-archive-manager/host'
     - id: ui-workspace-archive-manager
       name: '@michengai/dsh-archive-manager'

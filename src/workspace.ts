@@ -1,4 +1,5 @@
 import type { Context } from "@deepseek-ai/cordis";
+import { symbols } from "@deepseek-ai/cordis";
 import type { Domain, DomainGlobalSpec } from "@deepseek-ai/dsh-storage-domain";
 import type { TypertContribution } from "@deepseek-ai/dsh-typert-registry";
 import type { Header, HostContext, PersistenceCompat, SessionsCompat, WorkspaceConstructor } from "./host-compat.js";
@@ -355,8 +356,15 @@ export function bindArchiveManagerRemote(ctx: Context): () => void {
 	if (typert === undefined || typeof typert.register !== "function") {
 		throw new Error("archive-manager: typert is unavailable");
 	}
-	const dispose = typert.register(ARCHIVE_MANAGER_TYPERT as TypertContribution);
-	return typeof dispose === "function" ? () => { dispose(); } : () => {};
+	try {
+		const dispose = typert.register(ARCHIVE_MANAGER_TYPERT as TypertContribution);
+		return typeof dispose === "function" ? () => { dispose(); } : () => {};
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		// 热重载若没撤掉上一次注册，再次启用不能因此起不来。
+		if (!message.includes("already registered")) throw error;
+		return () => {};
+	}
 }
 /** 0.1.6 及更早的 generationFormat 自带 createRestore；0.1.7 起用本次修复收集到的直属子会话证据建目录。没有子会话时才传空数组。 */
 async function hostRepairFormat(format: RepairFormat | undefined, children: readonly Record<string, unknown>[] = []): Promise<RepairFormat> {
@@ -404,7 +412,7 @@ const staleFileUploadResolver = "file-upload: Agent resolver is already register
  * 只在这句已知错误上清掉过期注册再试一次；冷启动和其他错误保持原样。
  * Web 与桌面走同一条替换，所以两边都装这个兼容。
  */
-function tolerateStaleFileUploadResolver(ctx: Context) {
+export function tolerateStaleFileUploadResolver(ctx: Context) {
 	const uploads = ctx.get?.("fileUploads") as {
 		agentResolver?: unknown;
 		registerAgentResolver?: ((this: { agentResolver?: unknown }, resolve: unknown) => () => void) & { [fileUploadResolverRestart]?: boolean };
@@ -1391,12 +1399,44 @@ function protectArchivedSessionPath(registry: WorkspaceOverlayHost): () => void 
 	};
 }
 /**
+ * 官方实例自己没有 typertRemote 绑定时补一个：api-gateway 派发 `workspaceRegistry/*`
+ * 前会校验实例绑定，缺失时按 `gateway/binding-invalid` 拒绝。绑定同时把
+ * `ctx.invocation` 访问器装到根上下文（幂等，跨服务共用）。卸下时删除。
+ * `ctx.workspaceRegistry` 是 cordis 的 traceable 代理，而网关拿 `symbols.original`
+ * 指向的宿主实例做比较，所以绑定必须落在原始实例上。
+ */
+const remoteMethodDescriptor = "@deepseek-ai/dsh-typert-protocol/remote-methods";
+/** 网关的源码扫描只认原型上的 Remote 标记。不打上标记时，诊断接口会一直 404。 */
+function markOverlayMethods(registry: object, methods: readonly string[]): () => void {
+	const raw = (Reflect.get(registry, symbols.original) as object | undefined) ?? registry;
+	const prototype = Object.getPrototypeOf(raw) as object | null;
+	if (prototype === null) return () => {};
+	const before = Object.getOwnPropertyDescriptor(prototype, remoteMethodDescriptor);
+	for (const method of methods) markRemoteMethod(raw, method);
+	return () => {
+		if (before === undefined) delete (prototype as Record<string, unknown>)[remoteMethodDescriptor];
+		else Object.defineProperty(prototype, remoteMethodDescriptor, before);
+	};
+}
+function bindOverlayRemote(registry: object): () => void {
+	const raw = (Reflect.get(registry, symbols.original) as object | undefined) ?? registry;
+	if (Reflect.get(raw, "typertRemote") !== undefined) return () => {};
+	const name = Reflect.get(raw, "name");
+	const serviceKey = typeof name === "string" ? name : "workspaceRegistry";
+	Reflect.set(raw, "typertRemote", bindTypertRemote(raw, serviceKey));
+	return () => {
+		Reflect.deleteProperty(raw, "typertRemote");
+	};
+}
+/**
  * 把归档能力装到官方 `workspaceRegistry` 实例上。
  * 不替换服务对象，因此停用时卸下后，已持有该实例的 workspaceController 仍能创建工作区。
  */
 export function installArchiveWorkspace(registry: object): () => void {
 	const overlay = registry as WorkspaceOverlayHost;
 	if (overlay[workspaceOverlay] === true) return () => {};
+	// 本插件子类入口（`./workspace`）已在构造函数里装好，不重复叠加。
+	if (registry instanceof ArchiveWorkspaceRegistry) return () => {};
 	const target = overlay as WorkspaceOverlayHost & Record<string, unknown>;
 	const fields: Record<string, unknown> = {
 		deletedSessionIds: new Set<string>(),
@@ -1414,18 +1454,24 @@ export function installArchiveWorkspace(registry: object): () => void {
 		}
 	}
 	const restorePath = protectArchivedSessionPath(overlay);
+	const restoreRemote = bindOverlayRemote(registry);
 	const restoredMethods: { name: string; hadOwn: boolean; previous: unknown }[] = [];
+	const copiedMethods: string[] = [];
 	for (const name of Object.getOwnPropertyNames(ArchiveWorkspaceRegistry.prototype)) {
 		if (name === "constructor") continue;
 		const method = Reflect.get(ArchiveWorkspaceRegistry.prototype, name);
 		if (typeof method !== "function") continue;
 		restoredMethods.push({ name, hadOwn: Object.hasOwn(target, name), previous: target[name] });
 		target[name] = method;
+		copiedMethods.push(name);
 	}
+	const restoreMarkers = markOverlayMethods(registry, copiedMethods);
 	target[workspaceOverlay] = true;
 	return () => {
 		if (target[workspaceOverlay] !== true) return;
 		restorePath();
+		restoreMarkers();
+		restoreRemote();
 		for (const item of restoredMethods.reverse()) {
 			if (item.hadOwn) target[item.name] = item.previous;
 			else delete target[item.name];

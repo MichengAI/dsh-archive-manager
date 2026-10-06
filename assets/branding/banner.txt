@@ -1,4 +1,4 @@
 中文 README 使用 dsh-banner.webp，英文 README 使用 dsh-banner-en.webp，全宽展示。
 两张横幅均为 1.0.0 版本，尺寸 2172×724，通过 custom API 生成并经用户确认。
-仓库标识仍保留 assets/icon.png，供插件图标和其他入口复用。
+assets/icon.png 是外部软件标识，不要用作本插件在插件列表里的 logo。
 横幅采用 WebP quality=90、method=6，截图采用无损 WebP；均保留原始分辨率。
