@@ -6,10 +6,13 @@ Published release notes are retained below; new versions are added without remov
 
 ## Unreleased
 
+## 1.0.12 - 2026-10-06
+
 - Disabling this plugin no longer disables the official workspace or projection cache, so creating a workspace keeps working. Archive behavior is installed on those live services and removed when this plugin stops.
 - Diagnosis uses the same plugin entry as the archive page. Turning the plugin off and on again remounts those endpoints instead of leaving a separately disabled host row.
 - Enabling the plugin again no longer fails when the update route is still registered.
 - The plugin list shows a localized name and description, using the same locale metadata as Codex UI.
+- Archive and delete confirmations stay inside the settings page, and a failed deletion shows its error so it can be retried.
 - Installing from GitHub now includes the compiled runtime, so no manual build is required.
 
 ## 1.0.11 - 2026-10-01
