@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
-import { handlePluginUpdateEscape, manualPluginUpdateCommand } from '../src/plugin-update-model.ts'
-import { isDshCliEntry, isNewerVersion, isTrustedUpdateRequest, PLUGIN_UPDATE_HEADER, registerPluginUpdater } from '../src/plugin-updater.ts'
+import { describePluginUpdate, handlePluginUpdateEscape, manualPluginUpdateCommand } from '../src/plugin-update-model.ts'
+import { isDshCliEntry, isNewerVersion, isTrustedUpdateRequest, PLUGIN_UPDATE_HEADER, registerPluginUpdater, resolveUpdateRuntime, shouldNotifyParent } from '../src/plugin-updater.ts'
 
 test('归档会话独立更新只接受同源专用请求', () => {
   assert.equal(isNewerVersion('0.1.30', '0.1.31'), true)
@@ -10,8 +10,9 @@ test('归档会话独立更新只接受同源专用请求', () => {
   assert.equal(isNewerVersion('0.1.0-rc.2', '0.1.0-rc.10'), true)
   assert.equal(isNewerVersion('0.1.0-rc.10', '0.1.0-rc.2'), false)
   assert.equal(isTrustedUpdateRequest({ headers: { [PLUGIN_UPDATE_HEADER]: '1', origin: 'http://localhost:3000', host: 'localhost:3000' }, socket: { remoteAddress: '::ffff:127.0.0.1' } }), true)
+  assert.equal(isTrustedUpdateRequest({ headers: { [PLUGIN_UPDATE_HEADER]: '1', host: '127.0.0.1:19387' }, socket: { remoteAddress: '127.0.0.1' } }), true)
+  assert.equal(isTrustedUpdateRequest({ headers: { [PLUGIN_UPDATE_HEADER]: '1', host: 'example.com' }, socket: { remoteAddress: '127.0.0.1' } }), false)
   assert.equal(isTrustedUpdateRequest({ headers: { [PLUGIN_UPDATE_HEADER]: '1', 'sec-fetch-site': 'cross-site' } }), false)
-  assert.equal(isTrustedUpdateRequest({ headers: { [PLUGIN_UPDATE_HEADER]: '1', host: 'localhost:3000' }, socket: { remoteAddress: '127.0.0.1' } }), false)
   assert.equal(isTrustedUpdateRequest({ headers: { [PLUGIN_UPDATE_HEADER]: '1', origin: 'http://localhost:3000', host: 'localhost:3000' }, socket: { remoteAddress: '10.0.0.9' } }), false)
   assert.equal(manualPluginUpdateCommand('web', '@michengai/dsh-archive-manager', '0.1.31'), 'dsh plugin --profile web add @michengai/dsh-archive-manager@0.1.31 --registry=https://registry.npmjs.org/')
   assert.equal(isDshCliEntry('C:/tools/dsh/lib/bin.js', { name: '@deepseek-ai/dsh', bin: { dsh: 'lib/bin.js' } }, 'C:/tools/dsh'), true)
@@ -96,8 +97,90 @@ test('归档客户端与 Host 绑定自身更新入口', async () => {
   assert.match(updateUi, /size: "small", shape: "default"/)
   assert.match(updateUi, /width: 680/)
   assert.match(updateUi, /if \(version\.textContent !== versionLabel\)/)
+  assert.match(updateUi, /color: \"#e8b15a\"/)
   assert.match(await readFile(new URL('../src/plugin-update-model.ts', import.meta.url), 'utf8'), /else if \(payload\.latestCheckFailed\)/)
   assert.match(host, /endpoint: "\/api\/michengai\/dsh-archive-manager\/update"/)
-  assert.match(await readFile(new URL('../src/plugin-updater.ts', import.meta.url), 'utf8'), /const notifyParent = target\.desktopPnpm === void 0 && typeof process\.send === "function"/)
+  assert.match(await readFile(new URL('../src/plugin-updater.ts', import.meta.url), 'utf8'), /const notifyParent = shouldNotifyParent\(target\)/)
   assert.match(await readFile(new URL('../src/plugin-updater.ts', import.meta.url), 'utf8'), /isDshCliEntry/)
+})
+
+test('官方 Desktop 在线更新指向 desktop profile，且不通知父进程', () => {
+  const runtime = resolveUpdateRuntime({
+    get(name) {
+      if (name === 'profileContext') return {
+        name: 'desktop',
+        dir: 'D:\\profile\\desktop',
+        packageManager: {
+          command: 'D:\\Tools\\DeepSeek Harness\\DeepSeek Harness.exe',
+          args: ['--expose-internals', 'D:\\runtime\\pnpm.mjs'],
+          env: { ELECTRON_RUN_AS_NODE: '1' },
+        },
+      }
+      return undefined
+    },
+  }, {
+    argv: ['node', 'D:\\app\\dsh\\node_modules\\@deepseek-ai\\dsh-desktop-host\\lib\\index.js', 'D:\\runtime', 'D:\\profile\\desktop'],
+    env: {},
+    cwd: 'D:\\profile\\desktop',
+    homeDir: 'C:\\Users\\YUJIYU',
+  })
+  assert.equal(runtime.profileName, 'desktop')
+  assert.equal(runtime.profileDir, 'D:\\profile\\desktop')
+  assert.equal(runtime.officialDesktop, true)
+  assert.equal(runtime.canAutoUpdate, true)
+  assert.equal(runtime.cliEntry, undefined)
+  assert.equal(shouldNotifyParent(runtime, () => {}), false)
+})
+
+test('官方 Desktop 没有 profileContext 时仍用宿主参数定位 desktop，不回退 web', () => {
+  const runtime = resolveUpdateRuntime({ get() { return undefined } }, {
+    argv: ['node', 'D:\\app\\node_modules\\@deepseek-ai\\dsh-desktop-host\\lib\\index.js', 'D:\\runtime', 'D:\\profile\\desktop', 'D:\\runtime\\primary', 'D:\\runtime\\pnpm.mjs', 'D:\\runtime\\bin'],
+    env: {},
+    cwd: 'D:\\elsewhere',
+    homeDir: 'C:\\Users\\YUJIYU',
+    exists: (path) => path === 'D:\\runtime\\pnpm.mjs',
+    execPath: 'D:\\Tools\\DeepSeek Harness\\DeepSeek Harness.exe',
+  })
+  assert.equal(runtime.profileName, 'desktop')
+  assert.equal(runtime.profileDir, 'D:\\profile\\desktop')
+  assert.equal(runtime.canAutoUpdate, true)
+  assert.equal(runtime.packageManager?.command, 'D:\\Tools\\DeepSeek Harness\\DeepSeek Harness.exe')
+  assert.equal(shouldNotifyParent(runtime, () => {}), false)
+})
+
+test('普通 Web 没有 CLI 时仍回退 web，不把官方 Desktop 逻辑套上去', () => {
+  const runtime = resolveUpdateRuntime({ get() { return undefined } }, {
+    argv: ['node', 'D:\\tools\\dsh\\lib\\bin.js', 'web'],
+    env: {},
+    cwd: 'D:\\work',
+    homeDir: 'C:\\Users\\YUJIYU',
+    exists: () => false,
+  })
+  assert.equal(runtime.profileName, 'web')
+  assert.equal(runtime.officialDesktop, false)
+  assert.equal(runtime.canAutoUpdate, false)
+})
+
+test('发现新版本时提示使用提醒色，已是最新仍用成功色', () => {
+  const found = describePluginUpdate('zh', {
+    packageName: '@michengai/dsh-archive-manager',
+    currentVersion: '1.0.12',
+    latestVersion: '1.0.13',
+    updateAvailable: true,
+    profileName: 'desktop',
+    canAutoUpdate: true,
+    latestCheckFailed: false,
+  }, 'idle', { type: 'status' })
+  assert.equal(found.kind, 'update')
+  assert.match(found.message, /发现新版本/)
+  const latest = describePluginUpdate('zh', {
+    packageName: '@michengai/dsh-archive-manager',
+    currentVersion: '1.0.13',
+    latestVersion: '1.0.13',
+    updateAvailable: false,
+    profileName: 'web',
+    canAutoUpdate: true,
+    latestCheckFailed: false,
+  }, 'idle', { type: 'status' })
+  assert.equal(latest.kind, 'success')
 })

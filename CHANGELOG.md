@@ -6,6 +6,12 @@ Published release notes are retained below; new versions are added without remov
 
 ## Unreleased
 
+## 1.0.14 - 2026-10-07
+
+- Official Desktop can update this plugin in place. It no longer targets the web profile by mistake.
+- A new version is marked with a warning color. Version numbers keep their normal color.
+- After updating, fully quit and reopen DSH Desktop.
+
 ## 1.0.13 - 2026-10-06
 
 - The plugin list keeps the product name Archive Manager in Chinese as well as English, matching the other plugins. The settings page title is unchanged.
