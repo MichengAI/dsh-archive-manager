@@ -6,7 +6,7 @@ Published release notes are retained below; new versions are added without remov
 
 ## Unreleased
 
-## 1.0.14 - 2026-10-07
+## 1.0.15 - 2026-10-07
 
 - Official Desktop can update this plugin in place. It no longer targets the web profile by mistake.
 - A new version is marked with a warning color. Version numbers keep their normal color.
