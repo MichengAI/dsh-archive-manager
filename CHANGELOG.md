@@ -6,6 +6,10 @@ Published release notes are retained below; new versions are added without remov
 
 ## Unreleased
 
+## 1.0.16 - 2026-10-08
+
+- Session list cache is written to the plugin's safe folder again. It no longer falls back to the kernel folder without notice.
+
 ## 1.0.15 - 2026-10-07
 
 - Official Desktop can update this plugin in place. It no longer targets the web profile by mistake.
