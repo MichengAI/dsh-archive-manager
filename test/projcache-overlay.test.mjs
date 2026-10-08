@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Context, Service } from "@deepseek-ai/cordis";
+import { Context, Service, symbols } from "@deepseek-ai/cordis";
 import { DomainFacility } from "@deepseek-ai/dsh-storage-domain";
 import { SessionProjectionCache } from "@deepseek-ai/dsh-session-projection-cache";
 import { apply, inject } from "../lib/index.js";
@@ -13,43 +13,105 @@ function deferred() {
 }
 
 // 保留真实域的重复打开限制、写入队列和关闭行为，仅替换最底层存储介质。
-async function mountCache() {
+async function mountCache({ layered = false } = {}) {
 	const ctx = new Context();
 	const units = new Map();
 	const opened = [];
 	const closed = [];
 	let beforePut = async () => {};
-	ctx.provide("storage", { backend: { get: () => ({ kv: {
-		async open(spec) {
-			opened.push(spec.name);
-			let state = units.get(spec.name);
-			if (state === undefined) {
-				state = { version: spec.version, tables: Object.fromEntries(spec.tables.map((name) => [name, {}])), global: null };
-				units.set(spec.name, state);
-			}
-			return {
-				loadAll: async () => structuredClone(state),
-				putRecord: async (table, key, value) => {
-					await beforePut(spec.name, key);
-					state.tables[table][key] = structuredClone(value);
-				},
-				deleteRecord: async (table, key) => { delete state.tables[table][key]; },
-				setGlobal: async (value) => { state.global = structuredClone(value); },
-				close: async () => { closed.push(spec.name); },
-			};
-		},
-	} }) } });
-	const domains = new DomainFacility(ctx, { backend: "memory" });
-	ctx.provide("storageDomain", domains);
-	ctx.provide("sessionProjections", {});
-	ctx.provide("sessions", { get: () => undefined });
-	const cache = new SessionProjectionCache(ctx, { writeEveryEvents: 200, writeIntervalMs: 5000 });
-	await cache[Service.init]();
-	return { ctx, cache, domains, opened, closed, delayPut: (callback) => { beforePut = callback; } };
+	let domains;
+	const provideStorage = (serviceCtx) => {
+		serviceCtx.provide("storage", { backend: { get: () => ({ kv: {
+			async open(spec) {
+				opened.push(spec.name);
+				let state = units.get(spec.name);
+				if (state === undefined) {
+					state = { version: spec.version, tables: Object.fromEntries(spec.tables.map((name) => [name, {}])), global: null };
+					units.set(spec.name, state);
+				}
+				return {
+					loadAll: async () => structuredClone(state),
+					putRecord: async (table, key, value) => {
+						await beforePut(spec.name, key);
+						state.tables[table][key] = structuredClone(value);
+					},
+					deleteRecord: async (table, key) => { delete state.tables[table][key]; },
+					setGlobal: async (value) => { state.global = structuredClone(value); },
+					close: async () => { closed.push(spec.name); },
+				};
+			},
+		} }) } });
+		domains = new DomainFacility(serviceCtx, { backend: "memory" });
+		serviceCtx.provide("storageDomain", domains);
+		serviceCtx.provide("sessionProjections", {});
+		serviceCtx.provide("sessions", { get: () => undefined });
+	};
+	let cache;
+	const provideCache = async (serviceCtx) => {
+		cache = new SessionProjectionCache(serviceCtx, { writeEveryEvents: 200, writeIntervalMs: 5000 });
+		await cache[Service.init]();
+	};
+	let storageFiber;
+	let cacheFiber;
+	if (layered) {
+		// 根 Context 上的服务可绕过注入门禁，必须模拟宿主的独立插件提供者。
+		storageFiber = ctx.plugin({ name: "overlay-storage", apply: provideStorage });
+		await storageFiber;
+		cacheFiber = ctx.plugin({ name: "overlay-official-cache", inject: ["storageDomain", "sessionProjections", "sessions"], apply: provideCache });
+		await cacheFiber;
+	} else {
+		provideStorage(ctx);
+		await provideCache(ctx);
+	}
+	return { ctx, cache, domains, opened, closed, delayPut: (callback) => { beforePut = callback; }, async dispose() {
+		await domains.get("session_projcache")?.close();
+		await cacheFiber?.dispose();
+		await storageFiber?.dispose();
+	} };
 }
 
 const identity = { formatVersion: 4, createdAt: 1, isSeeded: false, inheritedEventCount: 0 };
 const rows = (title) => ({ title: { ver: 1, seq: 1, val: title } });
+
+test("真实插件注入下 overlay 接管原始实例，迁移与读写一致且停用恢复", async () => {
+	const host = await mountCache({ layered: true });
+	const officialTable = host.cache.table;
+	const marker = Symbol.for("dsh-archive-manager.projcache-overlay");
+	await host.cache.put("existing", identity, rows("迁移标题"));
+	let uninstall;
+	let proxy;
+	let fiber;
+	try {
+		fiber = host.ctx.plugin({ name: "overlay-consumer", inject: ["sessionProjectionCache"], async apply(ctx) {
+			proxy = ctx.sessionProjectionCache;
+			assert.equal(Reflect.get(proxy, symbols.original), host.cache);
+			assert.throws(() => proxy.ctx.storageDomain, /without inject/);
+			uninstall = await installArchiveProjectionCache(proxy);
+			ctx.effect(() => uninstall);
+		} });
+		await fiber;
+		assert.equal(host.cache[marker], true);
+		assert.ok(host.cache.table instanceof SafeSessionTable);
+		assert.equal(host.cache.requireTable(), host.cache.table);
+		assert.equal(host.cache.table.get("existing").rows.title.val, "迁移标题");
+		await proxy.put("new:session", identity, rows("新标题"));
+		assert.equal(host.cache.requireTable().get("new:session").rows.title.val, "新标题");
+		assert.equal(officialTable.get("new:session"), undefined);
+		await host.cache.delete("new:session");
+		await proxy.put("new:session", identity, rows("禁止复活"));
+		assert.equal(host.cache.requireTable().has("new:session"), false);
+		await fiber.dispose();
+		assert.equal(host.cache.table, officialTable);
+		assert.equal(host.cache[marker], undefined);
+		assert.equal(host.closed.filter((name) => name === safeProjectionCacheDomainSpec.name).length, 1);
+		await host.cache.put("after-disable", identity, rows("恢复官方写入"));
+		assert.equal(officialTable.get("after-disable").rows.title.val, "恢复官方写入");
+	} finally {
+		await uninstall?.();
+		await fiber?.dispose();
+		await host.dispose();
+	}
+});
 
 test("overlay 从官方已打开的缓存表补缺迁入，不覆盖安全域记录或关闭官方域", async () => {
 	const host = await mountCache();

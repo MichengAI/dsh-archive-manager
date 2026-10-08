@@ -414,7 +414,8 @@ const projectionOverlay = Symbol.for("dsh-archive-manager.projcache-overlay");
  * 停用时恢复官方表，不关掉官方服务。
  */
 export async function installArchiveProjectionCache(cache: object): Promise<() => Promise<void>> {
-	const target = cache as CacheCompat & Record<string | symbol, unknown>;
+	// 服务代理会把 ctx 切换到调用方，接管与恢复必须使用有存储权限的原始实例。
+	const target = ((Reflect.get(cache, symbols.original) as object | undefined) ?? cache) as CacheCompat & Record<string | symbol, unknown>;
 	if (target[projectionOverlay] === true) return async () => {};
 	const domain = await target.ctx.storageDomain.open(safeProjectionCacheDomainSpec);
 	let installed = false;
