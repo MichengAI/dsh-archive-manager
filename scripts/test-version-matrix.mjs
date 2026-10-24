@@ -13,6 +13,7 @@ const profiles = [
 	{ version: "0.2.0-rc.2", cordis: "4.0.4", schemastery: "3.18.4", latest: true },
 	{ version: "0.2.1-rc.1", cordis: "4.0.5", schemastery: "3.18.5", latest: true },
 	{ version: "0.2.1-rc.2", cordis: "4.0.5", schemastery: "3.18.5", latest: true },
+	{ version: "0.2.1-rc.3", cordis: "4.0.5", schemastery: "3.18.5", latest: true },
 ];
 const cordisPlugins = {
 	"4.0.4": {
@@ -45,8 +46,8 @@ function run(command, args, cwd, env = process.env) {
 	});
 }
 
-if (manifest.devDependencies["@deepseek-ai/dsh-session"] !== "0.2.1-rc.2") {
-	throw new Error(`开发依赖必须钉到矩阵里的最新 RC 0.2.1-rc.2，实际 ${manifest.devDependencies["@deepseek-ai/dsh-session"]}`);
+if (manifest.devDependencies["@deepseek-ai/dsh-session"] !== "0.2.1-rc.3") {
+	throw new Error(`开发依赖必须钉到矩阵里的最新 RC 0.2.1-rc.3，实际 ${manifest.devDependencies["@deepseek-ai/dsh-session"]}`);
 }
 const failures = [];
 for (const profile of profiles) {

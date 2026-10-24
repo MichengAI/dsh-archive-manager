@@ -6,6 +6,7 @@ export function hostTestOverrides(version) {
 		"0.2.0-rc.2",
 		"0.2.1-rc.1",
 		"0.2.1-rc.2",
+		"0.2.1-rc.3",
 	];
 	if (!supported.includes(version)) return {};
 	const names = [

@@ -4,6 +4,11 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 1.1.10 - 2026-10-24
+
+- Widened the DSH peer range and pinned development dependencies to `0.2.1-rc.3`. Installing on a `0.2.1-rc.3` host was rejected before `pnpm add` ran because the enumerated peer range stopped at `0.2.1-rc.2`; the manifest now accepts `0.2.1-rc.3` while the version matrix keeps the earlier 0.2.x release candidates.
+- Added the `0.2.1-rc.3` profile to the compatibility matrix and the isolated host overrides, and refreshed the reported test matrix.
+
 ## 1.1.9 - 2026-10-24
 
 - Redesigned the filter toolbar with a single-line adaptive layout (#74): the search input now uses the host's native `Input` primitive with an `IconSearchOutlineMedium` search icon and glowing green focus border; rearranged control order to search input, view filter/sort menu, project filter, and date range, with the input flexibly expanding to fill remaining width.
