@@ -630,42 +630,46 @@ export function startArchiveClient(require: HostRequire) {
 				if (archiveBusy.current || busy || !ids?.length) return;
 				if (organizeBatch) {
 					// 先上锁再 await：否则并发两次提交会同时穿过 archiveBusy 锁，发两遍请求。
-					archiveBusy.current = true;
+					// 同时置 busy：readScheduled 期间确认框的取消/勾选仍可交互，否则用户点击取消后归档仍会用旧 ids 执行。
+					archiveBusy.current = true; setBusy(true);
 					try {
 						// 取一次最新的定时任务集合：本批哪些会话会被保护、归档路径是否认这层保护，都用这一份。
 						const scheduled = await readScheduled();
-						setScheduledSkipped(ids.filter((id) => scheduled.has(id)).length);
+						let protectedCount = 0;
+						for (const id of ids) if (scheduled.has(id)) protectedCount++;
+						setScheduledSkipped(protectedCount);
 						const result = await executeBatch("archive", ids, { idle, protectedIds: scheduled });
 						const refusals = (result?.failures ?? []).flatMap((failure) => {
 							const refusal = activeArchiveFromMessage(failure.sessionId, failure.message);
 							return refusal === undefined ? [] : [refusal];
 						});
-						const scheduleRefusals = refusals.filter((refusal) => scheduleRefusal(refusal.kinds));
+						const skippedScheduled = refusals.filter((refusal) => scheduleRefusal(refusal.kinds)).length;
 						const other = refusals.find((refusal) => !scheduleRefusal(refusal.kinds));
-						if (other !== undefined && typeof archiveSession === "function") {
-							// 与定时任务无关的拒绝：照旧提供「停止并归档」。
-							const session = sessions.byId[other.sessionId];
-							setStopArchive({ sessionId: other.sessionId, title: session === undefined ? other.sessionId : displayTitle(session, t), kinds: other.kinds.join(", ") });
+						const stop = other !== undefined && typeof archiveSession === "function";
+						if (skippedScheduled > 0 || stop) {
 							setArchiveTarget(null); setArchiveGroup(null); setError(null);
-							if (scheduleRefusals.length > 0) setNotice(t("archives.archiveSkippedScheduled", { n: scheduleRefusals.length }));
-							return;
-						}
-						if (scheduleRefusals.length > 0) {
-							// 因定时任务被拒：跳过，不提供「停止并归档」，否则会删除任务。
-							setArchiveTarget(null); setArchiveGroup(null); setError(null);
-							setNotice(t("archives.archiveSkippedScheduled", { n: scheduleRefusals.length }));
+							if (stop) {
+								// 与定时任务无关的拒绝：照旧提供「停止并归档」。
+								const session = sessions.byId[other.sessionId];
+								setStopArchive({ sessionId: other.sessionId, title: session === undefined ? other.sessionId : displayTitle(session, t), kinds: other.kinds.join(", ") });
+							}
+							// 因定时任务被拒：只提示跳过，绝不提供「停止并归档」，否则会删除任务。
+							if (skippedScheduled > 0) setNotice(t("archives.archiveSkippedScheduled", { n: skippedScheduled }));
 							return;
 						}
 						if (result) { setArchiveTarget(null); setArchiveGroup(null); setIdleRequest(false); }
-					} finally { archiveBusy.current = false; }
+					} finally { archiveBusy.current = false; setBusy(false); }
 					return;
 				}
 				archiveBusy.current = true; setBusy(true); setError(null); setNotice(null);
 				try {
 					// 非批量路径同样不归档含定时任务的会话。
 					const scheduled = await readScheduled();
-					setScheduledSkipped(ids.filter((id) => scheduled.has(id)).length);
-					const result = await archiveSessions(ids.filter((id) => !scheduled.has(id)));
+					const remaining = ids.filter((id) => !scheduled.has(id));
+					setScheduledSkipped(ids.length - remaining.length);
+					// 全部被定时任务保护时不能落到 archiveSessions([])：那会清空选择并切到已归档页，看起来像归档成功。
+					if (remaining.length === 0) { setArchiveTarget(null); setArchiveGroup(null); return; }
+					const result = await archiveSessions(remaining);
 					setArchiveTarget(null); setArchiveGroup(null);
 					if (result.archivedSessionIdsAdded.length > 0) setNotice(t("archives.archiveSuccess", { n: result.archivedSessionIdsAdded.length }));
 					if (result.failures && result.failures.length > 0) setError(formatBatchFailures(result.failures, t));
@@ -725,8 +729,9 @@ export function startArchiveClient(require: HostRequire) {
             const normalizedQuery = query.trim().toLocaleLowerCase();
             const filteredGroups = candidateGroups.map(group => ({ ...group, sessions: group.sessions.filter(session => !normalizedQuery || displayTitle(session, t).toLocaleLowerCase().includes(normalizedQuery) || contentMatches.has(session.id)) })).filter(group => group.sessions.length);
             // 参数对象提到过滤链外：currentSessionId 会全表扫描 byId，写在回调里会退化成 O(N²)。
-            const idleOptions = { days: Number(idleDays), favorites: favoriteSet, currentId: currentSessionId(sessions), pending: uiFacts.pending, scheduled: skipScheduled ? scheduledSet : undefined };
-            const idleCandidates = favoritesReady ? filteredGroups.flatMap((group) => group.sessions).filter((session) => idleArchiveCandidate(session, idleOptions)).map((session) => session.id) : [];
+            // 仅在未归档页且收藏就绪时构造：已归档页与收藏未就绪时 idleCandidates 恒为空，无需扫描会话表。
+            const idleOptions = favoritesReady && !isArchived ? { days: Number(idleDays), favorites: favoriteSet, currentId: currentSessionId(sessions), pending: uiFacts.pending, scheduled: skipScheduled ? scheduledSet : undefined } : undefined;
+            const idleCandidates = idleOptions === undefined ? [] : filteredGroups.flatMap((group) => group.sessions).filter((session) => idleArchiveCandidate(session, idleOptions)).map((session) => session.id);
 			const visibleSessionIds = (0, react.useMemo)(() => archivedSessionIdsInGroups(filteredGroups), [filteredGroups]);
 			const selectedSessionIdSet = (0, react.useMemo)(() => new Set(selectedSessionIds), [selectedSessionIds]);
 			const undoableArchiveCount = (0, react.useMemo)(() => {
@@ -1054,10 +1059,17 @@ export function startArchiveClient(require: HostRequire) {
 						modalFooterButton({ disabled: busy, onClick: () => { if (!busy) { setStopArchive(null); setError(null); } }, children: t("cancel") }),
 						modalFooterButton({ danger: true, disabled: busy, onClick: async () => {
 							if (archiveBusy.current || busy || stopArchive === null || typeof archiveSession !== "function") return;
+							const target = stopArchive;
 							archiveBusy.current = true; setBusy(true); setError(null);
 							try {
-								await archiveSession(stopArchive.sessionId, { stopActivity: true });
-								setSelectedSessionIds((previous) => previous.filter((id) => stopArchive === null || id !== stopArchive.sessionId));
+								// 停止活动会让宿主删除该会话的全部定时任务；弹窗可能开了很久，落笔前必须重新核对。
+								if ((await readScheduled()).has(target.sessionId)) {
+									setStopArchive(null);
+									setNotice(t("archives.archiveSkippedScheduled", { n: 1 }));
+									return;
+								}
+								await archiveSession(target.sessionId, { stopActivity: true });
+								setSelectedSessionIds((previous) => previous.filter((id) => id !== target.sessionId));
 								setArchiveTab("archived");
 								setNotice(t("archives.archiveSuccess", { n: 1 }));
 								setStopArchive(null);
@@ -1176,7 +1188,9 @@ export function startArchiveClient(require: HostRequire) {
 			return sessionId === undefined ? undefined : { sessionId, kinds };
 		}
 		function activeArchiveFromMessage(sessionId: string, message: string) {
-			const match = /^cannot archive session '(?:[^'\\]|\\')*': the session is active \((.*)\)$/.exec(message);
+			// 远程拒绝会包成 "workspace session archive failed: workspace/session-active: ..."，
+			// 宿主原文在末尾，因此只锚定结尾，不能锚定开头。
+			const match = /cannot archive session '(?:[^'\\]|\\')*': the session is active \((.*)\)$/.exec(message);
 			if (match === null) return;
 			const kinds = match[1].split(", ").filter((kind) => kind.length > 0);
 			return kinds.length > 0 ? { sessionId, kinds } : undefined;
@@ -3173,6 +3187,10 @@ export function startArchiveClient(require: HostRequire) {
 				const cancelBtnRef = (0, react.useRef)<HTMLButtonElement>(null);
 				const confirmBtnRef = (0, react.useRef)<HTMLButtonElement>(null);
 
+				// 卡片不卸载：换一个工作区打开时必须清掉上一次的跳过条数，否则会显示别的项目的旧计数。
+				// 用 layout effect 在绘制前清掉，避免新卡片闪一帧旧计数。
+				(0, react.useLayoutEffect)(() => { if (request !== null) setSkippedScheduledCount(0); }, [request]);
+
 				(0, react.useLayoutEffect)(() => {
 					if (request === null || typeof document === "undefined") {
 						setCardPos(null);
@@ -3302,40 +3320,41 @@ export function startArchiveClient(require: HostRequire) {
 				};
 
 				const confirm = async () => {
-					setArchiving(true);
-					setError(null);
+					if (archivingRef.current) return;
 					const items = ctx.workspaces.list?.getSnapshot?.()?.items ?? [];
 					const workspace = items.find((item) => item.workspaceId === request.workspaceId);
 					const sessionMap = ctx.sessions.list?.getSnapshot?.()?.byId ?? {};
 					const archived = new Set(ctx.workspaces.list?.getSnapshot?.()?.archivedSessionIds ?? []);
-					// 绑定了活动定时任务的会话必须排除：归档会让宿主停止并删除这些任务。
-					const scheduled = new Set((await scheduledIdsOnce()).scheduledSessionIds);
 					const allCandidates = (workspace?.sessionIds ?? []).filter((id) => isWorkspaceTaskCandidate(id, sessionMap, archived));
-					const candidateIds = allCandidates.filter((id) => !scheduled.has(id));
 					if (allCandidates.length === 0) {
-						setArchiving(false);
 						publishArchiveWsTarget(null);
 						return;
 					}
+					// 先上锁再 await：查询期间重复点击不能并发发出两批归档。
+					archivingRef.current = true;
+					setArchiving(true);
+					setError(null);
+					const finish = () => { archivingRef.current = false; setArchiving(false); };
+					// 绑定了活动定时任务的会话必须排除：归档会让宿主停止并删除这些任务。
+					const scheduled = new Set((await scheduledIdsOnce()).scheduledSessionIds);
+					const candidateIds = allCandidates.filter((id) => !scheduled.has(id));
 					// 每次都重设计数：卡片不卸载，上一次的跳过条数不能带到下一次。
 					setSkippedScheduledCount(allCandidates.length - candidateIds.length);
 					if (candidateIds.length === 0) {
 						// 候选全被定时任务保护：留在卡片上显示跳过条数，不静默关窗。
-						setArchiving(false);
+						finish();
 						return;
 					}
 
 					archiveSessionsViaOfficial(ctx.workspaces, candidateIds, refreshSessionList).then((result) => {
-						setArchiving(false);
 						if (result.failures.length > 0) {
 							setError(formatBatchFailures(result.failures, t));
 							return;
 						}
 						publishArchiveWsTarget(null);
 					}).catch((err) => {
-						setArchiving(false);
 						setError(formatArchiveError(err, t));
-					});
+					}).finally(finish);
 				};
 
 				return (0, react_jsx_runtime.jsxs)("div", {
