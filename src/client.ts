@@ -307,41 +307,431 @@ export function startArchiveClient(require: HostRequire) {
 				},
 			]
 		};
+		/**
+		 * 注入插件自己的样式表；同标识已存在就跳过（重复注册、热重载都安全）。
+		 * @param name - `data-plugin-css` 标识，同时作为 style 归属标记。
+		 * @param css - 样式文本。
+		 */
+		function ensurePluginStyle(name: string, css: string) {
+			if (typeof document === "undefined" || document.querySelector("style[data-plugin-css=" + JSON.stringify(name) + "]") !== null) return;
+			const tag = document.createElement("style");
+			tag.dataset.plugin = "@michengai/dsh-archive-manager";
+			tag.dataset.pluginCss = name;
+			tag.textContent = css;
+			document.head.appendChild(tag);
+		}
 		/** 危险操作确认按钮统一红色描边。宿主哈希类名随版本变，不再引用。 */
 		const DANGER_BUTTON_CSS = ".dsham_btnDanger:not(:disabled){color:var(--dsw-alias-state-error-primary,#ef7272);border-color:var(--dsw-alias-state-error-primary,#ef7272)}";
-		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify("dsh-archive-manager/DangerButton.css") + "]") === null) {
-			const tag = document.createElement("style");
-			tag.dataset.plugin = "@michengai/dsh-archive-manager";
-			tag.dataset.pluginCss = "dsh-archive-manager/DangerButton.css";
-			tag.textContent = DANGER_BUTTON_CSS;
-			document.head.appendChild(tag);
-		}
+		ensurePluginStyle("dsh-archive-manager/DangerButton.css", DANGER_BUTTON_CSS);
 		/** 图标按钮类同时用于设置页宿主按钮和侧栏原生按钮，必须全局注入，否则侧栏先于设置页渲染时没有样式。 */
 		const ICON_ACTION_CSS = ".dsham_iconAction{display:inline-flex!important;align-items:center!important;justify-content:center!important;box-sizing:border-box!important;width:22px!important;min-width:22px!important;height:22px!important;padding:0!important;border:0.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm,8px)!important;background:transparent;color:var(--dsw-alias-label-secondary)}.dsham_iconAction:not(:disabled):hover{color:var(--dsw-alias-link,#4176e6)!important;border-color:var(--dsw-alias-link,#4176e6)!important}.dsham_iconAction.dsham_iconDanger{color:var(--dsw-alias-state-error-primary,#ef7272)!important;border-color:var(--dsw-alias-state-error-primary,#ef7272)!important}.dsham_iconAction.dsham_iconDanger:not(:disabled):hover{color:var(--dsw-alias-state-error-primary,#ef7272)!important;border-color:var(--dsw-alias-state-error-primary,#ef7272)!important}.dsham_iconAction svg{width:16px!important;height:16px!important;flex:none!important}";
-		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify("dsh-archive-manager/IconAction.css") + "]") === null) {
-			const tag = document.createElement("style");
-			tag.dataset.plugin = "@michengai/dsh-archive-manager";
-			tag.dataset.pluginCss = "dsh-archive-manager/IconAction.css";
-			tag.textContent = ICON_ACTION_CSS;
-			document.head.appendChild(tag);
-		}
+		ensurePluginStyle("dsh-archive-manager/IconAction.css", ICON_ACTION_CSS);
 		/** 模态与确认卡片基础样式全局注入，防止侧栏触发删除时因未进过设置页而无样式。 */
 		const ARCHIVE_MODAL_CSS = ".dsham_modalRoot{position:fixed;inset:0;z-index:1200;display:grid;place-items:center;padding:24px}.dsham_modalMask{position:absolute;inset:0;background:var(--dsw-alias-bg-mask-1,rgb(0 0 0 / 45%))}.dsham_modalDialog{position:relative;display:flex;flex-direction:column;gap:12px;max-width:calc(100vw - 48px);max-height:min(80vh,720px);padding:22px 24px 20px;overflow:hidden;border:0;border-radius:var(--dsw-radius-panel,28px);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);box-shadow:var(--dsw-elevation-prominent,0 16px 40px rgb(0 0 0 / 24%))}.dsham_modalDialog h2{margin:0;font-size:16px;line-height:24px}.dsham_modalDialog>p{margin:0;color:var(--dsw-alias-label-secondary);font-size:13px;line-height:20px}.dsham_modalBody{display:flex;flex-direction:column;gap:12px;flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain}.dsham_modalFooter{display:flex;flex:none;align-items:center;justify-content:flex-end;gap:8px}";
-		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify("dsh-archive-manager/Modal.css") + "]") === null) {
-			const tag = document.createElement("style");
-			tag.dataset.plugin = "@michengai/dsh-archive-manager";
-			tag.dataset.pluginCss = "dsh-archive-manager/Modal.css";
-			tag.textContent = ARCHIVE_MODAL_CSS;
-			document.head.appendChild(tag);
-		}
+		ensurePluginStyle("dsh-archive-manager/Modal.css", ARCHIVE_MODAL_CSS);
 		/** 侧边栏行内就地确认卡片样式：完全对齐官方原生 MenuSurface 材质与无箭头悬浮设计 */
 		const SIDEBAR_POPOVER_CSS = ".dsham_sidebarCardRoot{position:fixed;inset:0;z-index:1200;pointer-events:none}.dsham_sidebarCardBackdrop{position:fixed;inset:0;pointer-events:auto;background:transparent}.dsham_sidebarCard{position:fixed;pointer-events:auto;box-sizing:border-box;width:290px;max-height:calc(100vh - 32px);overflow-y:auto;padding:16px 18px 14px;border-radius:var(--dsw-radius-lg,14px);background:var(--dsw-menu-surface-fill);backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));-webkit-backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));border:none;box-shadow:var(--dsw-elevation-prominent);color:var(--dsw-alias-label-primary);display:flex;flex-direction:column;gap:8px}.dsham_sidebarCardTitle{margin:0;font-size:14px;font-weight:600;line-height:20px;color:var(--dsw-alias-label-primary)}.dsham_sidebarCardDesc{margin:0;font-size:13px;line-height:18px;color:var(--dsw-alias-label-secondary)}.dsham_sidebarCardError{margin-top:2px;font-size:12px;line-height:16px;color:var(--dsw-alias-state-error-primary,#ef7272);white-space:pre-line}.dsham_sidebarCardFooter{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:10px}.dsham_sidebarCardBtn{border:none;background:transparent;padding:5px 12px;border-radius:var(--dsw-radius-sm,6px);font:inherit;font-size:13px;font-weight:500;line-height:18px;cursor:pointer;transition:background-color .15s ease,opacity .15s ease}.dsham_sidebarCardBtnCancel{color:var(--dsw-alias-label-primary)}.dsham_sidebarCardBtnCancel:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}.dsham_sidebarCardBtnDanger{color:var(--dsw-alias-state-error-primary,#ef7272)}.dsham_sidebarCardBtnDanger:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover-danger,#f25a5a26)}.dsham_sidebarCardBtn:disabled{opacity:.4;cursor:default}";
-		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify("dsh-archive-manager/SidebarPopover.css") + "]") === null) {
-			const tag = document.createElement("style");
-			tag.dataset.plugin = "@michengai/dsh-archive-manager";
-			tag.dataset.pluginCss = "dsh-archive-manager/SidebarPopover.css";
-			tag.textContent = SIDEBAR_POPOVER_CSS;
-			document.head.appendChild(tag);
+		ensurePluginStyle("dsh-archive-manager/SidebarPopover.css", SIDEBAR_POPOVER_CSS);
+		/**
+		 * 收藏星住在一个**独立容器**里，容器紧跟在宿主的前导格（`_slot`，状态点/定时标记）之后：
+		 * 前导格永远是 16px，所以容器的起点恒定，不管格子里是空的还是转圈图标，星的位置都不变。
+		 * 未收藏且未悬停时容器 `display:none`（不占任何宽度）；已收藏或悬停本行时容器出现，
+		 * 星在里面 16×16 命中区 / 14px 图标，两种状态同一个元素。
+		 */
+		/** 星形路径：DOM 注入、菜单行克隆和 React 菜单项共用一份，避免三处漂移。 */
+		const STAR_PATH = "M8 1.75l1.934 3.918 4.324.628-3.129 3.05.738 4.306L8 11.618l-3.867 2.034.738-4.306-3.129-3.05 4.324-.628L8 1.75z";
+		/**
+		 * 星标 SVG 字符串。
+		 * @param filled - 已收藏为实心，否则描边。
+		 * @returns 14×14 的 svg 标记。
+		 */
+		function starSvg(filled: boolean): string {
+			return filled
+				? '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="' + STAR_PATH + '"/></svg>'
+				: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="' + STAR_PATH + '"/></svg>';
+		}
+		const ROW_FAVORITE_CSS = ".dsham_starSlot{display:none;align-items:center;justify-content:center;box-sizing:border-box;width:16px;min-width:16px;height:20px;flex:none;margin:0 3px 0 0}"
+			+ "[data-row-key^='session:']:hover .dsham_starSlot,.dsham_starSlot[data-favorited='true']{display:inline-flex}"
+			+ ".dsham_rowStar{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:16px;height:16px;padding:0;border:0;background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer;flex:none;border-radius:var(--dsw-radius-xs,4px)}"
+			+ ".dsham_starSlot[data-favorited='true'] .dsham_rowStar{color:#e8b931}"
+			+ ".dsham_rowStar svg{display:block;width:14px;height:14px;flex:none}";
+		ensurePluginStyle("dsh-archive-manager/RowFavorite.css", ROW_FAVORITE_CSS);
+		/**
+		 * 主界面「只看收藏」筛选：官方视图选项菜单是一份普通数组、没有插槽，
+		 * 所以沿用本插件既有的 DOM 做法——按文案找到「仅显示已归档」那一行后克隆它，
+		 * 插入一行自己的开关；列表侧只给非收藏行打隐藏属性，不改任何数据。
+		 */
+		const WORKSPACE_FAVORITES_ONLY_KEY = "dsh-archive-manager:workspace-favorites-only";
+		const FAVORITES_HIDDEN_ATTR = "data-dsham-favorites-hidden";
+		const FAVORITES_ONLY_MARKER = "data-dsham-favorites-only";
+		const ROW_STAR_CLASS = "dsham_rowStar";
+		const ROW_STAR_SLOT_CLASS = "dsham_starSlot";
+		/** 官方 onlyArchived 行的三种语言文案，用来在视图选项菜单里定位筛选分组。 */
+		const ONLY_ARCHIVED_TEXTS = ["仅显示已归档", "Archived only", "Только архивные"];
+		const FAVORITES_FILTER_CSS = "[data-dsham-favorites-hidden='true']{display:none!important}" + "button[data-dsham-favorites-only='true'][data-active='true']::after{content:\"\\2713\";margin-left:auto;padding-left:12px;font-size:12px;line-height:1;color:var(--dsw-alias-state-business-primary,#3b82f6)}";
+		ensurePluginStyle("dsh-archive-manager/FavoritesFilter.css", FAVORITES_FILTER_CSS);
+		function readWorkspaceFavoritesOnly(): boolean {
+			try { return window.localStorage.getItem(WORKSPACE_FAVORITES_ONLY_KEY) === "1"; }
+			catch { return false; }
+		}
+		function writeWorkspaceFavoritesOnly(value: boolean) {
+			try { window.localStorage.setItem(WORKSPACE_FAVORITES_ONLY_KEY, value ? "1" : "0"); }
+			catch { /* 隐私模式下 localStorage 不可写：筛选只在本次会话生效。 */ }
+		}
+		/**
+		 * 计算侧栏行在「只看收藏」下的可见性。空白占位会话（新会话行）不参与收藏，
+		 * 但保留可见，否则打开筛选后连新建入口都没了。
+		 * @param rows - 按 DOM 顺序排列的 `data-row-key` 值。
+		 * @param options - 收藏集合与当前会话摘要。
+		 * @returns 与 rows 等长的可见性数组。
+		 */
+		function favoritesOnlyVisibility(rows: readonly string[], options: { favorites: ReadonlySet<string>; sessions?: Record<string, { blank?: boolean } | undefined>; groupHasFavorite?: (groupKey: string) => boolean }): boolean[] {
+			const visibleSession = (sessionId: string) => options.favorites.has(sessionId) || options.sessions?.[sessionId]?.blank === true;
+			const groupHasVisible = new Map<string, boolean>();
+			let currentGroup: string | null = null;
+			for (const key of rows) {
+				if (key.startsWith("workspace:")) {
+					currentGroup = key;
+					groupHasVisible.set(key, false);
+					continue;
+				}
+				if (key.startsWith("session:") && currentGroup !== null && visibleSession(key.slice("session:".length))) groupHasVisible.set(currentGroup, true);
+			}
+			return rows.map((key) => {
+				if (key.startsWith("session:")) return visibleSession(key.slice("session:".length));
+				if (key.startsWith("workspace:")) return groupHasVisible.get(key) === true || options.groupHasFavorite?.(key.slice("workspace:".length)) === true;
+				// 溢出项（展开其余 N 个）会重新露出被筛掉的会话，筛选期间一律收起。
+				if (key.startsWith("overflow:")) return false;
+				return true;
+			});
+		}
+		/**
+		 * 折叠组里的收藏可能还没渲染成行，用工作区快照判断「这一组里有没有收藏」。
+		 * @param favorites - 当前收藏集合。
+		 * @param items - 工作区快照（含各自的 sessionIds）。
+		 * @returns 判断分组键（workspaceId 或 `ungrouped`）是否含收藏。
+		 */
+		function favoriteGroupPredicate(favorites: ReadonlySet<string>, items: readonly ClientWorkspace[]): (groupKey: string) => boolean {
+			const withFavorite = new Map<string, boolean>();
+			const grouped = new Set<string>();
+			for (const workspace of items) {
+				let found = false;
+				for (const sessionId of workspace.sessionIds) {
+					grouped.add(sessionId);
+					if (favorites.has(sessionId)) found = true;
+				}
+				withFavorite.set(workspace.workspaceId, found);
+			}
+			let ungrouped = false;
+			for (const sessionId of favorites) if (!grouped.has(sessionId)) { ungrouped = true; break; }
+			return (groupKey) => groupKey === "ungrouped" ? ungrouped : withFavorite.get(groupKey) === true;
+		}
+		/**
+		 * 主界面「只看收藏」：在官方「视图选项 → 筛选会话」里插入一行开关，打开后
+		 * 侧栏只保留收藏的会话（空白的新会话占位仍然可见）。筛选只改 DOM 可见性，
+		 * 不动会话、不动归档集合，关掉开关立刻还原。
+		 * @param ctx - 客户端根上下文（读会话摘要、订阅列表变更）。
+		 * @param favoriteRow - 共享收藏存储。
+		 * @param t - 本插件命名空间的文案。
+		 * @returns 开关状态、订阅与销毁句柄。
+		 */
+		function setupWorkspaceFavoritesOnly(ctx: ClientContext, favoriteRow: FavoriteRowStore, translate: () => Translate) {
+			const noop = { dispose: () => {} };
+			if (typeof document === "undefined" || typeof document.addEventListener !== "function" || typeof MutationObserver === "undefined") return noop;
+			let enabled = readWorkspaceFavoritesOnly();
+			let disposed = false;
+			let passQueued = false;
+			/** 每次筛选最多点开多少组折叠：点一次宿主只展开 5 条，超大组需要多轮，这里兜住失控。 */
+			let expansionClicks = 0;
+			const MAX_EXPANSION_CLICKS = 200;
+			/** 上一次展开尝试；下一次渲染没多出行就说明宿主没展开，别再点同一组。 */
+			let lastExpansion: { key: string; rows: number } | null = null;
+			const stalledGroups = /* @__PURE__ */ new Set<string>();
+			/**
+			 * 星标放在宿主前导格之后的独立容器里：前导格恒为 16px，所以容器起点固定，
+			 * 格子里有转圈图标/状态点也不会让星标左右移动。未收藏且未悬停时容器不渲染（零占位），
+			 * 已收藏或悬停本行时容器出现，星在里面常驻，尺寸始终一致。
+			 */
+			const ensureRowStars = (rows: readonly HTMLElement[]) => {
+				const snapshot = favoriteRow.getSnapshot();
+				for (const row of rows) {
+					const key = row.getAttribute("data-row-key") ?? "";
+					if (!key.startsWith("session:")) continue;
+					const sessionId = key.slice("session:".length);
+					const cell = Array.from(row.children).find((child) => child.tagName === "SPAN" && Array.from(child.classList).some((name) => name === "slot" || name.endsWith("_slot"))) ?? null;
+					if (cell === null) continue;
+					let holder = Array.from(row.children).find((child): child is HTMLElement => child.classList.contains(ROW_STAR_SLOT_CLASS)) ?? null;
+					if (!snapshot.ready) {
+						holder?.remove();
+						continue;
+					}
+					if (holder !== null && holder.previousElementSibling !== cell) {
+						holder.remove();
+						holder = null;
+					}
+					if (holder === null) {
+						holder = document.createElement("span");
+						holder.className = ROW_STAR_SLOT_CLASS;
+						cell.after(holder);
+					}
+					holder.dataset.sessionId = sessionId;
+					let star = holder.querySelector<HTMLButtonElement>("." + ROW_STAR_CLASS);
+					if (star === null) {
+						star = document.createElement("button");
+						star.type = "button";
+						star.className = ROW_STAR_CLASS;
+						star.addEventListener("click", (event) => {
+							event.preventDefault();
+							event.stopPropagation();
+							void favoriteRow.toggle(holder?.dataset.sessionId ?? "");
+						});
+						holder.appendChild(star);
+					}
+					const favorited = snapshot.ids.has(sessionId);
+					if (holder.dataset.favorited === String(favorited)) continue;
+					const label = translate()(favorited ? "organizer.unfavorite" : "organizer.favorite");
+					holder.dataset.favorited = String(favorited);
+					star.setAttribute("aria-pressed", String(favorited));
+					star.setAttribute("aria-label", label);
+					star.title = label;
+					star.innerHTML = starSvg(favorited);
+				}
+			};
+			const applyVisibility = (rows: readonly HTMLElement[]) => {
+				const snapshot = favoriteRow.getSnapshot();
+				if (!enabled || !snapshot.ready) {
+					for (const row of rows) if (row.hasAttribute(FAVORITES_HIDDEN_ATTR)) row.removeAttribute(FAVORITES_HIDDEN_ATTR);
+					expansionClicks = 0;
+					lastExpansion = null;
+					stalledGroups.clear();
+					return;
+				}
+				const keys = rows.map((row) => row.getAttribute("data-row-key") ?? "");
+				// 折叠组里的收藏可能还没渲染成行：用快照补一次分组判定，避免误判整组为空。
+				const groupHasFavorite = favoriteGroupPredicate(snapshot.ids, ctx.workspaces.list?.getSnapshot?.()?.items ?? []);
+				const visible = favoritesOnlyVisibility(keys, {
+					favorites: snapshot.ids,
+					sessions: ctx.sessions.list?.getSnapshot?.()?.byId,
+					groupHasFavorite
+				});
+				// 折叠会吞掉「第 6 条以后」的收藏：先点开这一组的溢出按钮，再隐藏非收藏行。
+				if (lastExpansion !== null) {
+					if (rows.length <= lastExpansion.rows) stalledGroups.add(lastExpansion.key);
+					lastExpansion = null;
+				}
+				let expanding = false;
+				if (expansionClicks < MAX_EXPANSION_CLICKS) {
+					for (let index = 0; index < rows.length; index += 1) {
+						const row = rows[index];
+						const key = keys[index];
+						if (!key.startsWith("overflow:") || row.getAttribute("aria-expanded") !== "false") continue;
+						const groupKey = key.slice("overflow:".length);
+						if (stalledGroups.has(groupKey) || !groupHasFavorite(groupKey)) continue;
+						try {
+							(row as HTMLButtonElement).click();
+							expansionClicks += 1;
+							lastExpansion = { key: groupKey, rows: rows.length };
+							expanding = true;
+						}
+						catch (reason) { console.warn("archive-manager: favorites-only expand failed", reason); }
+						break;
+					}
+				}
+				for (let index = 0; index < rows.length; index += 1) {
+					const row = rows[index];
+					if (visible[index]) {
+						if (row.hasAttribute(FAVORITES_HIDDEN_ATTR)) row.removeAttribute(FAVORITES_HIDDEN_ATTR);
+					}
+					else row.setAttribute(FAVORITES_HIDDEN_ATTR, "true");
+				}
+				if (expanding) schedulePass();
+			};
+			const buildMenuRow = (anchor: HTMLButtonElement): HTMLDivElement | null => {
+				const wrap = anchor.parentElement;
+				if (wrap === null) return null;
+				const clone = wrap.cloneNode(true) as HTMLDivElement;
+				const button = clone.querySelector<HTMLButtonElement>('button[role="menuitem"]');
+				if (button === null) return null;
+				const spans = Array.from(button.querySelectorAll<HTMLElement>("span"));
+				const icon = spans[0] ?? null;
+				const label = spans[spans.length - 1] ?? null;
+				if (icon !== null) icon.innerHTML = starSvg(false);
+				if (label !== null) label.textContent = translate()("organizer.favoritesOnly");
+				// 宿主的勾选图标是 CSS Module 类名，克隆不到就用自己的 ::after 勾号。
+				for (const svg of Array.from(button.querySelectorAll("svg"))) if (svg.closest("span") === null) svg.remove();
+				button.setAttribute(FAVORITES_ONLY_MARKER, "true");
+				button.dataset.active = String(enabled);
+				button.setAttribute("aria-pressed", String(enabled));
+				button.setAttribute("aria-label", translate()("organizer.favoritesOnly"));
+				button.onclick = (event: MouseEvent) => {
+					event.preventDefault();
+					event.stopPropagation();
+					toggle();
+					document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+				};
+				return clone;
+			};
+			const injectMenuRows = () => {
+				if (disposed) return;
+				for (const button of Array.from(document.querySelectorAll<HTMLButtonElement>("button[" + FAVORITES_ONLY_MARKER + "]"))) {
+					// 菜单没关就走完一轮时，桌面上的勾选也要跟上当前状态。
+					button.dataset.active = String(enabled);
+					button.setAttribute("aria-pressed", String(enabled));
+				}
+				for (const menu of Array.from(document.querySelectorAll<HTMLElement>('[role="menu"]'))) {
+					const anchor = Array.from(menu.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]')).find((item) => ONLY_ARCHIVED_TEXTS.some((text) => (item.textContent ?? "").includes(text)));
+					if (anchor === undefined) continue;
+					if (menu.querySelector("[" + FAVORITES_ONLY_MARKER + "]") !== null) continue;
+					const wrap = anchor.parentElement;
+					if (wrap === null) continue;
+					const row = buildMenuRow(anchor);
+					if (row !== null) wrap.parentElement?.insertBefore(row, wrap.nextSibling);
+				}
+			};
+			const schedulePass = () => {
+				if (passQueued || disposed) return;
+				passQueued = true;
+				const run = () => {
+					passQueued = false;
+					if (disposed) return;
+					const rows = Array.from(document.querySelectorAll<HTMLElement>("[data-row-key]"));
+					injectMenuRows();
+					ensureRowStars(rows);
+					applyVisibility(rows);
+					if (!favoriteRow.getSnapshot().ready) scheduleRetry();
+				};
+				if (typeof requestAnimationFrame === "function") requestAnimationFrame(run);
+				else setTimeout(run, 16);
+			};
+			const toggle = () => {
+				enabled = !enabled;
+				retriesLeft = 20;
+				expansionClicks = 0;
+				lastExpansion = null;
+				stalledGroups.clear();
+				writeWorkspaceFavoritesOnly(enabled);
+				schedulePass();
+			};
+			/** 客户端启动时 remote 还没挂上，第一次读收藏会失败：稍后重试，别把空集合当成结果。 */
+			let retryTimer: ReturnType<typeof setTimeout> | null = null;
+			let retriesLeft = 20;
+			const scheduleRetry = () => {
+				if (retryTimer !== null || disposed || retriesLeft <= 0) return;
+				retriesLeft -= 1;
+				retryTimer = setTimeout(() => {
+					retryTimer = null;
+					void favoriteRow.ensure();
+					schedulePass();
+				}, 600);
+			};
+			const observer = new MutationObserver((records) => {
+				if (mutationTouches(records, '[data-row-key], [role="menu"]')) schedulePass();
+			});
+			observer.observe(document.body, { childList: true, subtree: true });
+			// 行组件挂载前就把收藏读进来，避免开关先出现、列表还是空状态。
+			favoriteRow.ensure().catch(() => {});
+			const unsubscribers = [
+				favoriteRow.subscribe(() => schedulePass()),
+				typeof ctx.sessions.list?.subscribe === "function" ? ctx.sessions.list.subscribe(() => schedulePass()) : null,
+				typeof ctx.workspaces.list?.subscribe === "function" ? ctx.workspaces.list.subscribe(() => schedulePass()) : null
+			].filter((unsubscribe): unsubscribe is () => void => typeof unsubscribe === "function");
+			schedulePass();
+			return {
+				dispose() {
+					disposed = true;
+					observer.disconnect();
+					for (const unsubscribe of unsubscribers) unsubscribe();
+					for (const row of Array.from(document.querySelectorAll<HTMLElement>("[" + FAVORITES_HIDDEN_ATTR + "]"))) row.removeAttribute(FAVORITES_HIDDEN_ATTR);
+					for (const button of Array.from(document.querySelectorAll<HTMLElement>("[" + FAVORITES_ONLY_MARKER + "]"))) button.parentElement?.remove();
+					for (const star of Array.from(document.querySelectorAll<HTMLElement>("." + ROW_STAR_SLOT_CLASS))) star.remove();
+					if (retryTimer !== null) { clearTimeout(retryTimer); retryTimer = null; }
+				},
+			};
+		}
+		/** 收藏集合在客户端只保留一份：主界面星标、归档面板和批量操作读的是同一份状态。 */
+		interface FavoriteRowState {
+			ready: boolean;
+			ids: ReadonlySet<string>;
+			pending: ReadonlySet<string>;
+		}
+		interface FavoriteRowApi {
+			favoriteSessions(): Promise<{ favoriteSessionIds: string[] }>;
+			setSessionFavorite(input: { sessionId: string; favorite: boolean }): Promise<{ favoriteSessionIds: string[] }>;
+		}
+		interface FavoriteRowStore {
+			bind(api: FavoriteRowApi): void;
+			subscribe(listener: () => void): () => void;
+			getSnapshot(): FavoriteRowState;
+			ensure(): Promise<void>;
+			adopt(favoriteSessionIds: readonly string[]): void;
+			toggle(sessionId: string): Promise<void>;
+		}
+		/**
+		 * 主界面星标与归档面板共用的收藏存储：一次读取、乐观写入、失败回滚。
+		 * 写入永远走归档管理器自己的 favoriteSessions / setSessionFavorite 接口，
+		 * 不新开收藏来源，也不改宿主的 workspaceRegistry。
+		 * @returns 可绑定接口、可订阅的收藏存储。
+		 */
+		function createFavoriteRowStore(): FavoriteRowStore {
+			let api: FavoriteRowApi | undefined;
+			let state: FavoriteRowState = { ready: false, ids: /* @__PURE__ */ new Set<string>(), pending: /* @__PURE__ */ new Set<string>() };
+			let loading: Promise<void> | undefined;
+			/** 读取失败后的退避时间点：remote 挂载前的一次失败不能永久锁死收藏状态。 */
+			let retryAt = 0;
+			const listeners = /* @__PURE__ */ new Set<() => void>();
+			const publish = (next: FavoriteRowState) => {
+				state = next;
+				for (const listener of listeners) {
+					try { listener(); }
+					catch (reason) { console.warn("archive-manager: favorite listener failed", reason); }
+				}
+			};
+			const adopt = (favoriteSessionIds: readonly string[]) => {
+				const same = state.ids.size === favoriteSessionIds.length && favoriteSessionIds.every((id) => state.ids.has(id));
+				if (same && state.ready && state.pending.size === 0) return;
+				publish({ ready: true, ids: same ? state.ids : new Set(favoriteSessionIds), pending: /* @__PURE__ */ new Set<string>() });
+			};
+			return {
+				bind(next) { api = next; },
+				subscribe(listener) {
+					listeners.add(listener);
+					return () => { listeners.delete(listener); };
+				},
+				getSnapshot: () => state,
+				adopt,
+				ensure() {
+					if (api === undefined || state.ready) return Promise.resolve();
+					if (loading !== undefined) return loading;
+					if (Date.now() < retryAt) return Promise.resolve();
+					loading = api.favoriteSessions().then((value) => { adopt(value.favoriteSessionIds); }).catch((reason) => {
+						// 客户端启动时 remote 往往还没挂上：这次失败不能当成「没有收藏」，保持未就绪等待重试。
+						console.warn("archive-manager: load favorites failed, will retry", reason);
+						retryAt = Date.now() + 600;
+					}).finally(() => { loading = undefined; });
+					return loading;
+				},
+				async toggle(sessionId) {
+					if (api === undefined || !state.ready || state.pending.has(sessionId)) return;
+					const previousIds = state.ids;
+					const favorite = !previousIds.has(sessionId);
+					const optimistic = new Set(previousIds);
+					if (favorite) optimistic.add(sessionId);
+					else optimistic.delete(sessionId);
+					const pending = new Set(state.pending);
+					pending.add(sessionId);
+					publish({ ready: true, ids: optimistic, pending });
+					try {
+						const value = await api.setSessionFavorite({ sessionId, favorite });
+						if (!Array.isArray(value?.favoriteSessionIds)) throw new TypeError("favorite response is missing favoriteSessionIds");
+						adopt(value.favoriteSessionIds);
+					} catch (reason) {
+						console.warn("archive-manager: sidebar favorite toggle failed", reason);
+						const settled = new Set(state.pending);
+						settled.delete(sessionId);
+						publish({ ready: true, ids: previousIds, pending: settled });
+					}
+				}
+			};
 		}
 		//#endregion
 		//#region lib/types/client/subagent-lineage.js
@@ -458,7 +848,7 @@ export function startArchiveClient(require: HostRequire) {
 		/**
 		* 归档管理设置页：集中处理筛选、多选、恢复、删除和原生会话导航。
 		*/
-		function ArchivedSessionsSection({ archiveSessions, archiveSession, sessionStore, workspaceStore, unarchiveSession, deleteSession, unarchiveSessions, deleteArchivedSessions, archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState, close, t, diagnoseOrphanSubagents, cleanOrphanSubagents, diagnoseSessionCaches, rebuildSessionCaches, refreshCacheLists, searchSessionContent, searchArchivedContent, previewArchivedSession, favoriteSessions, setSessionFavorite, organizeBatch, useSessionPendingInteraction, useSessionStatus }: ArchiveProps) {
+		function ArchivedSessionsSection({ archiveSessions, archiveSession, sessionStore, workspaceStore, unarchiveSession, deleteSession, unarchiveSessions, deleteArchivedSessions, archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState, close, t, diagnoseOrphanSubagents, cleanOrphanSubagents, diagnoseSessionCaches, rebuildSessionCaches, refreshCacheLists, searchSessionContent, searchArchivedContent, previewArchivedSession, favoriteSessions, setSessionFavorite, favoriteSync, organizeBatch, useSessionPendingInteraction, useSessionStatus }: ArchiveProps) {
 			const sessions = (0, react.useSyncExternalStore)(sessionStore.subscribe, sessionStore.getSnapshot);
 			const workspaceState = (0, react.useSyncExternalStore)(workspaceStore.subscribe, workspaceStore.getSnapshot);
 			const [archiveTab, setArchiveTab] = (0, react.useState)("archived");
@@ -504,14 +894,24 @@ export function startArchiveClient(require: HostRequire) {
 			const favoriteSet = (0, react.useMemo)(() => new Set(favoriteIds), [favoriteIds]);
 			const loadFavorites = async () => {
 				if (!favoriteSessions) return;
-				try { const result = await favoriteSessions(); setFavoriteIds(result.favoriteSessionIds); setFavoritesReady(true); }
+				try { const result = await favoriteSessions(); setFavoriteIds(result.favoriteSessionIds); setFavoritesReady(true); favoriteSync?.adopt(result.favoriteSessionIds); }
 				catch (reason) { setFavoritesReady(false); setError(errorMessage(reason)); }
 			};
-			(0, react.useEffect)(() => { let active = true; if (favoriteSessions) favoriteSessions().then((value) => { if (active) { setFavoriteIds(value.favoriteSessionIds); setFavoritesReady(true); } }).catch((reason) => { if (active) setError(errorMessage(reason)); }); return () => { active = false; }; }, [favoriteSessions]);
+			(0, react.useEffect)(() => { let active = true; if (favoriteSessions) favoriteSessions().then((value) => { if (active) { setFavoriteIds(value.favoriteSessionIds); setFavoritesReady(true); favoriteSync?.adopt(value.favoriteSessionIds); } }).catch((reason) => { if (active) setError(errorMessage(reason)); }); return () => { active = false; }; }, [favoriteSessions]);
+			// 主界面星标与面板共用一份收藏：行内点星后面板立刻跟上，反之亦然。
+			(0, react.useEffect)(() => {
+				if (!favoriteSync) return;
+				return favoriteSync.subscribe(() => {
+					const snapshot = favoriteSync.getSnapshot();
+					if (!snapshot.ready) return;
+					setFavoriteIds([...snapshot.ids]);
+					setFavoritesReady(true);
+				});
+			}, [favoriteSync]);
 			const toggleFavorite = async (sessionId: string) => {
 				if (favoriteLock.current || busy || !favoritesReady) return;
 				favoriteLock.current = true; setFavoriteBusy(true); setError(null);
-				try { const value = await setSessionFavorite({ sessionId, favorite: !favoriteSet.has(sessionId) }); setFavoriteIds(value.favoriteSessionIds); }
+				try { const value = await setSessionFavorite({ sessionId, favorite: !favoriteSet.has(sessionId) }); setFavoriteIds(value.favoriteSessionIds); favoriteSync?.adopt(value.favoriteSessionIds); }
 				catch (reason) { setError(errorMessage(reason)); }
 				finally { favoriteLock.current = false; setFavoriteBusy(false); }
 			};
@@ -1008,7 +1408,7 @@ export function startArchiveClient(require: HostRequire) {
                       (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsMeta", children: [archiveTimeLabel(session.updatedAt, t)] }), contentMatches.has(session.id) && react.createElement("button", { type: "button", className: "dsham_settingsSnippet", disabled: busy, title: t(isArchived ? "discovery.preview" : "archives.openSession"), onClick: () => isArchived ? preview.open(session, query) : viewConversation(session) }, react.createElement(HighlightedText, { text: contentMatches.get(session.id)?.snippet ?? "", query }))
                     ] }),
                     (0, react_jsx_runtime.jsxs)("div", { className: "dsham_settingsActions", children: [
-                      typeof setSessionFavorite === "function" && settingsButton({ variant: "outline", className: "dsham_iconAction" + (favoriteSet.has(session.id) ? " dsham_favoriteOn" : ""), title: t(favoriteSet.has(session.id) ? "organizer.unfavorite" : "organizer.favorite"), "aria-pressed": favoriteSet.has(session.id), "aria-label": t(favoriteSet.has(session.id) ? "organizer.unfavorite" : "organizer.favorite") + t("common.separator") + displayTitle(session, t), disabled: busy || favoriteBusy || !favoritesReady, onClick: () => toggleFavorite(session.id), children: (0, react_jsx_runtime.jsx)("svg", { viewBox: "0 0 16 16", width: 16, height: 16, fill: favoriteSet.has(session.id) ? "currentColor" : "none", stroke: "currentColor", strokeWidth: 1.4, strokeLinejoin: "round", "aria-hidden": true, style: { display: "block" }, children: (0, react_jsx_runtime.jsx)("path", { d: "M8 1.75l1.934 3.918 4.324.628-3.129 3.05.738 4.306L8 11.618l-3.867 2.034.738-4.306-3.129-3.05 4.324-.628L8 1.75z" }) }) }),
+                      typeof setSessionFavorite === "function" && settingsButton({ variant: "outline", className: "dsham_iconAction" + (favoriteSet.has(session.id) ? " dsham_favoriteOn" : ""), title: t(favoriteSet.has(session.id) ? "organizer.unfavorite" : "organizer.favorite"), "aria-pressed": favoriteSet.has(session.id), "aria-label": t(favoriteSet.has(session.id) ? "organizer.unfavorite" : "organizer.favorite") + t("common.separator") + displayTitle(session, t), disabled: busy || favoriteBusy || !favoritesReady, onClick: () => toggleFavorite(session.id), children: (0, react_jsx_runtime.jsx)("svg", { viewBox: "0 0 16 16", width: 16, height: 16, fill: favoriteSet.has(session.id) ? "currentColor" : "none", stroke: "currentColor", strokeWidth: 1.4, strokeLinejoin: "round", "aria-hidden": true, style: { display: "block" }, children: (0, react_jsx_runtime.jsx)("path", { d: STAR_PATH }) }) }),
                       settingsButton({ variant: "outline", className: "dsham_iconAction", title: t(isArchived ? "archives.restore" : "archives.archiveSelected"), "aria-label": t(isArchived ? "archives.restore" : "archives.archiveSelected"), disabled: busy || unarchivingSessionIds.has(session.id), onClick: () => isArchived ? onUnarchive(session.id) : performArchive([session.id]), icon: (0, react_jsx_runtime.jsx)(isArchived ? _deepseek_ai_dsh_client_ui_primitives.IconRefreshOutlineMedium : _deepseek_ai_dsh_client_ui_primitives.IconArchiveOutlineMedium, { size: 16 }) }),
                       isArchived && (0, react_jsx_runtime.jsx)(ArchivedSessionMenu, { busy: busy || unarchivingSessionIds.has(session.id), t, title: displayTitle(session, t), onCopyId: () => copyId(session), onPreview: typeof previewArchivedSession === "function" ? () => preview.open(session, query) : undefined, onRestoreOpen: () => viewConversation(session, true), onDelete: () => requestDelete({ kind: "session", session }) })
                     ] })
@@ -2793,6 +3193,12 @@ export function startArchiveClient(require: HostRequire) {
             const previewArchivedSession: RegistryCalls["previewArchivedSession"] = input => registryCall("previewArchivedSession", input);
             const favoriteSessions = () => registryCall("favoriteSessions");
             const setSessionFavorite: RegistryCalls["setSessionFavorite"] = input => registryCall("setSessionFavorite", input);
+            /** 主界面星标与归档面板共用的收藏存储；读写仍然回到上面两个注册表方法。 */
+            const favoriteRowStore = createFavoriteRowStore();
+            favoriteRowStore.bind({ favoriteSessions, setSessionFavorite });
+            /** 视图选项里的「只看收藏」开关：状态存本地，可见性每次重算。 */
+            const favoritesOnly = setupWorkspaceFavoritesOnly(ctx, favoriteRowStore, () => ctx.locale.bind(NS));
+            ctx.effect(() => () => favoritesOnly.dispose(), "archive-manager: favorites only filter");
             const organizeBatch = createSessionOrganizer({
 				workspaces: ctx.workspaces.list, sessions: ctx.sessions.list,
 				archive: (id) => ctx.workspaces.archiveSession(id), restore: async (id) => { await unarchiveOne(id); return undefined; },
@@ -2863,6 +3269,24 @@ export function startArchiveClient(require: HostRequire) {
 				};
 				if (typeof Item === "function") return (0, react_jsx_runtime.jsx)(Item, { danger: true, icon, onSelect, children: t("menu.deleteSession") });
 				return (0, react_jsx_runtime.jsx)("button", { type: "button", role: "menuitem", onClick: onSelect, children: t("menu.deleteSession") });
+			}
+			/**
+			 * 会话「…」菜单里的收藏行：星标本身只在悬停时出现，键盘用户靠这一行收藏。
+			 * 读写走同一份 favoriteRow 存储，和标题左侧的星完全同步。
+			 */
+			function FavoriteMenuItem({ sessionId, favoriteRow, useMenuOpenState, t }: { sessionId: string; favoriteRow: FavoriteRowStore; useMenuOpenState: () => readonly [boolean, (open: boolean) => void]; t: Translate }) {
+				const [, setMenuOpen] = useMenuOpenState();
+				const state = (0, react.useSyncExternalStore)(favoriteRow.subscribe, favoriteRow.getSnapshot);
+				const favorited = state.ready && state.ids.has(sessionId);
+				const onSelect = () => {
+					setMenuOpen(false);
+					void favoriteRow.toggle(sessionId);
+				};
+				const Item = _deepseek_ai_dsh_client_ui_primitives.MenuItemButton;
+				const icon = (0, react_jsx_runtime.jsx)("svg", { viewBox: "0 0 16 16", width: 14, height: 14, fill: favorited ? "currentColor" : "none", stroke: "currentColor", strokeWidth: 1.4, strokeLinejoin: "round", "aria-hidden": true, children: (0, react_jsx_runtime.jsx)("path", { d: STAR_PATH }) });
+				const label = t(favorited ? "organizer.unfavorite" : "organizer.favorite");
+				if (typeof Item === "function") return (0, react_jsx_runtime.jsx)(Item, { icon, onSelect, children: label });
+				return (0, react_jsx_runtime.jsx)("button", { type: "button", role: "menuitem", onClick: onSelect, children: label });
 			}
 			function focusSessionRow(sessionId: string) {
 				try {
@@ -3544,6 +3968,7 @@ export function startArchiveClient(require: HostRequire) {
 			}
 			let sidebarMode: "menu" | "waiting" | undefined;
 			let disposeMenu: (() => void) | undefined;
+			let disposeFavoriteMenu: (() => void) | undefined;
 			let disposeDialog: (() => void) | undefined;
 			let disposeArchiveDialog: (() => void) | undefined;
 			/** 支持的宿主都声明了会话菜单插槽。插槽还没出现时只等待，不再盖掉官方侧栏。 */
@@ -3559,7 +3984,14 @@ export function startArchiveClient(require: HostRequire) {
 						locale: NS,
 						inject: () => ({})
 					}, DeleteSessionMenuItem));
-				disposeDialog ??= ctx.slots.inject("shell.overlay", () => ctx.slots.register({
+				disposeFavoriteMenu ??= ctx.slots.inject(sessionMenuSlot, () => ctx.slots.register({
+						name: sessionMenuSlot,
+						id: "archive-manager.favorite",
+						order: 350,
+						locale: NS,
+						inject: () => ({ favoriteRow: favoriteRowStore })
+					}, FavoriteMenuItem));
+			disposeDialog ??= ctx.slots.inject("shell.overlay", () => ctx.slots.register({
 						name: "shell.overlay",
 						id: "archive-manager.delete-session",
 						locale: NS,
@@ -3583,6 +4015,7 @@ export function startArchiveClient(require: HostRequire) {
 			ctx.effect(() => () => {
 				unsubscribeSidebar?.();
 				disposeMenu?.();
+				disposeFavoriteMenu?.();
 				disposeDialog?.();
 				disposeArchiveDialog?.();
 			}, "archive-manager: sidebar mode");
@@ -3597,7 +4030,7 @@ export function startArchiveClient(require: HostRequire) {
 				unarchiveSessions,
 				deleteArchivedSessions,
 				archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState: archiveViewState,
-				favoriteSessions, setSessionFavorite, organizeBatch, diagnoseOrphanSubagents, cleanOrphanSubagents, diagnoseSessionCaches, rebuildSessionCaches, refreshCacheLists, searchSessionContent, searchArchivedContent, previewArchivedSession,
+				favoriteSessions, setSessionFavorite, favoriteSync: favoriteRowStore, organizeBatch, diagnoseOrphanSubagents, cleanOrphanSubagents, diagnoseSessionCaches, rebuildSessionCaches, refreshCacheLists, searchSessionContent, searchArchivedContent, previewArchivedSession,
 				t: ctx.locale.bind(NS)
 			});
 
@@ -3657,6 +4090,8 @@ export function startArchiveClient(require: HostRequire) {
         }
         exports.__test = {
             forkWithFeedback,
+			favoritesOnlyVisibility,
+			createFavoriteRowStore,
 			unarchivedSessionIds,
 			ArchiveSelectionToolbar,
 			ArchivedSessionsSection,

@@ -43,6 +43,12 @@ export type StatusHook = <T>(selector: (value: StatusMap) => T) => T;
 export type BatchTarget = { scope: "all" | "ungrouped" } | { scope: "workspace"; workspaceId: string } | { scope: "sessions"; sessionIds: string[] };
 export interface DeletedBatch { requestedSessionIds: string[]; deletedSessionIds: string[]; skippedSessionIds: string[]; failures: { sessionId: string; message: string }[] }
 export interface ArchivedGroup { key: string; title: string; ids?: Set<string>; sessions: ClientSession[]; cwd?: string; workspaceId?: string; createdAt?: string }
+/** Client-side view of the shared favourites store (main-sidebar star ↔ archive panel). */
+export interface FavoriteSync {
+  subscribe(listener: () => void): () => void;
+  getSnapshot(): { ready: boolean; ids: ReadonlySet<string>; pending: ReadonlySet<string> };
+  adopt(favoriteSessionIds: readonly string[]): void;
+}
 export interface ArchiveProps {
   diagnoseSessionCaches?(): Promise<CacheDiagnosis>;
   rebuildSessionCaches?(input: { items: CacheCandidate[] }): Promise<CacheRebuildResult>;
@@ -61,6 +67,8 @@ export interface ArchiveProps {
   previewArchivedSession: (input: {sessionId: string; query: string}) => Promise<ArchivePreviewResult>;
   favoriteSessions(): Promise<{ favoriteSessionIds: string[] }>;
   setSessionFavorite(input: {sessionId: string; favorite: boolean}): Promise<{favoriteSessionIds: string[]}>;
+  /** Optional shared store: when present the panel mirrors main-sidebar star toggles. */
+  favoriteSync?: FavoriteSync;
   diagnoseOrphanSubagents?(): Promise<{ count: number; items: { sessionId: string; parentSessionId: string; createdAt: number; sizeBytes: number }[]; totalSizeBytes: number }>;
   cleanOrphanSubagents?(target?: { sessionIds?: string[] }): Promise<{ cleanedSessionIds: string[]; skippedSessionIds: string[]; failures: { sessionId: string; message: string }[] }>;
   organizeBatch?: (kind: OrganizeKind, ids: readonly string[], options?: OrganizeOptions) => Promise<BatchResult>;

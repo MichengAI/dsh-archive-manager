@@ -4,6 +4,11 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## Unreleased
+
+- Add a sidebar session star: a star sits left of each session title in its own container right after the host's leading slot — always visible once favourited, hover-only otherwise — and reads/writes the plugin's existing favourite set; the session "…" menu gains a matching Favourite / Unfavourite row for keyboard use.
+- Add a "Favourites only" filter: View options → Filter sessions gains a switch that narrows the sidebar to favourited sessions (empty workspaces and "Expand the remaining N" collapse too, and folded groups are expanded before filtering); the state lives in `localStorage` and no session or archive data is touched.
+
 ## 1.1.13 - 2026-10-26
 
 - Add opt-in official list-cache rebuilding (#88). Opening Archive Manager checks only stored headers and official cached projections for ordinary cold sessions in registered workspaces, ungrouped lists, or archives, while filtering out special IM channel sessions (`im:`). A repair card appears only when needed. Clicking reads logs sequentially through read-only handles and calls official `coldSnapshot`, without opening sessions, calling models, changing archives/schedules, importing old caches, or writing JSON directly.
