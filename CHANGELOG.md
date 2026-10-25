@@ -8,6 +8,8 @@ Published release notes are retained below; new versions are added without remov
 
 - Add opt-in official list-cache rebuilding (#88). Opening Archive Manager checks only stored headers and official cached projections for ordinary sessions in registered workspaces or archives; a repair card appears only when needed. Clicking reads logs sequentially through read-only handles and calls official `coldSnapshot`, without opening sessions, calling models, changing archives/schedules, importing old caches, or writing JSON directly.
 - Confirm persistence through bounded official cache readback, retain per-session failures for retry, and refresh the official session list. Rebuilds and deletion share the workspace operation queue; late writes after a confirmation timeout remain ordered before deletion on the official domain chain.
+- Use authoritative per-session persistence `stat` before and after each rebuild read instead of rescanning the entire stored-header list twice per target; retain lifecycle and activity checks and the official cache write/deletion ordering.
+- Detect resolved official list refresh failures from the public list state, including archive/restore/delete refresh paths. Show refresh errors separately without reporting successfully persisted caches as failed saves.
 - Extend isolated compatibility checks to all ten currently published 0.2.x alpha/RC hosts, including real JSONL logs, official JSON cache close/reopen, deletion timing, activity and same-ID lifecycle tests. This does not certify unpublished future hosts.
 
 ## 1.1.12 - 2026-10-24

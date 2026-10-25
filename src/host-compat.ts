@@ -14,7 +14,7 @@ export interface PersistenceCompat {
   name: string; root?: string; config?: { root?: string }; generationFormat?: unknown;
   locate(header: Header): { kind: string; path: string } | undefined;
   list(): Promise<{ header: Header }[]>;
-  stat(id: string): Promise<unknown>;
+  stat(id: string): Promise<{ header: Header } | undefined>;
   findLog?(id: string): Promise<unknown>;
   open(id: string, mode: "read"): Promise<{ header: Header; inheritedEventCount: number; read(offset: number): Promise<{ events: SessionEvent[] }>; close(): Promise<void> }>;
   prepare?(id: string): Promise<{ session: Session; [Symbol.dispose](): void }>;

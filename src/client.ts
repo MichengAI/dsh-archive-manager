@@ -2731,7 +2731,7 @@ export function startArchiveClient(require: HostRequire) {
 			const refreshSessionList = async () => {
 				if (typeof ctx.sessions.refresh !== "function") return null;
 				try {
-					await ctx.sessions.refresh();
+					await refreshCacheLists();
 					return null;
 				} catch (error) {
 					console.warn("archive-manager: restored archived sessions but session list refresh failed:", error);
@@ -2751,7 +2751,30 @@ export function startArchiveClient(require: HostRequire) {
             const diagnoseOrphanSubagents: RegistryCalls["diagnoseOrphanSubagents"] = () => registryCall("diagnoseOrphanSubagents");
             const diagnoseSessionCaches: RegistryCalls["diagnoseSessionCaches"] = () => registryCall("diagnoseSessionCaches");
             const rebuildSessionCaches: RegistryCalls["rebuildSessionCaches"] = input => registryCall("rebuildSessionCaches", input);
-            const refreshCacheLists = async () => { if (typeof ctx.sessions.refresh !== "function") throw new Error("Official session list refresh is unavailable"); await ctx.sessions.refresh(); };
+            const refreshCacheLists = async () => {
+                if (typeof ctx.sessions.refresh !== "function") throw new Error("Official session list refresh is unavailable");
+                const outcome = await ctx.sessions.refresh();
+                const sessions = ctx.sessions as unknown as {
+                    manager?: { listState?: string; listError?: unknown };
+                    listState?: string;
+                    listError?: unknown;
+                    list?: { getSnapshot?: () => { state?: string; error?: unknown; phase?: string } };
+                };
+                const manager = sessions.manager;
+                if (manager?.listState === "error" && manager.listError) {
+                    throw new Error(errorMessage(manager.listError));
+                }
+                if (sessions.listState === "error" && sessions.listError) {
+                    throw new Error(errorMessage(sessions.listError));
+                }
+                const snapshot = sessions.list?.getSnapshot?.();
+                if (snapshot?.state === "error" && snapshot.error) {
+                    throw new Error(errorMessage(snapshot.error));
+                }
+                if (outcome && typeof outcome === "object" && "ok" in outcome && (outcome as { ok: boolean }).ok === false) {
+                    throw new Error(errorMessage((outcome as { error?: unknown }).error ?? "Session list refresh failed"));
+                }
+            };
             const cleanOrphanSubagents: RegistryCalls["cleanOrphanSubagents"] = (input = {}) => registryCall("cleanOrphanSubagents", input ?? {});
             const searchArchivedContent: RegistryCalls["searchArchivedContent"] = input => registryCall("searchArchivedContent", input);
             const searchSessionContent: RegistryCalls["searchSessionContent"] = input => registryCall("searchSessionContent", input);

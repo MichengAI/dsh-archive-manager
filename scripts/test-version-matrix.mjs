@@ -69,7 +69,7 @@ for (const profile of profiles) {
 		dependencies["@deepseek-ai/cordis"] = profile.cordis;
 		dependencies["@deepseek-ai/schemastery"] = profile.schemastery;
 		Object.assign(dependencies, cordisPlugins[profile.cordis]);
-		for (const name of ["session-persistence-jsonl", "session-query", "session-title", "storage-json"]) dependencies[`@deepseek-ai/dsh-${name}`] = profile.version;
+		for (const name of ["api-session-controller", "session-persistence-jsonl", "session-query", "session-title", "storage-json"]) dependencies[`@deepseek-ai/dsh-${name}`] = profile.version;
 		await writeFile(join(isolated, "package.json"), JSON.stringify({ private: true, type: "module", dependencies, overrides: hostTestOverrides(profile.version) }), "utf8");
 		await run(npm, [...npmPrefix, "install", "--ignore-scripts", "--no-audit", "--no-fund"], isolated);
 		if (profile.latest && process.platform !== "win32") await run(npm, [...npmPrefix, "rebuild", "fs-ext"], isolated);
@@ -85,7 +85,7 @@ for (const profile of profiles) {
 		for (const file of ["package.json", "tsconfig.json", ".gitattributes", "README.md", "README.zh-CN.md", "CHANGELOG.md", "CHANGELOG.zh-CN.md", "LICENSE", "cordis.patch.yml"]) {
 			await cp(join(root, file), join(isolated, file));
 		}
-		const output = await run(process.execPath, ["--import", "tsx", "--test", "--test-reporter=spec", ...testNames.map((name) => join("test", name)), join("test", "fixtures", "latest-host.mjs"), join("test", "fixtures", "projcache-json.mjs"), join("test", "fixtures", "issue88-native.mjs")], isolated, { ...process.env, DSH_ARCHIVE_TEST_HOST_VERSION: profile.version });
+		const output = await run(process.execPath, ["--import", "tsx", "--test", "--test-reporter=spec", ...testNames.map((name) => join("test", name)), join("test", "fixtures", "latest-host.mjs"), join("test", "fixtures", "projcache-json.mjs"), join("test", "fixtures", "issue88-native.mjs"), join("test", "fixtures", "session-refresh-host.mjs")], isolated, { ...process.env, DSH_ARCHIVE_TEST_HOST_VERSION: profile.version });
 		console.log(output.trim().split(/\r?\n/).slice(-8).join("\n"));
 	} catch (error) {
 		console.error(`DSH ${profile.version} 回归失败：${String(error)}`);

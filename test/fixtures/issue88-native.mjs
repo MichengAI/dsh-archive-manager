@@ -53,7 +53,16 @@ test('Issue88: real cold service path persists official JSON and survives close/
   assert.equal(f.sessions.get(header.id), undefined);
   const diagnosis = await f.registry.diagnoseSessionCaches(); assert.equal(diagnosis.count, 1);
   const before = JSON.stringify(f.registry.requireState());
+  let listings = 0, stats = 0;
+  const list = f.persistence.list.bind(f.persistence), stat = f.persistence.stat.bind(f.persistence);
+  f.persistence.list = async (...args) => { listings++; return list(...args); };
+  f.persistence.stat = async (...args) => { stats++; return stat(...args); };
+  assert.equal((await f.persistence.stat(header.id)).header.createdAt, header.createdAt);
+  assert.equal(await f.persistence.stat('missing-target'), undefined);
+  stats = 0;
   const result = await f.registry.rebuildSessionCaches({ items: diagnosis.items });
+  assert.equal(listings, 0, '真实宿主重建不得全库枚举');
+  assert.equal(stats, 2, '真实宿主必须在读前后定向确认生命周期');
   assert.deepEqual(result, { rebuiltSessionIds: [header.id], skippedSessionIds: [], failures: [] });
   assert.equal(f.cache.cachedSnapshot(header).values.title, 'Issue88 synthetic title');
   assert.equal(JSON.stringify(f.registry.requireState()), before);

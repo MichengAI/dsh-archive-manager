@@ -27,7 +27,7 @@ export interface ClientSession extends SessionSummary {
   archived?: boolean; running: boolean; runningSubagentCount?: number;
   pendingInteraction?: string; failed?: boolean;
 }
-export interface ClientList { ids: string[]; byId: Record<string, ClientSession>; current?: string; phase: string }
+export interface ClientList { ids: string[]; byId: Record<string, ClientSession>; current?: string; phase: string; state?: "idle" | "loading" | "error"; error?: unknown }
 export interface ClientWorkspace { workspaceId: string; title: string; path: string; cwd?: string; sessionIds: string[]; createdAt: string; updatedAt?: string }
 export interface WorkspaceSnapshot { items: ClientWorkspace[]; archivedSessionIds: string[]; phase: string }
 export interface Observable<T> { getSnapshot(): T; subscribe(listener: () => void): () => void }

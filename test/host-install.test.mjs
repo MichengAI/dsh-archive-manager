@@ -60,7 +60,7 @@ function fakeDomain() {
 async function mountOfficialHost({ fileUploads } = {}) {
 	const ctx = new Context();
 	ctx.provide("storageDomain", { open: async () => fakeDomain() });
-	ctx.provide("sessionPersistence", { list: async () => [] });
+	ctx.provide("sessionPersistence", { list: async () => [], stat: async () => undefined });
 	ctx.provide("sessionProjections", {});
 	ctx.provide("sessions", { list: () => [], get: () => undefined });
 	if (fileUploads !== undefined) ctx.provide("fileUploads", fileUploads);

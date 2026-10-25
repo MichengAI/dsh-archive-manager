@@ -709,6 +709,15 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Re
 		}
 		return { count: items.length, items };
 	}
+	/** 定向读取持久化头部，优先单会话 stat 避免全量枚举，无 stat 时安全回退。 */
+	async readSessionHeaderDirect(sessionId: string): Promise<Header | undefined> {
+		const persistence = this.ctx.sessionPersistence;
+		if (typeof persistence?.stat === "function") {
+			const snapshot = await persistence.stat(sessionId);
+			return (snapshot as { header?: Header } | undefined)?.header;
+		}
+		return (await this.listStoredHeaders()).find(h => h.id === sessionId);
+	}
 	/** 与删除共用官方工作区队列；冷写入会同步加入官方域写入链，
 	 * 回读超时也不会取消已入队的写入，因此后续删除会排在该写入之后。 */
 	async rebuildSessionCaches(input: unknown): Promise<CacheRebuildResult> {
@@ -719,12 +728,13 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Re
 				try {
 					const cache = this.ctx.get("sessionProjectionCache");
 					if (!cache) throw new Error("Official session projection cache is unavailable");
-					const header = (await this.listStoredHeaders()).find(h => h.id === item.sessionId);
+					// 定向读取持久化头部，不使用工作区可能陈旧的内存索引。
+					const header = await this.readSessionHeaderDirect(item.sessionId);
 					if (!header || cacheIdentity(header) !== item.identity || !(await this.cacheRebuildEligible(header)) || this.usableSessionListCache(header)) {
 						result.skippedSessionIds.push(item.sessionId); return;
 					}
 					const source = await this.readStoredProjectionSource(this.ctx.sessionPersistence, item.sessionId);
-					const current = (await this.listStoredHeaders()).find(h => h.id === item.sessionId);
+					const current = await this.readSessionHeaderDirect(item.sessionId);
 					if (!current || cacheIdentity(current) !== item.identity || cacheIdentity(source.meta) !== item.identity || !(await this.cacheRebuildEligible(current))) {
 						result.skippedSessionIds.push(item.sessionId); return;
 					}
