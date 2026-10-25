@@ -38,9 +38,9 @@ Put inactive conversations away and find them again when needed, keeping everyda
 
 ## Manual list-cache rebuild (unreleased, #88)
 
-Opening Archive Manager checks only headers and official cached projections for ordinary cold sessions in registered workspaces and archives. A repair card appears only for missing/incompatible caches or an unavailable title projection. Click to read complete logs one at a time through read-only handles and rebuild registered projections with official `coldSnapshot`, saving to official `session_projcache`.
+Opening Archive Manager checks only headers and official cached projections for ordinary cold sessions in registered workspaces, ungrouped lists, and archives, while excluding special IM channel sessions (`im:`). A repair card appears only for missing/incompatible caches or an unavailable title projection. Click to read complete logs one at a time through read-only handles and rebuild registered projections with official `coldSnapshot`, saving to official `session_projcache`.
 
-No old plugin domains are scanned, no JSON is copied, no Session/Agent is activated, no model is called, and archives/schedules remain unchanged. Active sessions are skipped; failed items can be retried individually. The official session list is refreshed and candidates checked again afterward. A persistence-confirmation timeout means unknown, not cancelled: deletion remains ordered after pending native writes. Closing the page stops later requests, not the one already sent.
+No old plugin domains are scanned, no JSON is copied, no Session/Agent is activated, no model is called, and archives/schedules remain unchanged. Active sessions are skipped; failed items can be retried individually; feedback provides a "Done" dismiss button and auto-dismisses when clear. The official session list is refreshed and candidates checked again afterward. A persistence-confirmation timeout means unknown, not cancelled: deletion remains ordered after pending native writes. Closing the page stops later requests, not the one already sent.
 
 ## Orphan subagent cleanup
 

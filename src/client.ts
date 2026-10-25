@@ -547,19 +547,9 @@ export function startArchiveClient(require: HostRequire) {
 				const controller = createCacheRebuildController({ diagnose: diagnoseSessionCaches, rebuild: rebuildSessionCaches, refresh: refreshCacheLists });
 				cacheController.current = controller;
 				const off = controller.subscribe(() => {
-					const snap = controller.snapshot();
-					console.log("[archive-manager] cacheController state:", snap);
-					setCacheRepair(snap);
+					setCacheRepair(controller.snapshot());
 				});
 				void controller.load();
-				if (typeof window !== "undefined") {
-					(window as unknown as Record<string, unknown>).__dshArchiveManager = {
-						diagnose: diagnoseSessionCaches,
-						rebuild: rebuildSessionCaches,
-						refresh: refreshCacheLists,
-						controller,
-					};
-				}
 				return () => { off(); controller.dispose(); cacheController.current = null; };
 			}, [diagnoseSessionCaches, rebuildSessionCaches, refreshCacheLists]);
 			(0, react.useEffect)(() => {
