@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ArchiveWorkspaceRegistry } from '../src/workspace.ts';
+import { cacheIdentity } from '../src/cache-rebuild-contract.ts';
 
 const header = (id, extra = {}) => ({ id, version: 4, createdAt: 42, isSeeded: false, ...extra });
 function fixture() {
@@ -43,6 +44,20 @@ test('Issue88 rebuilding queries authoritative targets without full-library list
   assert.deepEqual(result.rebuiltSessionIds, ['archived', 'workspace', 'stray']);
   assert.equal(listings, 0, 'rebuilding must not scan all stored headers');
   assert.equal(stats, 6, 'check each target before and after reading');
+});
+
+test('Issue88 IM channel sessions stay out of diagnosis and rebuild even with a matching identity', async () => {
+  const f = fixture();
+  // 真实 IM 适配器会话：官方 session_projcache 的 JSON 后端无法承载含冒号的键。
+  const imHeader = header('im:qq_abc:dm:1790785563900:1554874335943065600');
+  f.rows.push(imHeader);
+  const value = await f.registry.diagnoseSessionCaches();
+  assert.deepEqual(value.items.map(v => v.sessionId), ['archived', 'workspace', 'stray'], 'IM 渠道会话不得进入候选');
+  const result = await f.registry.rebuildSessionCaches({ items: [{ sessionId: imHeader.id, identity: cacheIdentity(imHeader) }] });
+  assert.deepEqual(result.rebuiltSessionIds, []);
+  assert.deepEqual(result.skippedSessionIds, [imHeader.id]);
+  assert.equal(f.reads.some(v => Array.isArray(v) && v[0] === imHeader.id), false, 'IM 渠道会话不得被读取');
+  assert.equal(f.writes.includes(imHeader.id), false, 'IM 渠道会话不得写入官方缓存');
 });
 
 test('Issue88 partial cache without compatible title is a repair candidate', async () => {
