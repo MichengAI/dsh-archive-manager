@@ -65,6 +65,10 @@ export function createCacheRebuildController(api: {
       await load();
       update({ busy: false, progress: null });
     },
+    dismiss() {
+      if (!active) return;
+      update({ result: null, error: null, refreshError: null });
+    },
     dispose() {
       active = false;
       ++sequence;

@@ -690,7 +690,7 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Re
 	/** 只读句柄必须关闭，避免激活 Agent 或写入会话日志。 */
 	/** 普通冷会话（登记工作区、未分组及已归档）均支持重建，排除子代理、活跃及活动中会话。 */
 	async cacheRebuildEligible(header: Header) {
-		if (header.origin !== undefined || this.ctx.get("sessions")?.get(header.id) !== undefined) return false;
+		if (header.origin !== undefined || header.id.startsWith("im:") || header.id.includes(":") || header.id.includes("~003A") || this.ctx.get("sessions")?.get(header.id) !== undefined) return false;
 		const activity = await this.ctx.waterfall("workspace/session-activity", { sessionId: header.id as never }, () => Promise.resolve([]));
 		return activity.length === 0 && this.ctx.get("sessions")?.get(header.id) === undefined;
 	}

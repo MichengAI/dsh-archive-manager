@@ -6,7 +6,7 @@ interface OrganizerPanelProps {
  count: number; onPreview(): void; progress?: BatchProgress | null; result?: (BatchResult & { kind?: OrganizeKind }) | null;
  onRetry(): void; undoCount: number; onUndo(): void; onReload(): void;
  orphanCount?: number; orphanSizeBytes?: number; orphanCleaning?: boolean; onCleanOrphans?(): void;
- cacheCount?: number; cacheRepair?: CacheRepairState; onRebuildCaches?(): void; onRetryCaches?(): void; onReloadCaches?(): void;
+ cacheCount?: number; cacheRepair?: CacheRepairState; onRebuildCaches?(): void; onRetryCaches?(): void; onReloadCaches?(): void; onDismissCaches?(): void;
 }
 function formatBytes(bytes?: number): string {
   if (!bytes || bytes <= 0) return "0 B";
@@ -26,7 +26,7 @@ export function createOrganizerPanel(React: typeof import("react"), Button?: imp
     const list = h("ul", null, failures.map(failure => h("li", { key: failure.sessionId }, failure.sessionId, separator, failure.message)));
     return h(Disclosure, { title, open, onToggle: () => setOpen(value => !value) }, list);
   }
-  return function OrganizerPanel({ t, archived, busy, ready, days, onDays, count, onPreview, progress, result, onRetry, undoCount, onUndo, onReload, orphanCount = 0, orphanSizeBytes = 0, orphanCleaning = false, onCleanOrphans, cacheCount = 0, cacheRepair, onRebuildCaches, onRetryCaches, onReloadCaches }: OrganizerPanelProps) {
+  return function OrganizerPanel({ t, archived, busy, ready, days, onDays, count, onPreview, progress, result, onRetry, undoCount, onUndo, onReload, orphanCount = 0, orphanSizeBytes = 0, orphanCleaning = false, onCleanOrphans, cacheCount = 0, cacheRepair, onRebuildCaches, onRetryCaches, onReloadCaches, onDismissCaches }: OrganizerPanelProps) {
     return h(React.Fragment, null,
       h("style", null, ".dsham_organizer,.dsham_batchFeedback{display:grid;gap:12px;margin:0 0 16px;padding:14px 16px;border:0.5px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-2)}.dsham_organizerControls{display:flex;align-items:center;flex-wrap:wrap;gap:10px}.dsham_organizer label{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--dsw-alias-label-primary)}.dsham_number{width:88px;height:32px;padding:0 10px;border:0.5px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-sm,8px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px}.dsham_number:hover{border-color:var(--dsw-alias-border-l3)}.dsham_number:focus{outline:none;border-color:var(--dsw-alias-state-business-primary)}.dsham_disclosure{display:inline-flex;align-items:center;gap:6px;padding:0;border:0;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;cursor:pointer}.dsham_foldChevron{transition:transform 150ms ease}.dsham_foldChevron.is-open{transform:rotate(180deg)}.dsham_organizer p,.dsham_batchFeedback p{margin:0;font-size:12px;color:var(--dsw-alias-label-secondary)}.dsham_batchFeedback progress{width:100%}.dsham_batchFeedback details{font-size:12px;overflow-wrap:anywhere}.dsham_archivePreview{max-height:260px;overflow:auto;display:grid;gap:8px;padding:8px 0}.dsham_archivePreview label{display:flex;gap:8px;align-items:center;overflow-wrap:anywhere}"),
       (!archived || !ready) && h("div", { className: "dsham_organizer" }, h("div", { className: "dsham_organizerControls" },
@@ -51,7 +51,9 @@ export function createOrganizerPanel(React: typeof import("react"), Button?: imp
           cacheRepair.result.failures.length > 0 && onRetryCaches && textButton(t("organizer.cacheRetry", { n: cacheRepair.result.failures.length }), { disabled: busy || cacheRepair.busy, onClick: onRetryCaches })),
         cacheRepair.error && h("p", { role: "alert" }, t("organizer.cacheError", { detail: cacheRepair.error })),
         cacheRepair.refreshError && h("p", { role: "alert" }, t("organizer.refreshError", { detail: cacheRepair.refreshError })),
-        onReloadCaches && textButton(t("organizer.cacheCheck"), { disabled: busy || cacheRepair.busy, onClick: onReloadCaches })),
+        h("div", { className: "dsham_organizerControls" },
+          onReloadCaches && textButton(t("organizer.cacheCheck"), { disabled: busy || cacheRepair.busy, onClick: onReloadCaches }),
+          onDismissCaches && textButton(t("organizer.dismiss"), { disabled: busy || cacheRepair.busy, onClick: onDismissCaches }))),
       (progress || result || undoCount > 0) && h("section", { className: "dsham_batchFeedback", "aria-label": t("organizer.feedback") },
       progress && h("div", { role: "status", "aria-live": "polite" },
         h("progress", { value: progress.done, max: Math.max(1, progress.total), "aria-label": t("organizer.progress") }),
@@ -71,7 +73,7 @@ export function createOrganizerPanel(React: typeof import("react"), Button?: imp
 export const organizerZh = {
   "organizer.cacheTitle": "发现 {n} 个会话缺少可用列表缓存",
   "organizer.cacheDesc": "检查工作区、未分组及归档普通会话的头部与官方缓存。点击后逐条只读日志并重建官方列表缓存；跳过活动会话，不打开会话、不调用模型，也不改变归档或定时任务。超时表示保存未确认，可重试。",
-  "organizer.cacheRebuild": "重建列表缓存", "organizer.cacheRebuilding": "重建中…", "organizer.cacheRetry": "重试失败 {n} 条", "organizer.cacheCheck": "刷新列表并重新检测", "organizer.cacheError": "缓存检测失败：{detail}",
+  "organizer.cacheRebuild": "重建列表缓存", "organizer.cacheRebuilding": "重建中…", "organizer.cacheRetry": "重试失败 {n} 条", "organizer.cacheCheck": "刷新列表并重新检测", "organizer.cacheError": "缓存检测失败：{detail}", "organizer.dismiss": "完成",
   "organizer.feedback": "操作反馈",
   "organizer.allSessions": "全部会话", "organizer.favoriteFilter": "收藏筛选",
   "organizer.archiveResult": "归档结果", "organizer.restoreResult": "恢复结果", "organizer.deleteResult": "删除结果", "organizer.undoResult": "撤回结果",
@@ -95,7 +97,7 @@ export const organizerZh = {
 export const organizerEn = {
   "organizer.cacheTitle": "Found {n} sessions without usable list caches",
   "organizer.cacheDesc": "Checks headers and official caches for workspace, ungrouped, and archived ordinary sessions. On click, reads logs one at a time and rebuilds official caches. Skips active sessions; never opens sessions, calls models or changes archives or schedules. Timeout means persistence is unconfirmed and can be retried.",
-  "organizer.cacheRebuild": "Rebuild list caches", "organizer.cacheRebuilding": "Rebuilding…", "organizer.cacheRetry": "Retry {n} failed", "organizer.cacheCheck": "Refresh lists and check again", "organizer.cacheError": "Cache check failed: {detail}",
+  "organizer.cacheRebuild": "Rebuild list caches", "organizer.cacheRebuilding": "Rebuilding…", "organizer.cacheRetry": "Retry {n} failed", "organizer.cacheCheck": "Refresh lists and check again", "organizer.cacheError": "Cache check failed: {detail}", "organizer.dismiss": "Done",
   "organizer.feedback": "Operation feedback",
   "organizer.allSessions": "All sessions", "organizer.favoriteFilter": "Favorites filter",
   "organizer.archiveResult": "Archive results", "organizer.restoreResult": "Restore results", "organizer.deleteResult": "Delete results", "organizer.undoResult": "Undo results",
@@ -119,7 +121,7 @@ export const organizerEn = {
 export const organizerRu = {
   "organizer.cacheTitle": "Найдено {n} сессий без пригодного кеша списка",
   "organizer.cacheDesc": "Проверяются заголовки и официальный кеш сессий рабочих областей, без группы и архива. По нажатию журналы читаются по одному для восстановления официального кеша. Активные сессии пропускаются; сессии не открываются, модели не вызываются, архивы и расписания не меняются. Тайм-аут означает неподтверждённое сохранение; доступен повтор.",
-  "organizer.cacheRebuild": "Восстановить кеш списков", "organizer.cacheRebuilding": "Восстановление…", "organizer.cacheRetry": "Повторить {n} ошибок", "organizer.cacheCheck": "Обновить списки и проверить", "organizer.cacheError": "Ошибка проверки кеша: {detail}",
+  "organizer.cacheRebuild": "Восстановить кеш списков", "organizer.cacheRebuilding": "Восстановление…", "organizer.cacheRetry": "Повторить {n} ошибок", "organizer.cacheCheck": "Обновить списки и проверить", "organizer.cacheError": "Ошибка проверки кеша: {detail}", "organizer.dismiss": "Готово",
   "organizer.feedback": "Отзыв об операции",
   "organizer.allSessions": "Все сессии", "organizer.favoriteFilter": "Фильтр избранного",
   "organizer.archiveResult": "Результаты архивации", "organizer.restoreResult": "Результаты восстановления", "organizer.deleteResult": "Результаты удаления", "organizer.undoResult": "Результаты отмены",

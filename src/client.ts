@@ -976,7 +976,14 @@ export function startArchiveClient(require: HostRequire) {
 					orphanCount: orphanInfo?.count ?? 0,
 					cacheCount: cacheRepair.diagnosis.count, cacheRepair,
 					onRebuildCaches: () => runCacheRebuild(), onRetryCaches: () => runCacheRebuild(true),
-					onReloadCaches: async () => { try { await refreshCacheLists?.(); await cacheController.current?.load(); } catch (reason) { if (navigationActive.current) setError(errorMessage(reason)); } },
+					onReloadCaches: async () => {
+						try {
+							await refreshCacheLists?.();
+							await cacheController.current?.load();
+							if ((cacheController.current?.snapshot().diagnosis.count ?? 0) === 0) cacheController.current?.dismiss();
+						} catch (reason) { if (navigationActive.current) setError(errorMessage(reason)); }
+					},
+					onDismissCaches: () => cacheController.current?.dismiss(),
 					orphanSizeBytes: orphanInfo?.totalSizeBytes ?? 0,
 					orphanCleaning,
 					onCleanOrphans: cleanOrphans
