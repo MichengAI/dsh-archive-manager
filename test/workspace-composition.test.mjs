@@ -608,6 +608,41 @@ test("整理页收藏、闲置预览、部分失败重试及撤回形成完整�
 
 });
 
+test("Issue88 built settings page detects after mount, connects rebuild/retry/refresh and disposes pending work", async () => {
+  const values = []; let cursor = 0, writes = 0; const effects = [], cleanups = [];
+  const hooks = { ...statics.react,
+    useSyncExternalStore: (_subscribe, snapshot) => snapshot(),
+    useState: initial => { const i = cursor++; if (!(i in values)) values[i] = typeof initial === "function" ? initial() : initial; return [values[i], next => { writes++; values[i] = typeof next === "function" ? next(values[i]) : next; }]; },
+    useRef: initial => { const i = cursor++; return values[i] ??= { current: initial }; },
+    useMemo: fn => fn(),
+    useEffect: (fn, deps) => { const i = cursor++; if (!values[i] || !deps || deps.some((v, n) => v !== values[i][n])) { values[i] = deps; effects.push(() => { cleanups[i]?.(); cleanups[i] = fn(); }); } }
+  };
+  const client = factories.get("@michengai/dsh-archive-manager")(name => name === "react" ? hooks : statics[name]);
+  const candidates = ['a', 'b'].map(sessionId => ({ sessionId, identity: sessionId }));
+  let fail = true, refreshes = 0, diagnoses = 0; const calls = [];
+  const props = { sessionStore: source({ byId: {} }), workspaceStore: source({ items: [], archivedSessionIds: [] }),
+    archivedSessionMetadata: async () => ({ items: [] }), t: key => key, organizeBatch: async () => ({ succeeded: [], skipped: [], failures: [], remaining: [] }),
+    diagnoseSessionCaches: async () => { diagnoses++; return { count: candidates.length, items: [...candidates] }; },
+    rebuildSessionCaches: async ({ items }) => { const id = items[0].sessionId; calls.push(id); if (id === 'b' && fail) return { rebuiltSessionIds: [], skippedSessionIds: [], failures: [{ sessionId: id, message: 'synthetic error' }] }; candidates.splice(candidates.findIndex(c => c.sessionId === id), 1); return { rebuiltSessionIds: [id], skippedSessionIds: [], failures: [] }; },
+    refreshCacheLists: async () => { refreshes++; }
+  };
+  const nodes = node => Array.isArray(node) ? node.flatMap(nodes) : node?.props ? [node, ...nodes(node.props.children)] : [];
+  let tree; const render = () => { cursor = 0; tree = client.__test.ArchivedSessionsSection(props); while (effects.length) effects.shift()(); };
+  const panel = () => nodes(tree).find(node => node.type?.name === 'OrganizerPanel');
+  render(); await tick(); render(); assert.equal(panel().props.cacheCount, 2); assert.equal(calls.length, 0);
+  await panel().props.onRebuildCaches(); render(); assert.deepEqual(calls, ['a', 'b']); assert.equal(refreshes, 1); assert.equal(panel().props.cacheCount, 1);
+  assert.equal(panel().props.cacheRepair.result.failures.length, 1);
+  fail = false; await panel().props.onRetryCaches(); render(); assert.deepEqual(calls, ['a', 'b', 'b']); assert.equal(panel().props.cacheCount, 0);
+  await panel().props.onReloadCaches(); render(); assert.equal(refreshes, 3); assert.ok(diagnoses >= 3);
+  let rejectRefresh;
+  props.refreshCacheLists = () => new Promise((_resolve, reject) => { rejectRefresh = reject; });
+  render(); await tick(); render();
+  const refreshing = panel().props.onReloadCaches();
+  for (const cleanup of cleanups) cleanup?.();
+  const beforeCleanup = writes; rejectRefresh(new Error('late refresh failure')); await refreshing;
+  assert.equal(writes, beforeCleanup, 'unmounted refresh failure must not update state');
+});
+
 test("删除确认框显示失败原因、允许重试，并阻止重复提交", async () => {
   const values = []; let cursor = 0;
   const hooks = { ...statics.react,

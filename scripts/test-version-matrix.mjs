@@ -11,6 +11,11 @@ const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
 const profiles = [
 	{ version: "0.2.0-rc.1", cordis: "4.0.4", schemastery: "3.18.4", latest: true },
 	{ version: "0.2.0-rc.2", cordis: "4.0.4", schemastery: "3.18.4", latest: true },
+	{ version: "0.2.1-alpha.1", cordis: "4.0.5-alpha.1", schemastery: "3.18.5-alpha.1", latest: true },
+	{ version: "0.2.1-alpha.2", cordis: "4.0.5-alpha.1", schemastery: "3.18.5-alpha.1", latest: true },
+	{ version: "0.2.1-alpha.3", cordis: "4.0.5-alpha.2", schemastery: "3.18.5-alpha.2", latest: true },
+	{ version: "0.2.1-alpha.4", cordis: "4.0.5-alpha.2", schemastery: "3.18.5-alpha.2", latest: true },
+	{ version: "0.2.1-alpha.5", cordis: "4.0.5-alpha.2", schemastery: "3.18.5-alpha.2", latest: true },
 	{ version: "0.2.1-rc.1", cordis: "4.0.5", schemastery: "3.18.5", latest: true },
 	{ version: "0.2.1-rc.2", cordis: "4.0.5", schemastery: "3.18.5", latest: true },
 	{ version: "0.2.1-rc.3", cordis: "4.0.5", schemastery: "3.18.5", latest: true },
@@ -32,6 +37,9 @@ const cordisPlugins = {
 	},
 };
 const npm = process.platform === "win32" ? process.execPath : "npm";
+for (const generation of [1, 2]) {
+	cordisPlugins[`4.0.5-alpha.${generation}`] = Object.fromEntries(Object.entries(cordisPlugins["4.0.5"]).map(([name, version]) => [name, `${version}-alpha.${generation}`]));
+}
 const npmPrefix = process.platform === "win32" ? [join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js")] : [];
 const testNames = (await readdir(join(root, "test"))).filter((name) => name.endsWith(".test.mjs"));
 
@@ -77,7 +85,7 @@ for (const profile of profiles) {
 		for (const file of ["package.json", "tsconfig.json", ".gitattributes", "README.md", "README.zh-CN.md", "CHANGELOG.md", "CHANGELOG.zh-CN.md", "LICENSE", "cordis.patch.yml"]) {
 			await cp(join(root, file), join(isolated, file));
 		}
-		const output = await run(process.execPath, ["--import", "tsx", "--test", "--test-reporter=spec", ...testNames.map((name) => join("test", name)), join("test", "fixtures", "latest-host.mjs"), join("test", "fixtures", "projcache-json.mjs")], isolated, { ...process.env, DSH_ARCHIVE_TEST_HOST_VERSION: profile.version });
+		const output = await run(process.execPath, ["--import", "tsx", "--test", "--test-reporter=spec", ...testNames.map((name) => join("test", name)), join("test", "fixtures", "latest-host.mjs"), join("test", "fixtures", "projcache-json.mjs"), join("test", "fixtures", "issue88-native.mjs")], isolated, { ...process.env, DSH_ARCHIVE_TEST_HOST_VERSION: profile.version });
 		console.log(output.trim().split(/\r?\n/).slice(-8).join("\n"));
 	} catch (error) {
 		console.error(`DSH ${profile.version} 回归失败：${String(error)}`);

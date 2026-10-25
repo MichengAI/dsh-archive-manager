@@ -8,6 +8,9 @@ import type { RemoteResult } from "./client-compat.js";
 import type { ReactNode, RefObject, AriaAttributes, HTMLAttributes, DragEvent as ReactDragEvent } from "react";
 import { createDiscoveryTools, discoveryCss, discoveryZh, discoveryEn, discoveryRu } from "./archive-discovery-ui.js";
 import { copySessionText, discoveryInvocations, matchesUpdatedRange, validUpdatedRange } from "./archive-discovery.js";
+import { cacheRebuildInvocations } from "./cache-rebuild-contract.js";
+import { createCacheRebuildController } from "./cache-rebuild-client.js";
+import type { CacheRepairState } from "./cache-rebuild-client.js";
 import { allowArchivedNavigation, openArchivedConversation, formatArchiveNavigationError, ArchiveNavigationError, currentSessionId } from "./archive-experience.js";
 import { observePluginUpdate } from "./plugin-update-ui.js";
 import { setupSidebarEntry } from "./sidebar-entry.js";
@@ -193,6 +196,7 @@ export function startArchiveClient(require: HostRequire) {
 			descriptors: [
 				...favoriteInvocations(),
 				...discoveryInvocations(),
+				...cacheRebuildInvocations(),
 				{
 					id: "@michengai/dsh-archive-manager#workspaceRegistry/unarchiveSession",
 					service: "workspaceRegistry",
@@ -453,7 +457,7 @@ export function startArchiveClient(require: HostRequire) {
 		/**
 		* 归档管理设置页：集中处理筛选、多选、恢复、删除和原生会话导航。
 		*/
-		function ArchivedSessionsSection({ archiveSessions, archiveSession, sessionStore, workspaceStore, unarchiveSession, deleteSession, unarchiveSessions, deleteArchivedSessions, archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState, close, t, diagnoseOrphanSubagents, cleanOrphanSubagents, searchSessionContent, searchArchivedContent, previewArchivedSession, favoriteSessions, setSessionFavorite, organizeBatch, useSessionPendingInteraction, useSessionStatus }: ArchiveProps) {
+		function ArchivedSessionsSection({ archiveSessions, archiveSession, sessionStore, workspaceStore, unarchiveSession, deleteSession, unarchiveSessions, deleteArchivedSessions, archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState, close, t, diagnoseOrphanSubagents, cleanOrphanSubagents, diagnoseSessionCaches, rebuildSessionCaches, refreshCacheLists, searchSessionContent, searchArchivedContent, previewArchivedSession, favoriteSessions, setSessionFavorite, organizeBatch, useSessionPendingInteraction, useSessionStatus }: ArchiveProps) {
 			const sessions = (0, react.useSyncExternalStore)(sessionStore.subscribe, sessionStore.getSnapshot);
 			const workspaceState = (0, react.useSyncExternalStore)(workspaceStore.subscribe, workspaceStore.getSnapshot);
 			const [archiveTab, setArchiveTab] = (0, react.useState)("archived");
@@ -535,6 +539,23 @@ export function startArchiveClient(require: HostRequire) {
 				finally { batchLock.current = false; setBusy(false); setBatchProgress(null); }
 			};
 			const [orphanInfo, setOrphanInfo] = (0, react.useState)<{ count: number; items: { sessionId: string; parentSessionId: string; createdAt: number; sizeBytes: number }[]; totalSizeBytes: number } | null>(null);
+			const cacheController = (0, react.useRef)<ReturnType<typeof createCacheRebuildController> | null>(null);
+			const [cacheRepair, setCacheRepair] = (0, react.useState)<CacheRepairState>({ diagnosis: { count: 0, items: [] }, busy: false, progress: null, result: null, error: null, refreshError: null });
+			(0, react.useEffect)(() => {
+				if (!diagnoseSessionCaches || !rebuildSessionCaches || !refreshCacheLists) return;
+				const controller = createCacheRebuildController({ diagnose: diagnoseSessionCaches, rebuild: rebuildSessionCaches, refresh: refreshCacheLists });
+				cacheController.current = controller;
+				const off = controller.subscribe(() => setCacheRepair(controller.snapshot()));
+				void controller.load();
+				return () => { off(); controller.dispose(); cacheController.current = null; };
+			}, [diagnoseSessionCaches, rebuildSessionCaches, refreshCacheLists]);
+			(0, react.useEffect)(() => { if (!cacheController.current?.snapshot().busy) void cacheController.current?.load(); }, [workspaceState]);
+			const runCacheRebuild = async (retry = false) => {
+				if (busy || batchLock.current || !cacheController.current || cacheController.current.snapshot().busy) return;
+				batchLock.current = true; setBusy(true);
+				try { await cacheController.current.run(retry); }
+				finally { batchLock.current = false; if (navigationActive.current) setBusy(false); }
+			};
 			const [orphanCleaning, setOrphanCleaning] = (0, react.useState)(false);
 			const loadOrphans = () => {
 				if (typeof diagnoseOrphanSubagents === "function") {
@@ -938,6 +959,9 @@ export function startArchiveClient(require: HostRequire) {
 					undoCount: undoableArchiveCount,
 					onUndo: () => executeBatch("undo", lastArchive, { retry: true }), onReload: loadFavorites,
 					orphanCount: orphanInfo?.count ?? 0,
+					cacheCount: cacheRepair.diagnosis.count, cacheRepair,
+					onRebuildCaches: () => runCacheRebuild(), onRetryCaches: () => runCacheRebuild(true),
+					onReloadCaches: async () => { try { await refreshCacheLists?.(); await cacheController.current?.load(); } catch (reason) { if (navigationActive.current) setError(errorMessage(reason)); } },
 					orphanSizeBytes: orphanInfo?.totalSizeBytes ?? 0,
 					orphanCleaning,
 					onCleanOrphans: cleanOrphans
@@ -2725,6 +2749,9 @@ export function startArchiveClient(require: HostRequire) {
                 return result.value;
             };
             const diagnoseOrphanSubagents: RegistryCalls["diagnoseOrphanSubagents"] = () => registryCall("diagnoseOrphanSubagents");
+            const diagnoseSessionCaches: RegistryCalls["diagnoseSessionCaches"] = () => registryCall("diagnoseSessionCaches");
+            const rebuildSessionCaches: RegistryCalls["rebuildSessionCaches"] = input => registryCall("rebuildSessionCaches", input);
+            const refreshCacheLists = async () => { if (typeof ctx.sessions.refresh !== "function") throw new Error("Official session list refresh is unavailable"); await ctx.sessions.refresh(); };
             const cleanOrphanSubagents: RegistryCalls["cleanOrphanSubagents"] = (input = {}) => registryCall("cleanOrphanSubagents", input ?? {});
             const searchArchivedContent: RegistryCalls["searchArchivedContent"] = input => registryCall("searchArchivedContent", input);
             const searchSessionContent: RegistryCalls["searchSessionContent"] = input => registryCall("searchSessionContent", input);
@@ -3535,7 +3562,7 @@ export function startArchiveClient(require: HostRequire) {
 				unarchiveSessions,
 				deleteArchivedSessions,
 				archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState: archiveViewState,
-				favoriteSessions, setSessionFavorite, organizeBatch, diagnoseOrphanSubagents, cleanOrphanSubagents, searchSessionContent, searchArchivedContent, previewArchivedSession,
+				favoriteSessions, setSessionFavorite, organizeBatch, diagnoseOrphanSubagents, cleanOrphanSubagents, diagnoseSessionCaches, rebuildSessionCaches, refreshCacheLists, searchSessionContent, searchArchivedContent, previewArchivedSession,
 				t: ctx.locale.bind(NS)
 			});
 

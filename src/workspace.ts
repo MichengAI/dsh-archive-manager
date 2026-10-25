@@ -1,4 +1,7 @@
 import type { Context } from "@deepseek-ai/cordis";
+import { confirmColdCacheWrite } from "./cache-rebuild.js";
+import { cacheIdentity, cacheRebuildInput, cacheRebuildInvocations } from "./cache-rebuild-contract.js";
+import type { CacheDiagnosis, CacheRebuildResult } from "./cache-rebuild-contract.js";
 import { symbols } from "@deepseek-ai/cordis";
 import type { Domain, DomainGlobalSpec } from "@deepseek-ai/dsh-storage-domain";
 import type { TypertContribution } from "@deepseek-ai/dsh-typert-registry";
@@ -157,6 +160,8 @@ const ARCHIVE_REMOTE_METHODS = [
 	"searchSessionContent",
 	"previewArchivedSession",
 	"diagnoseOrphanSubagents",
+	"diagnoseSessionCaches",
+	"rebuildSessionCaches",
 	"cleanOrphanSubagents",
 ] as const;
 function markRemoteMethod(instance: object, method: string) {
@@ -307,6 +312,7 @@ const orphanCleanResultSchema = {
  * 或协议包双份导致 /api/workspaceRegistry/deleteSession 在生产环境 404。
  */
 const ARCHIVE_MANAGER_INVOCATIONS = [
+	...cacheRebuildInvocations(),
 	...favoriteInvocations(),
 	...discoveryInvocations(),
 	{
@@ -682,6 +688,53 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Re
 		return { items };
 	}
 	/** 只读句柄必须关闭，避免激活 Agent 或写入会话日志。 */
+	async cacheRebuildEligible(header: Header) {
+		if (header.origin !== undefined || this.ctx.get("sessions")?.get(header.id) !== undefined) return false;
+		const state = this.requireState();
+		if (!state.archivedSessionIds.includes(header.id) && !state.workspaceIds.some(id => this.requireTable().get(id)?.sessionIds.includes(header.id))) return false;
+		const activity = await this.ctx.waterfall("workspace/session-activity", { sessionId: header.id as never }, () => Promise.resolve([]));
+		return activity.length === 0 && this.ctx.get("sessions")?.get(header.id) === undefined;
+	}
+	/** 检测仅读取头部与官方缓存，不读取会话正文。 */
+	usableSessionListCache(header: Header) {
+		const snapshot = this.ctx.get("sessionProjectionCache")?.cachedSnapshot(header);
+		return snapshot !== undefined && Object.hasOwn(snapshot.values, "title");
+	}
+	async diagnoseSessionCaches(): Promise<CacheDiagnosis> {
+		const cache = this.ctx.get("sessionProjectionCache");
+		if (!cache) throw new Error("Official session projection cache is unavailable");
+		const items = [];
+		for (const header of await this.listStoredHeaders()) {
+			if (await this.cacheRebuildEligible(header) && !this.usableSessionListCache(header)) items.push({ sessionId: header.id, identity: cacheIdentity(header) });
+		}
+		return { count: items.length, items };
+	}
+	/** 与删除共用官方工作区队列；冷写入会同步加入官方域写入链，
+	 * 回读超时也不会取消已入队的写入，因此后续删除会排在该写入之后。 */
+	async rebuildSessionCaches(input: unknown): Promise<CacheRebuildResult> {
+		const { items } = cacheRebuildInput.parse(input);
+		const result: CacheRebuildResult = { rebuiltSessionIds: [], skippedSessionIds: [], failures: [] };
+		for (const item of [...new Map(items.map(row => [row.sessionId, row])).values()]) {
+			await this.enqueueOperation(async () => {
+				try {
+					const cache = this.ctx.get("sessionProjectionCache");
+					if (!cache) throw new Error("Official session projection cache is unavailable");
+					const header = (await this.listStoredHeaders()).find(h => h.id === item.sessionId);
+					if (!header || cacheIdentity(header) !== item.identity || !(await this.cacheRebuildEligible(header)) || this.usableSessionListCache(header)) {
+						result.skippedSessionIds.push(item.sessionId); return;
+					}
+					const source = await this.readStoredProjectionSource(this.ctx.sessionPersistence, item.sessionId);
+					const current = (await this.listStoredHeaders()).find(h => h.id === item.sessionId);
+					if (!current || cacheIdentity(current) !== item.identity || cacheIdentity(source.meta) !== item.identity || !(await this.cacheRebuildEligible(current))) {
+						result.skippedSessionIds.push(item.sessionId); return;
+					}
+					await confirmColdCacheWrite(cache, source);
+					result.rebuiltSessionIds.push(item.sessionId);
+				} catch (error) { result.failures.push({ sessionId: item.sessionId, message: (error instanceof Error ? error.message : String(error)).slice(0, 500) }); }
+			});
+		}
+		return result;
+	}
 	async readStoredProjectionSource(persistence: PersistenceCompat, sessionId: string) {
 		const handle = await persistence.open(sessionId, "read");
 		try {

@@ -31,6 +31,8 @@ export interface SessionsCompat {
   announce(session: Session): void;
 }
 interface CacheCompat {
+  cachedSnapshot(meta: Header): { asOfSeq: number; values: object } | undefined;
+  coldSnapshot(meta: Header, inheritedEventCount: number, events: SessionEvent[]): { asOfSeq: number; values: object };
   requireTable(): Pick<KvTable<string, CheckpointRecord>, "delete">;
 }
 interface HostServices {

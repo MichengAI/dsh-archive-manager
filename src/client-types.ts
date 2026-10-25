@@ -1,4 +1,5 @@
 import type * as React from "react";
+import type { CacheDiagnosis, CacheRebuildResult, CacheCandidate } from "./cache-rebuild-contract.js";
 import type { SessionSummary, BatchResult, BatchProgress, OrganizeKind, OrganizeOptions, Translate } from "./contracts.js";
 import type { ArchivePreviewResult } from "./archive-discovery.js";
 
@@ -43,6 +44,9 @@ export type BatchTarget = { scope: "all" | "ungrouped" } | { scope: "workspace";
 export interface DeletedBatch { requestedSessionIds: string[]; deletedSessionIds: string[]; skippedSessionIds: string[]; failures: { sessionId: string; message: string }[] }
 export interface ArchivedGroup { key: string; title: string; ids?: Set<string>; sessions: ClientSession[]; cwd?: string; workspaceId?: string; createdAt?: string }
 export interface ArchiveProps {
+  diagnoseSessionCaches?(): Promise<CacheDiagnosis>;
+  rebuildSessionCaches?(input: { items: CacheCandidate[] }): Promise<CacheRebuildResult>;
+  refreshCacheLists?(): Promise<unknown>;
   sessionStore: Observable<ClientList>; workspaceStore: Observable<WorkspaceSnapshot>;
   archiveSessions(ids: string[]): Promise<{ archivedSessionIdsAdded: string[]; failures?: { sessionId: string; message: string }[] }>;
   archiveSession?(id: string, options?: { stopActivity?: boolean }): Promise<unknown>;

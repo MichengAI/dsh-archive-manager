@@ -4,6 +4,7 @@ export function hostTestOverrides(version) {
 	const supported = [
 		"0.2.0-rc.1",
 		"0.2.0-rc.2",
+		"0.2.1-alpha.1", "0.2.1-alpha.2", "0.2.1-alpha.3", "0.2.1-alpha.4", "0.2.1-alpha.5",
 		"0.2.1-rc.1",
 		"0.2.1-rc.2",
 		"0.2.1-rc.3",

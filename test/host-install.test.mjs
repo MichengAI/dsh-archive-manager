@@ -21,8 +21,10 @@ const ARCHIVE_ENDPOINTS = [
 	"deleteArchivedSessions",
 	"deleteSession",
 	"diagnoseOrphanSubagents",
+	"diagnoseSessionCaches",
 	"favoriteSessions",
 	"previewArchivedSession",
+	"rebuildSessionCaches",
 	"searchArchivedContent",
 	"searchSessionContent",
 	"setSessionFavorite",
@@ -163,6 +165,9 @@ test("归档能力经真实网关从官方 workspace 实例派发", async () => 
 	assert.deepEqual(await call("workspaceRegistry/archivedSessionMetadata", {}), { ok: true, value: { items: [] } });
 	assert.deepEqual(await call("workspaceRegistry/favoriteSessions", {}), { ok: true, value: { favoriteSessionIds: [] } });
 	assert.equal((await call("workspaceRegistry/diagnoseOrphanSubagents", {})).ok, true);
+	assert.deepEqual(await call("workspaceRegistry/diagnoseSessionCaches", {}), { ok: true, value: { count: 0, items: [] } });
+	assert.equal((await call("workspaceRegistry/rebuildSessionCaches", { input: { items: "invalid" } })).ok, false);
+	assert.deepEqual(await call("workspaceRegistry/rebuildSessionCaches", { input: { items: [{ sessionId: "missing", identity: "stale" }] } }), { ok: true, value: { rebuiltSessionIds: [], skippedSessionIds: ["missing"], failures: [] } });
 	assert.deepEqual(await call("workspaceRegistry/cleanOrphanSubagents", {}), { ok: true, value: { cleanedSessionIds: [], skippedSessionIds: [], failures: [] } });
 	assert.equal((await call("workspaceRegistry/cleanOrphanSubagents", { target: { sessionIds: 123 } })).ok, false, "非法参数必须被网关干净拒绝");
 	assert.equal(cache.table, officialTable);
