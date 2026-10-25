@@ -1,5 +1,5 @@
 import { errorMessage } from "./contracts.js";
-import type { Translate, SearchInput, SearchHit, Failure, SessionDetail, SessionSummary } from "./contracts.js";
+import type { Translate, SearchInput, SearchHit, Failure, SessionSummary } from "./contracts.js";
 import { DateRange, Disclosure } from "./plugin-ui.js";
 import type { ArchivePreviewResult } from "./archive-discovery.js";
 import type * as ReactTypes from "react";
@@ -8,7 +8,7 @@ interface SearchState { key?: string; status: string; items: SearchHit[]; failur
 interface PreviewTarget { session: SessionSummary; query: string }
 interface PreviewState { key?: PreviewTarget | null; status: string; value?: ArchivePreviewResult; error?: string }
 interface MarkdownProps { text: string; streaming: boolean; labels: { code: { copyLabel: string; copiedLabel: string }; footnotes: string } }
-import { searchArchiveBatches, detailsResultSchema, findTextRange } from "./archive-discovery.js";
+import { searchArchiveBatches, findTextRange } from "./archive-discovery.js";
 
 type HostButton = ComponentType<Record<string, unknown>>;
 type HostSegmented = (props: { id: string; label: string; value: string; options: readonly { value: string; label: string }[]; onChange(value: string): void }) => ReactNode;
@@ -41,38 +41,7 @@ export function createDiscoveryTools(React: ReactNamespace, host: { Button?: Hos
     const active = enabled && query.trim() && call;
     return { ...(active ? state.key === key ? state : { key, status: "loading", items: [], failures: [], done: 0, total: ids.length } : { status: "idle", items: [], failures: [] }), retry: () => setRevision(value => value + 1) };
   }
-  function useSessionDetails(sessions: readonly SessionSummary[], call?: (input: { sessionIds: string[] }) => Promise<unknown>, t?: Translate, paused = false) {
-    const key = JSON.stringify(sessions.map(session => [session.id, session.updatedAt]));
-    const [revision, setRevision] = React.useState(0);
-    const [state, setState] = React.useState<{ key: string; items: SessionDetail[]; pending: boolean }>({ key: "", items: [], pending: false });
-    React.useEffect(() => {
-      // 批量删除会逐条缩短列表。暂停时停掉后续分批，也不要为变短的列表重读原文。
-      if (!call || paused) return;
-      let active = true;
-      const ids = [...new Set((JSON.parse(key) as [string, unknown][]).map(row => row[0]))];
-      setState({ key, items: [], pending: ids.length > 0 });
-      const load = async () => {
-        const items: SessionDetail[] = [];
-        for (let start = 0; start < ids.length && active; start += 20) {
-          const batch = ids.slice(start, start + 20);
-          try {
-            const result = detailsResultSchema.parse(await call({ sessionIds: batch }));
-            const found = new Map(result.items.map(row => [row.sessionId, row]));
-            items.push(...batch.map(sessionId => found.get(sessionId) ?? { sessionId, turnCount: null, path: null, error: "", errorKey: "details.notReturned" }));
-          } catch (error) {
-            items.push(...batch.map(sessionId => ({ sessionId, turnCount: null, path: null, error: errorMessage(error) })));
-          }
-          if (active) setState({ key, items: [...items], pending: start + 20 < ids.length });
-        }
-      };
-      load();
-      return () => { active = false; };
-    }, [key, call, revision, paused]);
-    const current = call && state.key === key ? state : { items: [], pending: Boolean(call && sessions.length) };
-    // 只缓存读取结果和本地错误键；语言切换在渲染时生效，不触发重复读取。
-    const items = current.items.map(row => row.errorKey ? { ...row, error: t ? t(row.errorKey) : row.errorKey } : row);
-    return { ...current, items, byId: Object.fromEntries(items.map(row => [row.sessionId, row])), retry: () => setRevision(value => value + 1) };
-  }  function useArchivePreview(call: ((input: { sessionId: string; query: string }) => Promise<ArchivePreviewResult>) | undefined, eligibleIds: readonly string[]) {
+  function useArchivePreview(call: ((input: { sessionId: string; query: string }) => Promise<ArchivePreviewResult>) | undefined, eligibleIds: readonly string[]) {
     const [target, setTarget] = React.useState<PreviewTarget | null>(null);
     const [state, setState] = React.useState<PreviewState>({ status: "idle" });
     const [revision, setRevision] = React.useState(0);
@@ -145,7 +114,7 @@ export function createDiscoveryTools(React: ReactNamespace, host: { Button?: Hos
       value.messages.map(row => h("article", { key: row.seq, className: "dsham_previewMessage" }, h("div", { className: "dsham_previewRole", "data-role": row.role }, h("span", { "aria-hidden": true }, t(row.role === "user" ? "discovery.you" : "discovery.ai")), h("strong", null, t("discovery." + row.role))), raw || !MarkdownText ? h("pre", { className: "dsham_previewRaw" }, h(HighlightedText, { text: row.text, query: preview.target?.query })) : h(MarkdownText, { text: row.text, streaming: false, labels: { code: { copyLabel: t("discovery.copyCode"), copiedLabel: t("details.copied") }, footnotes: t("discovery.footnotes") } }), row.truncated && h("small", null, t("discovery.truncated")))),
       value.hasLater && h("p", null, t("discovery.later")));
   }
-  return { HighlightedText, useSessionDetails, useArchiveSearch, useArchivePreview, DiscoveryFilters, SearchStatus, PreviewContent };
+  return { HighlightedText, useArchiveSearch, useArchivePreview, DiscoveryFilters, SearchStatus, PreviewContent };
 }
 
 export const discoveryCss = [
@@ -156,8 +125,8 @@ export const discoveryCss = [
   ".dsham_dateTrigger:hover{border-color:var(--dsw-alias-border-l3)}",
   ".dsham_dateTrigger.is-open{border-color:var(--dsw-alias-state-business-primary);box-shadow:0 0 0 1px var(--dsw-alias-state-business-primary)}",
   ".dsham_dateIcon{flex:none;color:var(--dsw-alias-label-tertiary);display:flex;align-items:center}",
-  ".dsham_dateText{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}",
-  ".dsham_dateText.placeholder{color:var(--dsw-alias-label-tertiary)}",
+  ".dsham_dateText{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;color:var(--dsw-alias-label-primary)}",
+  ".dsham_dateText.placeholder{color:var(--dsw-alias-label-primary)}",
   ".dsham_dateClearBtn{flex:none;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;padding:0;border:0;background:transparent;color:var(--dsw-alias-label-tertiary);border-radius:50%;cursor:pointer;font-size:13px;line-height:1}",
   ".dsham_dateClearBtn:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}",
   ".dsham_dateChevron{flex:none;color:var(--dsw-alias-label-tertiary);display:flex;align-items:center}",
@@ -201,21 +170,21 @@ export const discoveryCss = [
   ".dsham_settingsSnippet:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}"
 ].join("");
 export const discoveryZh = {
-  "common.separator": "：", "details.notReturned": "宿主未返回会话详情",
+  "common.separator": "：",
   "copy.empty": "没有可复制的内容", "copy.unavailable": "当前环境不支持剪贴板，请在 HTTPS 或本机地址中打开页面", "copy.denied": "复制失败，请允许浏览器访问剪贴板后重试", "discovery.you": "你", "discovery.ai": "AI",
-  "discovery.readOnly": "只读预览", "discovery.messageCount": "本次显示 {n} 条消息", "discovery.displayMode": "显示方式", "discovery.formatted": "排版", "discovery.raw": "原文与高亮", "discovery.copyCode": "复制代码", "discovery.footnotes": "注释", "details.turns": "{n} 轮", "details.unknown": "轮次未知", "details.pending": "轮次读取中", "details.hint": "按用户提交消息数统计，不含工具调用和插件注入", "details.more": "轮次最多", "details.less": "轮次最少", "details.failed": "{n} 条会话详情读取失败", "details.copyId": "复制会话 ID", "details.copyPath": "复制会话路径", "details.copied": "已复制", "details.noPath": "宿主未提供可复制的会话路径", "discovery.date": "日期", "discovery.timeRange": "时间范围", "discovery.allTime": "全部时间", "discovery.today": "今天", "discovery.last7Days": "近 7 天", "discovery.last30Days": "近 30 天", "discovery.last90Days": "近 90 天", "discovery.customRange": "自定义…", "discovery.dateActive": "日期·已选", "discovery.clearDate": "清除日期", "discovery.active": "已启用", "discovery.scope": "查找范围", "discovery.titleOnly": "仅标题", "discovery.titleAndContent": "标题与正文", "discovery.from": "更新时间从", "discovery.to": "至", "discovery.clear": "清除条件", "discovery.invalidDate": "开始日期不能晚于结束日期，请检查日期范围。",
+  "discovery.readOnly": "只读预览", "discovery.messageCount": "本次显示 {n} 条消息", "discovery.displayMode": "显示方式", "discovery.formatted": "排版", "discovery.raw": "原文与高亮", "discovery.copyCode": "复制代码", "discovery.footnotes": "注释", "details.copyId": "复制会话 ID", "details.copied": "已复制", "discovery.date": "日期", "discovery.timeRange": "时间范围", "discovery.allTime": "全部时间", "discovery.today": "今天", "discovery.last7Days": "近 7 天", "discovery.last30Days": "近 30 天", "discovery.last90Days": "近 90 天", "discovery.customRange": "自定义…", "discovery.dateActive": "日期·已选", "discovery.clearDate": "清除日期", "discovery.active": "已启用", "discovery.scope": "查找范围", "discovery.titleOnly": "仅标题", "discovery.titleAndContent": "标题与正文", "discovery.from": "更新时间从", "discovery.to": "至", "discovery.clear": "清除条件", "discovery.invalidDate": "开始日期不能晚于结束日期，请检查日期范围。",
   "discovery.searching": "正在检索正文：{done} / {total}", "discovery.searched": "正文检索完成：{done} / {total}", "discovery.searchError": "正文检索未完成，当前结果可能不完整。", "discovery.failed": "{n} 条会话读取失败", "discovery.retry": "重试", "discovery.preview": "快速预览", "discovery.loading": "正在读取会话…", "discovery.previewHint": "只读预览原始对话文本，不恢复会话；不含工具输出、附件、推理和系统内容。", "discovery.earlier": "前面还有消息，可打开完整会话查看。", "discovery.later": "后面还有消息，可打开完整会话查看。", "discovery.empty": "没有可预览的用户或助手文本。", "discovery.truncated": "本条仅显示部分内容。", "discovery.user": "用户", "discovery.assistant": "助手", "discovery.openFull": "打开完整会话", "discovery.searchPlaceholder": "搜索标题或正文"
 };
 export const discoveryEn = {
-  "common.separator": ": ", "details.notReturned": "The host did not return session details",
+  "common.separator": ": ",
   "copy.empty": "Nothing to copy", "copy.unavailable": "Clipboard unavailable. Open the page over HTTPS or localhost.", "copy.denied": "Copy failed. Allow clipboard access and retry.", "discovery.you": "You", "discovery.ai": "AI",
-  "discovery.readOnly": "Read-only preview", "discovery.messageCount": "Showing {n} messages", "discovery.displayMode": "Display mode", "discovery.formatted": "Formatted", "discovery.raw": "Source and highlights", "discovery.copyCode": "Copy code", "discovery.footnotes": "Footnotes", "details.turns": "{n} turns", "details.unknown": "Unknown turns", "details.pending": "Loading turns", "details.hint": "User submissions; excludes tool calls and injected messages", "details.more": "Most turns", "details.less": "Fewest turns", "details.failed": "Could not read turns for {n} sessions", "details.copyId": "Copy session ID", "details.copyPath": "Copy session path", "details.copied": "Copied", "details.noPath": "The host did not provide a session path", "discovery.date": "Date", "discovery.timeRange": "Time range", "discovery.allTime": "All time", "discovery.today": "Today", "discovery.last7Days": "Past 7 days", "discovery.last30Days": "Past 30 days", "discovery.last90Days": "Past 90 days", "discovery.customRange": "Custom…", "discovery.dateActive": "Date · Set", "discovery.clearDate": "Clear dates", "discovery.active": "Active", "discovery.scope": "Search in", "discovery.titleOnly": "Titles", "discovery.titleAndContent": "Titles and content", "discovery.from": "Updated from", "discovery.to": "To", "discovery.clear": "Clear filters", "discovery.invalidDate": "Check the date range: the start must not be after the end.",
+  "discovery.readOnly": "Read-only preview", "discovery.messageCount": "Showing {n} messages", "discovery.displayMode": "Display mode", "discovery.formatted": "Formatted", "discovery.raw": "Source and highlights", "discovery.copyCode": "Copy code", "discovery.footnotes": "Footnotes", "details.copyId": "Copy session ID", "details.copied": "Copied", "discovery.date": "Date", "discovery.timeRange": "Time range", "discovery.allTime": "All time", "discovery.today": "Today", "discovery.last7Days": "Past 7 days", "discovery.last30Days": "Past 30 days", "discovery.last90Days": "Past 90 days", "discovery.customRange": "Custom…", "discovery.dateActive": "Date · Set", "discovery.clearDate": "Clear dates", "discovery.active": "Active", "discovery.scope": "Search in", "discovery.titleOnly": "Titles", "discovery.titleAndContent": "Titles and content", "discovery.from": "Updated from", "discovery.to": "To", "discovery.clear": "Clear filters", "discovery.invalidDate": "Check the date range: the start must not be after the end.",
   "discovery.searching": "Searching content: {done} / {total}", "discovery.searched": "Content search complete: {done} / {total}", "discovery.searchError": "Content search is incomplete; results may be missing.", "discovery.failed": "Could not read {n} conversations", "discovery.retry": "Retry", "discovery.preview": "Quick preview", "discovery.loading": "Reading conversation…", "discovery.previewHint": "Read-only original conversation text; keeps the conversation archived. Excludes tools, attachments, reasoning and system content.", "discovery.earlier": "More messages before this preview. Open the full conversation to read them.", "discovery.later": "More messages after this preview. Open the full conversation to read them.", "discovery.empty": "No user or assistant text to preview.", "discovery.truncated": "Only part of this message is shown.", "discovery.user": "User", "discovery.assistant": "Assistant", "discovery.openFull": "Open full conversation", "discovery.searchPlaceholder": "Search titles or content"
 };
 
 export const discoveryRu = {
-  "common.separator": ": ", "details.notReturned": "Хост не вернул сведения о сессии",
+  "common.separator": ": ",
   "copy.empty": "Нечего копировать", "copy.unavailable": "Буфер обмена недоступен. Откройте страницу по HTTPS или localhost.", "copy.denied": "Не удалось скопировать. Разрешите доступ к буферу обмена и повторите.", "discovery.you": "Вы", "discovery.ai": "ИИ",
-  "discovery.readOnly": "Предпросмотр только для чтения", "discovery.messageCount": "Показано сообщений: {n}", "discovery.displayMode": "Режим отображения", "discovery.formatted": "Форматировано", "discovery.raw": "Исходник и подсветка", "discovery.copyCode": "Копировать код", "discovery.footnotes": "Сноски", "details.turns": "{n} ходов", "details.unknown": "Ходов неизвестно", "details.pending": "Загрузка ходов", "details.hint": "По числу сообщений пользователя; без вызовов инструментов и инъекций плагинов", "details.more": "Больше ходов", "details.less": "Меньше ходов", "details.failed": "Не удалось прочитать ходы для {n} сессий", "details.copyId": "Копировать ID сессии", "details.copyPath": "Копировать путь сессии", "details.copied": "Скопировано", "details.noPath": "Хост не предоставил путь сессии", "discovery.date": "Дата", "discovery.timeRange": "Период", "discovery.allTime": "Все время", "discovery.today": "Сегодня", "discovery.last7Days": "Последние 7 дней", "discovery.last30Days": "Последние 30 дней", "discovery.last90Days": "Последние 90 дней", "discovery.customRange": "Свой период…", "discovery.dateActive": "Дата · Выбрана", "discovery.clearDate": "Сбросить даты", "discovery.active": "Включено", "discovery.scope": "Искать в", "discovery.titleOnly": "Названия", "discovery.titleAndContent": "Названия и содержимое", "discovery.from": "Обновлено с", "discovery.to": "По", "discovery.clear": "Сбросить фильтры", "discovery.invalidDate": "Проверьте диапазон дат: начало не должно быть позже конца.",
+  "discovery.readOnly": "Предпросмотр только для чтения", "discovery.messageCount": "Показано сообщений: {n}", "discovery.displayMode": "Режим отображения", "discovery.formatted": "Форматировано", "discovery.raw": "Исходник и подсветка", "discovery.copyCode": "Копировать код", "discovery.footnotes": "Сноски", "details.copyId": "Копировать ID сессии", "details.copied": "Скопировано", "discovery.date": "Дата", "discovery.timeRange": "Период", "discovery.allTime": "Все время", "discovery.today": "Сегодня", "discovery.last7Days": "Последние 7 дней", "discovery.last30Days": "Последние 30 дней", "discovery.last90Days": "Последние 90 дней", "discovery.customRange": "Свой период…", "discovery.dateActive": "Дата · Выбрана", "discovery.clearDate": "Сбросить даты", "discovery.active": "Включено", "discovery.scope": "Искать в", "discovery.titleOnly": "Названия", "discovery.titleAndContent": "Названия и содержимое", "discovery.from": "Обновлено с", "discovery.to": "По", "discovery.clear": "Сбросить фильтры", "discovery.invalidDate": "Проверьте диапазон дат: начало не должно быть позже конца.",
   "discovery.searching": "Поиск по содержимому: {done} / {total}", "discovery.searched": "Поиск по содержимому завершён: {done} / {total}", "discovery.searchError": "Поиск по содержимому неполный; результаты могут быть неполными.", "discovery.failed": "Не удалось прочитать {n} разговоров", "discovery.retry": "Повторить", "discovery.preview": "Быстрый предпросмотр", "discovery.loading": "Чтение разговора…", "discovery.previewHint": "Только чтение исходного текста разговора; сессия остаётся в архиве. Без вывода инструментов, вложений, рассуждений и системного содержимого.", "discovery.earlier": "Перед предпросмотром есть ещё сообщения. Откройте полный разговор, чтобы их прочитать.", "discovery.later": "После предпросмотра есть ещё сообщения. Откройте полный разговор, чтобы их прочитать.", "discovery.empty": "Нет текста пользователя или ассистента для предпросмотра.", "discovery.truncated": "Показана только часть этого сообщения.", "discovery.user": "Пользователь", "discovery.assistant": "Ассистент", "discovery.openFull": "Открыть полный разговор", "discovery.searchPlaceholder": "Поиск по названиям или содержимому"
 };

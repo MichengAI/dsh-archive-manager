@@ -52,27 +52,6 @@ const provideShortcuts = (root) => {
 	}
 };
 
-test("归档诊断读取没有列表摘要的 ID", async () => {
-  const effects = [], calls = [];
-  const hooks = { ...statics.react,
-    useSyncExternalStore: (_subscribe, get) => get(),
-    useState: initial => [typeof initial === "function" ? initial() : initial, () => {}],
-    useRef: initial => ({ current: initial }), useMemo: fn => fn(),
-    useEffect: fn => effects.push(fn)
-  };
-  const client = factories.get("@michengai/dsh-archive-manager")(name => name === "react" ? hooks : statics[name]);
-  client.__test.ArchivedSessionsSection({
-    sessionStore: source({ byId: {} }),
-    workspaceStore: source({ items: [], archivedSessionIds: ["missing-header"] }),
-    archivedSessionMetadata: async () => ({ items: [] }),
-    sessionDetails: async input => { calls.push(input); return { items: [] }; }, t: key => key
-  });
-  const cleanups = effects.map(fn => fn());
-  await tick();
-  assert.deepEqual(calls, [{ sessionIds: ["missing-header"] }]);
-  cleanups.forEach(fn => fn?.());
-});
-
 test("真实官方导航监听器：显式查看归档不再被清空，切换和卸载恢复默认策略", async (t) => {
   const observable = (state) => {
     const listeners = new Set();
@@ -763,17 +742,13 @@ test("批量删除进行中不再重读剩余会话的详情和创建时间", as
   const state = { items: [], archivedSessionIds: [...ids] };
   const sessionState = { byId: Object.fromEntries(ids.map(id => [id, { id, title: id, updatedAt: 1 }])) };
   let metadataCalls = 0;
-  let detailCalls = 0;
   let deleting = false;
   let metadataDuring = 0;
-  let detailDuring = 0;
-  let detailInputs = [];
   let deleteCalls = 0;
   const props = {
     sessionStore: source(sessionState),
     workspaceStore: source(state),
     archivedSessionMetadata: async () => { metadataCalls += 1; if (deleting) metadataDuring += 1; return { items: [] }; },
-    sessionDetails: async input => { detailCalls += 1; detailInputs.push(input.sessionIds); if (deleting) detailDuring += 1; return { items: [] }; },
     organizeBatch: async kind => {
       throw new Error(`批量删除必须走宿主作用域接口，不得再经过 organizeBatch：${kind}`);
     },
@@ -810,7 +785,6 @@ test("批量删除进行中不再重读剩余会话的详情和创建时间", as
   try {
     render();
     assert.equal(metadataCalls, 1);
-    assert.equal(detailCalls, 1);
     const boxes = () => nodes(tree).filter(node => node.props.label === "archives.selectSession");
     boxes()[0].props.onChange({ target: { checked: true } });
     render();
@@ -825,12 +799,9 @@ test("批量删除进行中不再重读剩余会话的详情和创建时间", as
     await nodes(dialog.props.footer).find(node => node.props.children === "archives.deleteSelectedConfirm").props.onClick();
     assert.equal(deleteCalls, 1, "两个会话的批量删除只允许一次宿主调用");
     assert.equal(metadataDuring, 0, "删除过程中不能按剩余归档名单重读创建时间");
-    assert.equal(detailDuring, 0, "删除过程中不能按变短的列表重读会话原文");
     deleting = false;
     render();
     assert.equal(metadataCalls, 2, "删除结束后只补读一次创建时间");
-    assert.equal(detailCalls, 2, "删除结束后只补读一次详情");
-    assert.deepEqual(detailInputs.at(-1), ["c"]);
   } finally {
     globalThis.window = previousWindow;
   }

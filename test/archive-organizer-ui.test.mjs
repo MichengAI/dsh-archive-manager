@@ -36,9 +36,8 @@ test("删除结果独立于闲置整理区域并保留失败重试", () => {
   assert.doesNotMatch(html, /闲置天数|预览闲置归档/);
 });
 test("未归档页提供「跳过含定时任务的会话」开关，并默认可见", () => {
-  const changes = [];
   const html = renderToStaticMarkup(React.createElement(Panel, {
-    ...props, archived: false, skipScheduled: true, onSkipScheduled: value => changes.push(value)
+    ...props, archived: false, skipScheduled: true, onSkipScheduled: () => {}
   }));
   assert.match(html, /跳过含定时任务的会话/);
   assert.match(html, /type="checkbox"/);
@@ -90,4 +89,24 @@ test("开关点击回调传出新状态", () => {
   assert.ok(checkbox, "必须渲染定时任务开关");
   checkbox.props.onChange({ target: { checked: false } });
   assert.deepEqual(changes, [false]);
+});
+
+test("OrganizerPanel: 发现孤儿子代理时展示清理卡片并响应清理点击", () => {
+  let cleaned = 0;
+  const t = (key, values) => {
+    let text = organizerZh[key] ?? key;
+    if (values) for (const [name, value] of Object.entries(values)) text = text.replaceAll(`{${name}}`, String(value));
+    return text;
+  };
+  const html = renderToStaticMarkup(React.createElement(Panel, {
+    ...props,
+    t,
+    archived: true,
+    orphanCount: 3,
+    orphanSizeBytes: 2048,
+    onCleanOrphans: () => { cleaned++; }
+  }));
+  assert.match(html, /发现 3 个无主孤儿子代理/);
+  assert.match(html, /清理全部孤儿/);
+  assert.match(html, /2.0 KB/);
 });

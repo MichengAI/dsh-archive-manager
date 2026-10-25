@@ -446,6 +446,7 @@ test("bundle resolves the current client-store", () => {
 
 test("manifest keeps one DSH peer range; store optional; ghost client-runtime peer removed", () => {
 	assert.equal(PACKAGE_MANIFEST.engines?.node, "^22.19.0 || >=24.0.0");
+	assert.equal(PACKAGE_MANIFEST.engines?.dsh, ">=0.2.0-rc.1 <0.3.0-0");
 	assert.equal(PACKAGE_MANIFEST.packageManager, "pnpm@11.22.0");
 	const dshPeerRanges = Object.entries(PACKAGE_MANIFEST.peerDependencies ?? {})
 		.filter(([name]) => name.startsWith("@deepseek-ai/dsh-"))
@@ -455,15 +456,15 @@ test("manifest keeps one DSH peer range; store optional; ghost client-runtime pe
 		.map(([, version]) => version);
 	assert.ok(dshPeerRanges.length > 0);
 	assert.equal(new Set(dshPeerRanges).size, 1);
-	assert.equal(dshPeerRanges[0], "0.2.0-rc.1 || 0.2.0-rc.2 || 0.2.1-rc.1 || 0.2.1-rc.2 || 0.2.1-rc.3");
-	for (const version of ["0.2.0-rc.1", "0.2.0-rc.2", "0.2.1-rc.1", "0.2.1-rc.2", "0.2.1-rc.3"]) {
-		assert.ok(semver.satisfies(version, dshPeerRanges[0], { includePrerelease: true }), `peer 范围必须接纳已验证宿主 ${version}`);
+	assert.equal(dshPeerRanges[0], ">=0.2.0-rc.1 <0.3.0-0");
+	for (const version of ["0.2.0-rc.1", "0.2.0-rc.2", "0.2.1-rc.1", "0.2.1-rc.2", "0.2.1-rc.3", "0.2.1-rc.4", "0.2.2-alpha.1", "0.2.2-rc.1", "0.2.9"]) {
+		assert.ok(semver.satisfies(version, dshPeerRanges[0], { includePrerelease: true }), `peer 范围必须接纳 0.2.x 代际版本 ${version}`);
 	}
-	for (const version of ["0.1.0-rc.8", "0.1.1-rc.2", "0.1.2-rc.1", "0.1.5-rc.1", "0.1.5-rc.2", "0.1.5-rc.3", "0.1.6-alpha.1", "0.1.6-alpha.2", "0.1.7-alpha.1", "0.1.7-rc.1", "0.1.7-rc.2", "0.2.0", "0.2.0-rc.3", "0.2.1", "0.2.1-alpha.1", "0.2.1-alpha.5", "0.2.1-rc.4"]) {
-		assert.equal(semver.satisfies(version, dshPeerRanges[0], { includePrerelease: true }), false, `不接纳未声明版本 ${version}`);
+	for (const version of ["0.1.0-rc.8", "0.1.1-rc.2", "0.1.2-rc.1", "0.1.5-rc.1", "0.1.5-rc.2", "0.1.5-rc.3", "0.1.6-alpha.1", "0.1.6-alpha.2", "0.1.7-alpha.1", "0.1.7-rc.1", "0.1.7-rc.2", "0.2.0-alpha.1", "0.3.0-alpha.1", "0.3.0-rc.1", "0.3.0", "1.0.0"]) {
+		assert.equal(semver.satisfies(version, dshPeerRanges[0], { includePrerelease: true }), false, `不接纳超出 0.2 代际版本 ${version}`);
 	}
 	assert.ok(dshDevelopmentVersions.length > 0);
-	assert.deepEqual([...new Set(dshDevelopmentVersions)], ["0.2.1-rc.2"]);
+	assert.deepEqual([...new Set(dshDevelopmentVersions)], ["0.2.1-rc.3"]);
 	assert.equal(PACKAGE_MANIFEST.peerDependenciesMeta?.["@deepseek-ai/dsh-client-store"], undefined);
 	assert.equal(PACKAGE_MANIFEST.peerDependenciesMeta?.["@deepseek-ai/dsh-client-runtime"], undefined);
 	assert.equal(PACKAGE_MANIFEST.peerDependencies?.["@deepseek-ai/dsh-client-runtime"], undefined);
@@ -747,6 +748,22 @@ test("sortArchivedGroups: 按更新、创建或字母顺序排列项目与组内
 	assert.deepEqual(groups[0].sessions.map((session) => session.id), ["a", "b"], "原分组顺序保持不变");
 });
 
+test("sortArchivedGroups: 按最近归档顺序（archivedSessionIds 倒序）排列项目与组内会话", () => {
+	const groups = [
+		{ key: "w1", title: "zeta", sessions: [summary("a", { displayTitle: "Alpha", updatedAt: 100 }), summary("b", { displayTitle: "Beta", updatedAt: 10 })] },
+		{ key: "w2", title: "alpha", sessions: [summary("c", { displayTitle: "Charlie", updatedAt: 50 })] }
+	];
+	// 归档顺序是 a 先归档，c 接着归档，b 最后归档（最新归档）
+	const archivedOrder = ["a", "c", "b"];
+	const translate = (key) => key;
+
+	const sorted = t.sortArchivedGroups(groups, "archived", {}, translate, archivedOrder);
+	// b 是最新归档（索引最大），包含 b 的 w1 排在最前；组内 b 排在 a 前面
+	assert.deepEqual(sorted.map((group) => group.key), ["w1", "w2"]);
+	assert.deepEqual(sorted[0].sessions.map((session) => session.id), ["b", "a"]);
+	assert.deepEqual(sorted[1].sessions.map((session) => session.id), ["c"]);
+});
+
 test("deriveArchivedBatchIds: 按完整归档集合派生全部、项目和未分组批次", () => {
 	const items = [
 		{ workspaceId: "w1", title: "proj-a", sessionIds: ["s1", "s-missing"] },
@@ -837,16 +854,4 @@ test("未归档列表排除已归档、子代理和空白占位，保留跨项�
 		summary("a"), summary("b"), summary("loose"), summary("old"), summary("child", {origin:"subagent"}), summary("blank", {blank:true})
 	].map(item => [item.id, item]));
 	assert.deepEqual(t.unarchivedSessionIds(byId, ["old"]), ["a", "b", "loose"]);
-});
-
-test("轮次排序覆盖组内与组间，零轮有效而未知置后", () => {
-  const groups = [{ key: "a", title: "甲", sessions: [summary("unknown", { updatedAt: 99 }), summary("zero", { updatedAt: 1 })] }, { key: "b", title: "乙", sessions: [summary("many", { updatedAt: 2 })] }];
-  const details = { zero: { turnCount: 0 }, many: { turnCount: 9 }, unknown: { turnCount: null } };
-  const asc = t.sortArchivedGroups(groups, "turnsAsc", {}, key => key, details);
-  assert.deepEqual(asc.map(group => group.key), ["a", "b"]);
-  assert.deepEqual(asc[0].sessions.map(row => row.id), ["zero", "unknown"]);
-  const desc = t.sortArchivedGroups(groups, "turnsDesc", {}, key => key, details);
-  assert.deepEqual(desc.map(group => group.key), ["b", "a"]);
-  assert.deepEqual(desc[1].sessions.map(row => row.id), ["zero", "unknown"]);
-  assert.equal(groups[0].sessions[0].id, "unknown");
 });

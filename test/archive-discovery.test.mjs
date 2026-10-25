@@ -1,29 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { extractConversation, findContentMatch, previewConversation, matchesUpdatedRange, searchArchiveBatches, searchInputSchema, sessionDetailCandidates } from "../src/archive-discovery.ts";
+import { extractConversation, findContentMatch, previewConversation, matchesUpdatedRange, searchArchiveBatches, searchInputSchema } from "../src/archive-discovery.ts";
 const user = (seq, text) => ({ type: "user/message", seq, data: { role: "user", content: [{ type: "text", text }] } });
 const assistant = (seq, text) => ({ type: "assistant/message", seq, data: { message: { role: "assistant", content: [{ type: "text", text }] } } });
-
-test("轮次统计保留旧载荷选择语义并跳过非对象事件", async () => {
-  const { countConversationTurns } = await import("../src/archive-discovery.ts");
-  for (const [data, expected] of [
-    [{ message: "", source: { kind: "user" } }, 0],
-    [{ message: 0 }, 0],
-    [{ message: "s", source: { kind: "automation" } }, 1],
-    [{ message: null, source: { kind: "automation" } }, 0],
-    [{ message: { source: { kind: "user" } } }, 1],
-    [{ message: { source: { kind: "automation" } } }, 0],
-    [[], 1],
-    [{ message: [], source: { kind: "automation" } }, 1],
-    [{ source: [] }, 1],
-  ]) assert.equal(countConversationTurns([{ type: "user/message", data }]), expected);
-  assert.equal(countConversationTurns([null, undefined, 42, "raw", false, [], user(0, "正常消息")]), 1);
-});
-
-test("诊断候选保留缺摘要会话且去重，不改变现有摘要", () => {
-  const a = { id: "a", updatedAt: 1 };
-  assert.deepEqual(sessionDetailCandidates(["a", "missing", "a"], { a }), [a, { id: "missing" }]);
-});
 
 test("大小写展开后的命中映射回原文，截断不拆开代理对", () => {
   for (const count of [100, 2500]) {
@@ -93,19 +72,11 @@ test("搜索参数限制批量大小、关键词和会话 ID，防止无限请�
   assert.throws(() => searchInputSchema.parse({ sessionIds: ["a"], query: "x".repeat(201) }));
 });
 
-test("轮次排序的未知值始终置后，复制成功与拒绝均有明确结果", async () => {
-  const { countConversationTurns, compareTurnCounts, copySessionText, detailsResultSchema } = await import("../src/archive-discovery.ts");
-  assert.equal(countConversationTurns([user(0, ""), assistant(1, "回答"), { type: "user/message", data: { source: { kind: "agent-message" } } }]), 1);
-  for (const order of ["turnsAsc", "turnsDesc"]) {
-    assert.ok(compareTurnCounts(0, null, order) < 0);
-    assert.ok(compareTurnCounts(undefined, 2, order) > 0);
-  }
-  assert.ok(compareTurnCounts(2, 5, "turnsAsc") < 0);
-  assert.ok(compareTurnCounts(2, 5, "turnsDesc") > 0);
+test("复制成功与拒绝均有明确结果", async () => {
+  const { copySessionText } = await import("../src/archive-discovery.ts");
   let copied;
   await copySessionText("会话-ID", { writeText: async text => { copied = text; } });
   assert.equal(copied, "会话-ID");
   await assert.rejects(copySessionText("ID", { writeText: async () => { throw new Error("denied"); } }), /复制失败/);
   await assert.rejects(copySessionText("ID", null), /不支持剪贴板/);
-  assert.throws(() => detailsResultSchema.parse({ items: [{ sessionId: "a", turnCount: -1, path: null, error: "" }] }));
 });

@@ -13,9 +13,9 @@ const invalidScope: BatchTarget = { scope: "everything" };
 void [missingWorkspace, numericId, invalidScope];
 
 function remoteContract(registry: Registry, result: RemoteResult<string>, props: ArchiveProps, drag: RowDrag) {
-  registry.sessionDetails({ sessionIds: ["会话一"] });
-  // @ts-expect-error 详情请求必须传入会话集合。
-  registry.sessionDetails({ sessionId: "会话一" });
+  registry.previewArchivedSession({ sessionId: "会话一", query: "关键词" });
+  // @ts-expect-error 预览请求必须传入 sessionId。
+  registry.previewArchivedSession({ query: "关键词" });
   // @ts-expect-error 收藏状态必须是布尔值。
   registry.setSessionFavorite({ sessionId: "会话一", favorite: "是" });
   // @ts-expect-error 失败结果不能读取成功值，必须先检查 ok。

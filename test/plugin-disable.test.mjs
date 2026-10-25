@@ -158,7 +158,7 @@ test("停用安装入口后，官方工作区实例仍能创建目录", async ()
 		assert.equal(typeof created.id, "string");
 		assert.equal(registry.deleteSession, undefined);
 
-		assert.deepEqual(inject, ["workspaceRegistry", "sessionProjectionCache", "sessionPersistence", "typert"]);
+		assert.deepEqual(inject, ["workspaceRegistry", "sessionPersistence", "typert"]);
 		const uninstall = await apply(ctx);
 		assert.equal(typeof registry.deleteSession, "function");
 		assert.equal(cache.table, officialTable);
@@ -168,7 +168,7 @@ test("停用安装入口后，官方工作区实例仍能创建目录", async ()
 		assert.equal(registry.deleteSession, undefined);
 		assert.equal(cache.table, officialTable);
 		assert.equal((await registry.create(project)).id, created.id);
-		assert.equal(opened.includes("session_projcache_archive_manager_v2"), true);
+		assert.equal(opened.some(name => name.startsWith("session_projcache_archive_manager")), false);
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}

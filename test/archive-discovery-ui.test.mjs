@@ -18,27 +18,6 @@ function harness() {
 }
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
-test("详情读取不依赖翻译函数身份，切换语言只重译本地提示", async () => {
-  const env = harness();
-  let calls = 0;
-  const call = async () => { calls++; return { items: [] }; };
-  const render = label => env.render(() => env.tools.useSessionDetails([{ id: "a", updatedAt: 1 }], call, () => label));
-  try {
-    render("缺少详情"); await tick();
-    for (let i = 0; i < 5; i++) {
-      assert.equal(render("缺少详情").byId.a.error, "缺少详情");
-      await tick();
-    }
-    assert.equal(calls, 1);
-    const translated = render("Details unavailable");
-    assert.equal(translated.byId.a.error, "Details unavailable");
-    assert.equal(translated.items[0].error, "Details unavailable");
-    assert.equal(calls, 1, "切换语言不能触发磁盘读取");
-    translated.retry(); render("Details unavailable"); await tick();
-    assert.equal(calls, 2, "手动重试仍能重新读取");
-  } finally { env.dispose(); }
-});
-
 test("离开预览页签后清除目标，返回时不复开且丢弃迟到响应", async () => {
   const env = harness();
   let ids = ["a"], resolve;
@@ -128,46 +107,6 @@ test("日期范围写入开始和结束，清空时清除条件", () => {
   assert.ok(clearButton, "有值时渲染独立清除小按钮");
   clearButton.props.onClick({ stopPropagation() {} });
   assert.equal(calls[calls.length - 1][0], "clear", "点击清除按钮触发 onClear");
-});
-
-test("删除进行中暂停详情读取，不因列表变短重读剩余会话", async () => {
-  const env = harness();
-  const calls = [];
-  let sessions = Array.from({ length: 21 }, (_, i) => ({ id: String(i), updatedAt: 1 }));
-  let paused = false;
-  const call = input => new Promise(resolve => calls.push({ input, resolve }));
-  const render = () => env.render(() => env.tools.useSessionDetails(sessions, call, undefined, paused));
-  try {
-    render();
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0].input.sessionIds.length, 20);
-    paused = true;
-    sessions = sessions.slice(1);
-    render();
-    calls[0].resolve({ items: [] });
-    await tick();
-    assert.equal(calls.length, 1, "暂停后不能继续下一批，也不能因为列表变化重读");
-    paused = false;
-    render();
-    assert.equal(calls.length, 2, "恢复后只补读一次当前列表");
-    assert.deepEqual(calls[1].input.sessionIds, sessions.map(session => session.id).slice(0, 20));
-  } finally { env.dispose(); }
-});
-
-test("详情分批读取取消后不发布旧结果，单批失败可重试", async () => {
-  const env = harness(); const calls = [];
-  let sessions = Array.from({ length: 21 }, (_, i) => ({ id: String(i), updatedAt: 1 }));
-  const call = input => new Promise((resolve, reject) => calls.push({ input, resolve, reject }));
-  const render = () => env.render(() => env.tools.useSessionDetails(sessions, call));
-  render(); assert.equal(calls[0].input.sessionIds.length, 20);
-  sessions = [{ id: "new", updatedAt: 2 }]; render();
-  calls[0].resolve({ items: [] }); await tick();
-  assert.equal(calls.length, 2, "取消旧查询后不再读取旧列表的下一批");
-  calls[1].reject(new Error("读取失败")); await tick();
-  let state = render(); assert.equal(state.byId.new.turnCount, null); assert.match(state.byId.new.error, /读取失败/);
-  state.retry(); render(); calls[2].resolve({ items: [{ sessionId: "new", turnCount: 5, path: "路径", error: "" }] }); await tick();
-  state = render(); assert.equal(state.byId.new.turnCount, 5); assert.equal(state.pending, false);
-  env.dispose();
 });
 
 test("快速预览默认使用宿主排版并允许切换原文高亮", () => {

@@ -92,17 +92,25 @@ test("创建时间排序从宿主归档头部读取元数据，更新时间继�
 
   assert.match(client, /registry\.archivedSessionMetadata\(\)/);
   assert.match(client, /Object\.fromEntries\(result\.items\.map/);
-  assert.match(client, /sortBy === "created" \? \(details\[session\.id\]\?\.createdAt \?\? createdAtById\[session\.id\]\) : session\.updatedAt/);
-  assert.match(client, /sortArchivedGroups\(groups, sortBy, createdAtById, t, details.byId\)/);
+  assert.match(client, /sortBy === "created" \? createdAtById\[session\.id\] : session\.updatedAt/);
+  assert.match(client, /archives\.sortArchived/);
+  assert.match(client, /sortArchivedGroups\(groups, sortBy, createdAtById, t(?:, [^)]+)?\)/);
 });
 
-test("老归档缺少投影时由宿主重建，并在新老客户端会话服务上刷新列表", async () => {
+test("归档元数据请求不触发会话列表刷新", async () => {
   const client = await readFile(clientPath, "utf8");
-
-  assert.match(client, /result\.value\.repairedSessionIds\?\.length > 0/);
-  assert.match(client, /typeof ctx\.sessions\.refresh === "function"/);
-  assert.match(client, /await ctx\.sessions\.refresh\(\)/);
-  assert.match(client, /repaired archived projections but session list refresh failed/);
+  const start = client.indexOf("const archivedSessionMetadata = async () => {");
+  const end = client.indexOf("const sessionMenuSlot =", start);
+  assert.ok(start >= 0 && end > start, "必须执行真实元数据请求包装器");
+  const build = new Function("ctx", `${client.slice(start, end)}; return archivedSessionMetadata;`);
+  const value = { items: [{ sessionId: "archived", createdAt: 42 }], repairedSessionIds: ["archived"] };
+  let refreshes = 0;
+  const request = build({
+    get: () => ({ archivedSessionMetadata: async () => ({ ok: true, value }) }),
+    sessions: { refresh: async () => { refreshes += 1; } },
+  });
+  assert.equal(await request(), value);
+  assert.equal(refreshes, 0, "即使旧服务返回补缓存标记，元数据读取也不应触发全量刷新");
 });
 
 test("归档设置页占满宿主内容区，侧栏入口使用简短归档标签", async () => {

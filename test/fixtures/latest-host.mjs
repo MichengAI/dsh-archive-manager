@@ -15,9 +15,6 @@ const { SessionPersistence } = await import(
 	"@deepseek-ai/dsh-session-persistence"
 );
 const { SessionQueryEngine } = await import("@deepseek-ai/dsh-session-query");
-const { SessionProjectionRegistry } = await import(
-	"@deepseek-ai/dsh-session-projection"
-);
 const { SessionProjectionCache } = await import(
 	"@deepseek-ai/dsh-session-projection-cache"
 );
@@ -133,59 +130,6 @@ async function setup(t, compression = "none") {
 		create,
 	};
 }
-
-test("真实宿主旧自动化诊断修复使用写锁、代际编码和压缩复读", async t => {
-	const env = await setup(t, "zstd");
-	if (!Number.isInteger(env.persistence.generationFormat?.currentVersion) || env.persistence.generationFormat.currentVersion < 3) {
-		t.skip("此宿主不使用第三代及以后的日志修复协议");
-		return;
-	}
-	const id = "repair-legacy";
-	const meta = { type: "session", version: 0, id, createdAt: 1700000000000, cwd: env.cwd, delegationDepth: 0 };
-	const target = env.persistence.locate(meta).path;
-	const directory = dirname(target);
-	await mkdir(directory, { recursive: true });
-	const source = join(directory, "session.jsonl.zstd");
-	const events = [
-		["turn/start", { turn: 1 }],
-		["step/start", { turn: 1, step: 1 }],
-		["user/message", { id: "legacy-user", role: "user", content: [{ type: "text", text: "旧自动化正文必须保留" }], source: { kind: "automation", automationId: "a", runId: "r", scheduledFor: "2026-09-01T00:00:00Z" } }],
-		["step/end", { turn: 1, step: 1 }],
-		["turn/end", { turn: 1, reason: { kind: "completed" } }]
-	].map(([type, data], seq) => ({ type, data, seq, time: 1700000000000, ...(type === "user/message" ? { surfaceOp: "append" } : {}) }));
-	const { zstdCompressSync } = await import("node:zlib");
-	const original = Buffer.concat([meta, ...events].map(row => zstdCompressSync(Buffer.from(JSON.stringify(row) + "\n", "utf8"))));
-	await writeFile(source, original);
-	env.state.archivedSessionIds = [id];
-	let leases = 0, releases = 0, validations = 0;
-	const acquire = env.persistence.acquireLease.bind(env.persistence);
-	env.persistence.acquireLease = async (...args) => {
-		const lease = await acquire(...args); leases++;
-		const release = lease.release.bind(lease);
-		lease.release = async () => { await release(); releases++; };
-		return lease;
-	};
-	const readPrefix = env.persistence.readZstdPrefix.bind(env.persistence);
-	env.persistence.readZstdPrefix = async bytes => { validations++; return readPrefix(bytes); };
-	const diagnosis = await env.registry.diagnoseSession({ sessionId: id });
-	assert.equal(diagnosis.repairable, true, JSON.stringify(diagnosis));
-	assert.ok(validations > 0);
-	// 篡改校验器读到的身份，发布前必须拒绝，且不能生成目标工件。
-	env.persistence.readZstdPrefix = async bytes => {
-		const parsed = await readPrefix(bytes);
-		return { ...parsed, meta: { ...parsed.meta, id: "wrong" } };
-	};
-	await assert.rejects(env.registry.repairSession({ sessionId: id, token: diagnosis.token }), /校验/);
-	await assert.rejects(access(target), { code: "ENOENT" });
-	env.persistence.readZstdPrefix = readPrefix;
-	const result = await env.registry.repairSession({ sessionId: id, token: diagnosis.token });
-	assert.equal(result.repaired, true, JSON.stringify(result));
-	assert.equal(leases, 1); assert.equal(releases, 1);
-	assert.deepEqual(await readFile(source), original);
-	const reader = await env.persistence.open(id, "read");
-	try { assert.match(JSON.stringify((await reader.read(0)).events), /旧自动化正文必须保留/); }
-	finally { await reader.close(); }
-});
 
 for (const compression of ["none", "zstd"]) {
 	test(`最新宿主实时会话落盘并释放写句柄后删除，重开存储不复活 (${compression})`, async (t) => {
@@ -308,7 +252,7 @@ for (const compression of ["none", "zstd"]) {
 	});
 }
 
-test("新版缺失投影使用只读句柄恢复并释放句柄", async (t) => {
+test("正文读取共用只读句柄并在完成后释放", async (t) => {
 	const env = await setup(t);
 	const header = await env.create("archive");
 	const source = await env.registry.readStoredProjectionSource(
@@ -325,7 +269,7 @@ test("新版缺失投影使用只读句柄恢复并释放句柄", async (t) => {
 for (const { previousCache, seeded } of ["缺失", "无版本", "旧代际"].flatMap(
 	(previousCache) => [false, true].map((seeded) => ({ previousCache, seeded })),
 )) {
-	test(`新版归档摘要修复后真实缓存可用且再次访问不重复修复（缓存：${previousCache}，播种：${seeded}）`, async (t) => {
+	test(`归档元数据不读取真实正文或补写缓存（缓存：${previousCache}，播种：${seeded}）`, async (t) => {
 		const env = await setup(t);
 		const parent = env.sessions.prepare("projection-parent", {
 			meta: { cwd: env.cwd },
@@ -353,103 +297,36 @@ for (const { previousCache, seeded } of ["缺失", "无版本", "旧代际"].fla
 			await writer.close();
 		}
 		await env.registry.archiveSession(session.id);
-		// 使用官方投影驱动和缓存匹配逻辑，仅缓存存储层使用内存表。
-		const projections = new SessionProjectionRegistry(env.ctx);
-		const stringSchema = {
-			parse(value) {
-				assert.equal(typeof value, "string");
-				return value;
-			},
-		};
-		projections.register({
-			key: "title",
-			stateVersion: 1,
-			stateSchema: stringSchema,
-			init: (header, count) => {
-				assert.equal(header.isSeeded, seeded);
-				assert.equal(
-					count,
-					inheritedEventCount,
-					"投影恢复必须使用持久化的继承切点",
-				);
-				return "";
-			},
-			apply: (state, item) =>
-				item.type === "session/title" ? item.data.title : state,
-			wire: { viewSchema: stringSchema, view: (state) => state },
-		});
-		const cache = new SessionProjectionCache(env.ctx, {
-			writeEveryEvents: 100,
-			writeIntervalMs: 60000,
-		});
+		const cache = new SessionProjectionCache(env.ctx, { writeEveryEvents: 100, writeIntervalMs: 60000 });
 		const records = new Map();
-		let writes = 0;
+		const calls = [];
 		cache.table = {
-			get: (id) => records.get(id),
-			put: async (id, record) => {
-				writes++;
-				records.set(id, record);
-			},
+			get: id => records.get(id),
+			put: async (id, value) => { calls.push("put"); records.set(id, value); },
 		};
-		if (previousCache !== "缺失") {
-			const { version, createdAt, cwd, isSeeded } = session.header;
-			records.set(session.id, {
-				identity: {
-					...(previousCache === "无版本" ? {} : { formatVersion: version - 1 }),
-					createdAt,
-					cwd,
-					isSeeded,
-					inheritedEventCount,
-				},
-				rows: { title: { ver: 1, seq: event.seq, val: "旧代际标题" } },
+		if (previousCache !== "缺失") records.set(session.id, {
+			identity: {
+				...(previousCache === "无版本" ? {} : { formatVersion: session.header.version - 1 }),
+				createdAt: session.header.createdAt, cwd: session.header.cwd,
+				isSeeded: seeded, inheritedEventCount,
+			},
+			rows: { title: { ver: 1, seq: event.seq, val: "旧代际标题" } },
+		});
+		const before = structuredClone([...records]);
+		const read = env.registry.readStoredProjectionSource;
+		env.registry.readStoredProjectionSource = async function (...args) {
+			calls.push("read");
+			return read.apply(this, args);
+		};
+		cache.cachedSnapshot = () => { calls.push("cachedSnapshot"); return undefined; };
+		for (let attempt = 0; attempt < 2; attempt += 1) {
+			assert.deepEqual(await env.registry.archivedSessionMetadata(), {
+				items: [{ sessionId: session.id, createdAt: session.header.createdAt }],
 			});
 		}
-		// 插件经 ctx.get 取服务方法。回归护栏：剩余宿主只按头部读取缓存。
-		const snapshot = (header) => cache.cachedSnapshot(header);
-		const cachedSnapshotArgCounts = [];
-		const rawCachedSnapshot = cache.cachedSnapshot.bind(cache);
-		const cachedSnapshotSpy = function (...args) {
-			cachedSnapshotArgCounts.push(args.length);
-			return rawCachedSnapshot(...args);
-		};
-		Object.defineProperty(cachedSnapshotSpy, "length", { value: cache.cachedSnapshot.length });
-		cache.cachedSnapshot = cachedSnapshotSpy;
-		assert.equal(snapshot(session.header), void 0);
-		let reads = 0;
-		const read = env.registry.readStoredProjectionSource.bind(env.registry);
-		env.registry.readStoredProjectionSource = async (...args) => {
-			reads++;
-			return read(...args);
-		};
-		const first = await env.registry.archivedSessionMetadata();
-		assert.deepEqual(first.repairedSessionIds, [session.id]);
-		assert.deepEqual(
-			snapshot(session.header),
-			{ asOfSeq: event.seq, values: { title: "从原文恢复的标题" } },
-			"修复成功必须产生官方缓存可读取的标题和正确水位",
-		);
-		assert.equal(
-			records.get(session.id).identity.formatVersion,
-			session.header.version,
-		);
-		assert.equal(
-			records.get(session.id).identity.inheritedEventCount,
-			inheritedEventCount,
-		);
-		const second = await env.registry.archivedSessionMetadata();
-		assert.equal(second.repairedSessionIds, void 0);
-		assert.ok(
-			cachedSnapshotArgCounts.length > 0
-			&& cachedSnapshotArgCounts.every((argCount) => argCount === 1),
-			`插件读取缓存只能传头部，实际：${cachedSnapshotArgCounts.join(",")}`,
-		);
-		assert.equal(
-			reads,
-			seeded ? 2 : 1,
-			"播种会话需再次读取继承切点，普通会话直接命中缓存",
-		);
-		assert.equal(writes, 1, "缓存命中后不再写回");
-		assert.equal(env.sessions.get(session.id), void 0, "修复不能激活冷会话");
+		assert.deepEqual(calls, [], "读取归档元数据不得触发正文读取、缓存查询或写回");
+		assert.deepEqual([...records], before, "已有官方缓存保持原样，不由归档列表修复");
+		assert.equal(env.sessions.get(session.id), undefined, "读取元数据不能激活冷会话");
 	});
 }
 

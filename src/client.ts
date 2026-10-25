@@ -2,13 +2,12 @@ import type { ClientContext, Workspaces, Registry, RegistryCalls, DiscoveryMetho
 import type { ArchiveDeleteTarget } from "./client-types.js";
 import { record, errorMessage, errorCode } from "./contracts.js";
 import type { Schema } from "./contracts.js";
-import type { ClientSession, ClientList, ClientWorkspace, WorkspaceSnapshot, Observable, WorkspaceView, UiFacts, PendingHook, StatusHook, StatusMap, BatchTarget, DeletedBatch, ArchivedGroup, ArchiveProps, ArchiveBatchResult, ArchiveRetry, Translate, BatchProgress, OrganizeKind, SessionDetail } from "./client-types.js";
+import type { ClientSession, ClientList, ClientWorkspace, WorkspaceSnapshot, Observable, WorkspaceView, UiFacts, PendingHook, StatusHook, StatusMap, BatchTarget, DeletedBatch, ArchivedGroup, ArchiveProps, ArchiveBatchResult, ArchiveRetry, Translate, BatchProgress, OrganizeKind } from "./client-types.js";
 import type { NavigationSource } from "./archive-experience.js";
 import type { RemoteResult } from "./client-compat.js";
 import type { ReactNode, RefObject, AriaAttributes, HTMLAttributes, DragEvent as ReactDragEvent } from "react";
-import { createSessionHealthPanel, healthZh, healthEn, healthRu } from "./session-health-ui.js";
 import { createDiscoveryTools, discoveryCss, discoveryZh, discoveryEn, discoveryRu } from "./archive-discovery-ui.js";
-import { compareTurnCounts, copySessionText, discoveryInvocations, matchesUpdatedRange, validUpdatedRange, sessionDetailCandidates } from "./archive-discovery.js";
+import { copySessionText, discoveryInvocations, matchesUpdatedRange, validUpdatedRange } from "./archive-discovery.js";
 import { allowArchivedNavigation, openArchivedConversation, formatArchiveNavigationError, ArchiveNavigationError, currentSessionId } from "./archive-experience.js";
 import { observePluginUpdate } from "./plugin-update-ui.js";
 import { setupSidebarEntry } from "./sidebar-entry.js";
@@ -96,8 +95,7 @@ export function startArchiveClient(require: HostRequire) {
 			return props as HTMLAttributes<HTMLDivElement> & { children: ReactNode };
 		}
 		const OrganizerPanel = createOrganizerPanel(react, _deepseek_ai_dsh_client_ui_primitives.Button);
-        const { HighlightedText, useSessionDetails, useArchiveSearch, useArchivePreview, DiscoveryFilters, SearchStatus, PreviewContent } = createDiscoveryTools(react, { Button: _deepseek_ai_dsh_client_ui_primitives.Button, SegmentedControl: _deepseek_ai_dsh_client_ui_primitives.SegmentedControl });
-        const SessionHealthPanel = createSessionHealthPanel(react, { warning: _deepseek_ai_dsh_client_ui_primitives.IconWarningOutlineMedium, info: _deepseek_ai_dsh_client_ui_primitives.IconInfoOutlineMedium, check: _deepseek_ai_dsh_client_ui_primitives.IconCheckOutlineMedium, refresh: _deepseek_ai_dsh_client_ui_primitives.IconRefreshOutlineMedium, search: _deepseek_ai_dsh_client_ui_primitives.IconSearchOutlineMedium, chevron: _deepseek_ai_dsh_client_ui_primitives.IconChevronDownOutlineMedium }, _deepseek_ai_dsh_client_ui_primitives.Button);
+        const { HighlightedText, useArchiveSearch, useArchivePreview, DiscoveryFilters, SearchStatus, PreviewContent } = createDiscoveryTools(react, { Button: _deepseek_ai_dsh_client_ui_primitives.Button, SegmentedControl: _deepseek_ai_dsh_client_ui_primitives.SegmentedControl });
 		const UPDATE_ICON_PATHS: Record<string, string[]> = {
 			refresh: ["M13.5 5.5V2.5m0 0h-3m3 0-2.1 2.1A5.5 5.5 0 1 0 13.2 12"],
 			download: ["M8 2v8m0 0 3-3m-3 3-3-3M3 13v2h10v-2"],
@@ -179,7 +177,6 @@ export function startArchiveClient(require: HostRequire) {
 				const value = record(input);
 				if (typeof value !== "object" || value === null || Array.isArray(value) || !Array.isArray(value.items)) throw new TypeError("result.items must be an array");
 				if (value.items.some((item) => typeof item !== "object" || item === null || typeof item.sessionId !== "string" || typeof item.createdAt !== "number" || !Number.isFinite(item.createdAt))) throw new TypeError("items must contain sessionId/createdAt objects");
-				if (value.repairedSessionIds !== void 0 && (!Array.isArray(value.repairedSessionIds) || value.repairedSessionIds.some((id) => typeof id !== "string"))) throw new TypeError("repairedSessionIds must be a string array");
 				return value;
 			}
 		};
@@ -250,6 +247,58 @@ export function startArchiveClient(require: HostRequire) {
 					invocation: { kind: "direct" },
 					parameters: [],
 					result: strictCodec("@michengai/dsh-archive-manager/types#ArchivedSessionMetadata", archivedSessionMetadataSchema),
+					sourceLocation: { file: "@michengai/dsh-archive-manager/lib/workspace.js", line: 1, column: 1 }
+				},
+				{
+					id: "@michengai/dsh-archive-manager#workspaceRegistry/diagnoseOrphanSubagents",
+					service: "workspaceRegistry",
+					namespace: "workspaceRegistry",
+					method: "diagnoseOrphanSubagents",
+					invocation: { kind: "direct" },
+					parameters: [],
+					result: strictCodec("@michengai/dsh-archive-manager/types#OrphanSubagentDiagnosis", {
+						parse(value: unknown) {
+							const val = record(value);
+							if (!val || typeof val.count !== "number" || !Array.isArray(val.items) || typeof val.totalSizeBytes !== "number") {
+								throw new TypeError("invalid orphan subagent diagnosis");
+							}
+							return val;
+						}
+					}),
+					sourceLocation: { file: "@michengai/dsh-archive-manager/lib/workspace.js", line: 1, column: 1 }
+				},
+				{
+					id: "@michengai/dsh-archive-manager#workspaceRegistry/cleanOrphanSubagents",
+					service: "workspaceRegistry",
+					namespace: "workspaceRegistry",
+					method: "cleanOrphanSubagents",
+					invocation: { kind: "direct" },
+					parameters: [{
+						name: "target",
+						wire: "target",
+						source: "json",
+						acceptsUndefined: true,
+						codec: strictCodec("@michengai/dsh-archive-manager/types#CleanOrphanTarget", {
+							parse(v: unknown) {
+								if (v === undefined || v === null) return {};
+								const val = record(v);
+								if (!val) throw new TypeError("target must be an object");
+								if (val.sessionIds !== undefined && (!Array.isArray(val.sessionIds) || val.sessionIds.some(id => typeof id !== "string"))) {
+									throw new TypeError("sessionIds must be an array of strings");
+								}
+								return val;
+							}
+						})
+					}],
+					result: strictCodec("@michengai/dsh-archive-manager/types#CleanOrphanResult", {
+						parse(value: unknown) {
+							const val = record(value);
+							if (!val || !Array.isArray(val.cleanedSessionIds) || !Array.isArray(val.skippedSessionIds) || !Array.isArray(val.failures)) {
+								throw new TypeError("invalid orphan subagent clean result");
+							}
+							return val;
+						}
+					}),
 					sourceLocation: { file: "@michengai/dsh-archive-manager/lib/workspace.js", line: 1, column: 1 }
 				},
 			]
@@ -405,7 +454,7 @@ export function startArchiveClient(require: HostRequire) {
 		/**
 		* 归档管理设置页：集中处理筛选、多选、恢复、删除和原生会话导航。
 		*/
-		function ArchivedSessionsSection({ archiveSessions, archiveSession, sessionStore, workspaceStore, unarchiveSession, deleteSession, unarchiveSessions, deleteArchivedSessions, archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState, close, t, diagnoseSession, repairSession, sessionDetails, searchSessionContent, searchArchivedContent, previewArchivedSession, favoriteSessions, setSessionFavorite, organizeBatch, scheduledSessionIds, useSessionPendingInteraction, useSessionStatus }: ArchiveProps) {
+		function ArchivedSessionsSection({ archiveSessions, archiveSession, sessionStore, workspaceStore, unarchiveSession, deleteSession, unarchiveSessions, deleteArchivedSessions, archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState, close, t, diagnoseOrphanSubagents, cleanOrphanSubagents, searchSessionContent, searchArchivedContent, previewArchivedSession, favoriteSessions, setSessionFavorite, organizeBatch, scheduledSessionIds, useSessionPendingInteraction, useSessionStatus }: ArchiveProps) {
 			const sessions = (0, react.useSyncExternalStore)(sessionStore.subscribe, sessionStore.getSnapshot);
 			const workspaceState = (0, react.useSyncExternalStore)(workspaceStore.subscribe, workspaceStore.getSnapshot);
 			const [archiveTab, setArchiveTab] = (0, react.useState)("archived");
@@ -501,6 +550,40 @@ export function startArchiveClient(require: HostRequire) {
 				} catch (reason) { setError(errorMessage(reason)); }
 				finally { batchLock.current = false; setBusy(false); setBatchProgress(null); }
 			};
+			const [orphanInfo, setOrphanInfo] = (0, react.useState)<{ count: number; items: { sessionId: string; parentSessionId: string; createdAt: number; sizeBytes: number }[]; totalSizeBytes: number } | null>(null);
+			const [orphanCleaning, setOrphanCleaning] = (0, react.useState)(false);
+			const loadOrphans = () => {
+				if (typeof diagnoseOrphanSubagents === "function") {
+					diagnoseOrphanSubagents().then(setOrphanInfo).catch((err) => {
+						console.warn("archive-manager: diagnose orphan subagents failed", err);
+					});
+				}
+			};
+			(0, react.useEffect)(() => {
+				loadOrphans();
+			}, [workspaceState.archivedSessionIds]);
+
+			const cleanOrphans = async () => {
+				if (orphanCleaning || typeof cleanOrphanSubagents !== "function") return;
+				setOrphanCleaning(true); setError(null); setNotice(null);
+				try {
+					const res = await cleanOrphanSubagents({});
+					if (res.cleanedSessionIds.length > 0 || res.skippedSessionIds.length > 0) {
+						loadOrphans();
+					}
+					if (res.failures.length > 0) {
+						setNotice(null);
+						setError(formatBatchFailures(res.failures, t));
+					} else if (res.cleanedSessionIds.length > 0) {
+						setError(null);
+						setNotice(t("organizer.orphanCleanSuccess", { n: res.cleanedSessionIds.length }));
+					}
+				} catch (error) {
+					setError(errorMessage(error));
+				} finally {
+					setOrphanCleaning(false);
+				}
+			};
 			const navigationActive = (0, react.useRef)(true);
 			const navigationPending = (0, react.useRef)(false);
 			(0, react.useEffect)(() => { navigationActive.current = true; return () => { navigationActive.current = false; }; }, []);
@@ -535,16 +618,12 @@ export function startArchiveClient(require: HostRequire) {
 			};
 			(0, react.useEffect)(() => { if (viewState) Object.assign(viewState, { query, project, sortBy }); }, [query, project, sortBy, viewState]);
 			const eligibleIds = (0, react.useMemo)(() => isArchived ? workspaceState.archivedSessionIds : unarchivedSessionIds(sessions.byId, workspaceState.archivedSessionIds), [isArchived, sessions.byId, workspaceState.archivedSessionIds]);
-			const liveDetailSessions = sessionDetailCandidates(eligibleIds, sessions.byId);
-			// 删除会逐条缩短列表。忙碌时沿用删除前的目标，避免每删一条就重读剩余原文。
-			const heldDetailSessions = (0, react.useRef)(liveDetailSessions);
-			if (!busy) heldDetailSessions.current = liveDetailSessions;
 			const groups = (0, react.useMemo)(() => deriveArchivedGroups(sessions.byId, workspaceState.items, eligibleIds, t("group.ungrouped")), [sessions.byId, workspaceState, eligibleIds, t]);
 			const switchTab = (tab: string) => {
 				if (busy || unarchivingSessionIdsRef.current.size > 0) return;
 				preview.close();
 				setArchiveTab(tab); setSelectedSessionIds([]); setArchiveTarget(null); setArchiveGroup(null); setError(null); setNotice(null); setProject("all"); setQuery("");
-
+				if (tab !== "archived" && sortBy === "archived") setSortBy("updated");
 			};
 			const performArchive = async (ids: string[] | null, idle = false) => {
 				if (archiveBusy.current || busy || !ids?.length) return;
@@ -612,22 +691,14 @@ export function startArchiveClient(require: HostRequire) {
 				finally { archiveBusy.current = false; setBusy(false); }
 			};
 			const confirmArchive = () => performArchive(archiveTarget, idleRequest);
-			const details = useSessionDetails(heldDetailSessions.current, sessionDetails, t, busy);
-            const copyDetail = async (session: ClientSession, kind: string) => {
-                setError(null); setNotice(null);
-                try {
-                    let text = session.id;
-                    if (kind === "path") {
-                        let row = details.byId[session.id];
-                        if (!row) row = (await sessionDetails({ sessionIds: [session.id] })).items[0];
-                        if (!row?.path) throw new Error(t("details.noPath"));
-                        text = row.path;
-                    }
-                    await copySessionText(text);
-                    if (navigationActive.current) setNotice(t("details.copied"));
-                } catch (reason) { if (navigationActive.current) setError(typeof errorCode(reason) === "string" && String(errorCode(reason)).startsWith("copy.") ? t(String(errorCode(reason))) : errorMessage(reason)); }
-            };
-            const sortedGroups = (0, react.useMemo)(() => sortArchivedGroups(groups, sortBy, createdAtById, t, details.byId), [groups, sortBy, createdAtById, t, details.byId]);
+			const copyId = async (session: ClientSession) => {
+				setError(null); setNotice(null);
+				try {
+					await copySessionText(session.id);
+					if (navigationActive.current) setNotice(t("details.copied"));
+				} catch (reason) { if (navigationActive.current) setError(typeof errorCode(reason) === "string" && String(errorCode(reason)).startsWith("copy.") ? t(String(errorCode(reason))) : errorMessage(reason)); }
+			};
+			const sortedGroups = (0, react.useMemo)(() => sortArchivedGroups(groups, sortBy, createdAtById, t, isArchived ? workspaceState.archivedSessionIds : undefined), [groups, sortBy, createdAtById, t, isArchived, workspaceState.archivedSessionIds]);
 			(0, react.useEffect)(() => {
 				// 归档名单在批量删除中会逐条变化。忙碌时不重读，结束后再补一次。
 				if (busy) return;
@@ -875,9 +946,9 @@ export function startArchiveClient(require: HostRequire) {
 								favoritesOnly,
 								setFavoritesOnly,
 								favoriteBusy: busy || favoriteBusy || !favoritesReady,
-								sortBy,
+								sortBy: (!isArchived && sortBy === "archived") ? "updated" : sortBy,
 								setSortBy,
-								options: [{ value: "updated", label: t("archives.sortUpdated") }, { value: "created", label: t("archives.sortCreated") }, { value: "alphabetical", label: t("archives.sortAlphabetical") }, ...typeof sessionDetails === "function" ? [{ value: "turnsDesc", label: t("details.more") }, { value: "turnsAsc", label: t("details.less") }] : []]
+								options: [...(isArchived ? [{ value: "archived", label: t("archives.sortArchived") }] : []), { value: "updated", label: t("archives.sortUpdated") }, { value: "created", label: t("archives.sortCreated") }, { value: "alphabetical", label: t("archives.sortAlphabetical") }]
 							}),
 							(0, react_jsx_runtime.jsx)(ArchiveProjectSelect, {
 								id: "dsham-project-filter",
@@ -899,7 +970,7 @@ export function startArchiveClient(require: HostRequire) {
 							})
 						]
 					})
-				}), react.createElement("style", null, discoveryCss), react.createElement(SearchStatus, { state: contentSearch, t }), react.createElement(SessionHealthPanel, { key: archiveTab, t, isArchived, items: details.items, sessions: groups.flatMap(group => group.sessions), diagnoseSession, repairSession, retry: details.retry, pending: details.pending }), organizeBatch && (0, react_jsx_runtime.jsx)(OrganizerPanel, {
+				}), react.createElement("style", null, discoveryCss), react.createElement(SearchStatus, { state: contentSearch, t }), organizeBatch && (0, react_jsx_runtime.jsx)(OrganizerPanel, {
 					t, archived: isArchived, busy: busy || favoriteBusy || unarchivingSessionIds.size > 0, ready: favoritesReady,
 					days: idleDays, onDays: setIdleDays, count: idleCandidates.length,
 					onPreview: () => { requestArchive(idleCandidates); setIdleRequest(true); },
@@ -907,7 +978,11 @@ export function startArchiveClient(require: HostRequire) {
 					onRetry: () => { const retry = retryBatch.current; if (retry) { if (retry.kind === "delete") requestDelete({ kind: "batch", target: { scope: "sessions", sessionIds: retry.ids }, count: retry.ids.length }); else executeBatch(retry.kind, retry.ids, { idle: retry.idle, retry: true }); } },
 					undoCount: undoableArchiveCount,
 					onUndo: () => executeBatch("undo", lastArchive, { retry: true }), onReload: loadFavorites,
-					skipScheduled, onSkipScheduled: setSkipScheduled, scheduledSkipped
+					skipScheduled, onSkipScheduled: setSkipScheduled, scheduledSkipped,
+					orphanCount: orphanInfo?.count ?? 0,
+					orphanSizeBytes: orphanInfo?.totalSizeBytes ?? 0,
+					orphanCleaning,
+					onCleanOrphans: cleanOrphans
 				}), groups.length > 0 && (0, react_jsx_runtime.jsx)(ArchiveSelectionToolbar, {
 					selectedCount: selectedSessionIds.length,
 					hiddenCount: selectedSessionIds.length - selectedVisibleCount,
@@ -936,12 +1011,12 @@ export function startArchiveClient(require: HostRequire) {
                     (0, react_jsx_runtime.jsx)(ArchiveSelectionCheckbox, { checked: selectedSessionIdSet.has(session.id), disabled: busy, label: t("archives.selectSession", { name: displayTitle(session, t) }), onChange: (event) => toggleSessionSelection(session.id, event.target.checked) }),
                     (0, react_jsx_runtime.jsxs)("div", { className: "dsham_settingsContent", children: [
                       (0, react_jsx_runtime.jsx)("button", { type: "button", className: "dsham_settingsTitleLink", title: displayTitle(session, t), "aria-label": t("archives.openSession") + t("common.separator") + displayTitle(session, t), disabled: busy || unarchivingSessionIds.has(session.id), onClick: () => viewConversation(session), children: displayTitle(session, t) }),
-                      (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsMeta", children: [archiveTimeLabel(session.updatedAt, t), typeof sessionDetails === "function" && react.createElement("span", { key: "turns", title: details.byId[session.id]?.error || t("details.hint") }, " · ", t(typeof details.byId[session.id]?.turnCount === "number" ? "details.turns" : details.byId[session.id] ? "details.unknown" : "details.pending", { n: details.byId[session.id]?.turnCount }))] }), contentMatches.has(session.id) && react.createElement("button", { type: "button", className: "dsham_settingsSnippet", disabled: busy, title: t(isArchived ? "discovery.preview" : "archives.openSession"), onClick: () => isArchived ? preview.open(session, query) : viewConversation(session) }, react.createElement(HighlightedText, { text: contentMatches.get(session.id)?.snippet ?? "", query }))
+                      (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsMeta", children: [archiveTimeLabel(session.updatedAt, t)] }), contentMatches.has(session.id) && react.createElement("button", { type: "button", className: "dsham_settingsSnippet", disabled: busy, title: t(isArchived ? "discovery.preview" : "archives.openSession"), onClick: () => isArchived ? preview.open(session, query) : viewConversation(session) }, react.createElement(HighlightedText, { text: contentMatches.get(session.id)?.snippet ?? "", query }))
                     ] }),
                     (0, react_jsx_runtime.jsxs)("div", { className: "dsham_settingsActions", children: [
                       typeof setSessionFavorite === "function" && settingsButton({ variant: "outline", className: "dsham_iconAction" + (favoriteSet.has(session.id) ? " dsham_favoriteOn" : ""), title: t(favoriteSet.has(session.id) ? "organizer.unfavorite" : "organizer.favorite"), "aria-pressed": favoriteSet.has(session.id), "aria-label": t(favoriteSet.has(session.id) ? "organizer.unfavorite" : "organizer.favorite") + t("common.separator") + displayTitle(session, t), disabled: busy || favoriteBusy || !favoritesReady, onClick: () => toggleFavorite(session.id), children: (0, react_jsx_runtime.jsx)("svg", { viewBox: "0 0 16 16", width: 16, height: 16, fill: favoriteSet.has(session.id) ? "currentColor" : "none", stroke: "currentColor", strokeWidth: 1.4, strokeLinejoin: "round", "aria-hidden": true, style: { display: "block" }, children: (0, react_jsx_runtime.jsx)("path", { d: "M8 1.75l1.934 3.918 4.324.628-3.129 3.05.738 4.306L8 11.618l-3.867 2.034.738-4.306-3.129-3.05 4.324-.628L8 1.75z" }) }) }),
                       settingsButton({ variant: "outline", className: "dsham_iconAction", title: t(isArchived ? "archives.restore" : "archives.archiveSelected"), "aria-label": t(isArchived ? "archives.restore" : "archives.archiveSelected"), disabled: busy || unarchivingSessionIds.has(session.id), onClick: () => isArchived ? onUnarchive(session.id) : performArchive([session.id]), icon: (0, react_jsx_runtime.jsx)(isArchived ? _deepseek_ai_dsh_client_ui_primitives.IconRefreshOutlineMedium : _deepseek_ai_dsh_client_ui_primitives.IconArchiveOutlineMedium, { size: 16 }) }),
-                      (isArchived || typeof sessionDetails === "function") && (0, react_jsx_runtime.jsx)(ArchivedSessionMenu, { busy: busy || unarchivingSessionIds.has(session.id), t, title: displayTitle(session, t), onCopyId: () => copyDetail(session, "id"), onCopyPath: typeof sessionDetails === "function" ? () => copyDetail(session, "path") : undefined, onPreview: isArchived && typeof previewArchivedSession === "function" ? () => preview.open(session, query) : undefined, onRestoreOpen: isArchived ? () => viewConversation(session, true) : undefined, onDelete: isArchived ? () => requestDelete({ kind: "session", session }) : undefined })
+                      isArchived && (0, react_jsx_runtime.jsx)(ArchivedSessionMenu, { busy: busy || unarchivingSessionIds.has(session.id), t, title: displayTitle(session, t), onCopyId: () => copyId(session), onPreview: typeof previewArchivedSession === "function" ? () => preview.open(session, query) : undefined, onRestoreOpen: () => viewConversation(session, true), onDelete: () => requestDelete({ kind: "session", session }) })
                     ] })
                   ]
                 }, session.id))
@@ -1877,14 +1952,13 @@ export function startArchiveClient(require: HostRequire) {
 			});
 		}
 		/** 会话行上的更多操作，弹出层用宿主 Menu。 */
-		function ArchivedSessionMenu({ busy, title, t, onPreview, onRestoreOpen, onDelete, onCopyId, onCopyPath }: { busy: boolean; title: string; t: Translate; onPreview?: () => void; onRestoreOpen?: () => void; onDelete?: () => void; onCopyId?: () => void; onCopyPath?: () => void }) {
+		function ArchivedSessionMenu({ busy, title, t, onPreview, onRestoreOpen, onDelete, onCopyId }: { busy: boolean; title: string; t: Translate; onPreview?: () => void; onRestoreOpen?: () => void; onDelete?: () => void; onCopyId?: () => void }) {
 			const [open, setOpen] = (0, react.useState)(false);
-			const choose = (id: string) => { if (busy) return; setOpen(false); if (id === "copyId") return onCopyId?.(); if (id === "copyPath") return onCopyPath?.(); if (id === "preview") return onPreview?.(); if (id === "restoreOpen") return onRestoreOpen?.(); if (id === "delete") onDelete?.(); };
+			const choose = (id: string) => { if (busy) return; setOpen(false); if (id === "copyId") return onCopyId?.(); if (id === "preview") return onPreview?.(); if (id === "restoreOpen") return onRestoreOpen?.(); if (id === "delete") onDelete?.(); };
 			const items = [
 				...onPreview ? [{ id: "preview", label: t("discovery.preview"), icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconBrowseOutlineMedium, { size: 16 }), danger: false }] : [],
 				...onRestoreOpen ? [{ id: "restoreOpen", label: t("archives.restoreOpen"), icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconUnarchiveOutlineMedium, { size: 16 }), danger: false }] : [],
 				...onCopyId ? [{ id: "copyId", label: t("details.copyId"), icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCopyOutlineMedium, { size: 16 }), danger: false }] : [],
-				...onCopyPath ? [{ id: "copyPath", label: t("details.copyPath"), icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconLinkOutlineMedium, { size: 16 }), danger: false }] : [],
 				...onDelete ? [{ id: "delete", label: t("menu.deleteSession"), icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconTrashOutlineMedium, { size: 16 }), danger: true }] : []
 			];
 			return (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Menu, {
@@ -2020,17 +2094,25 @@ export function startArchiveClient(require: HostRequire) {
 		* 归档设置页排序：时间排序同时按每组首条会话排列项目，字母排序则
 		* 同时排列项目名和组内标题；所有输入均复制后排序，不改写 store 快照。
 		*/
-		function sortArchivedGroups(groups: readonly ArchivedGroup[], sortBy: string, createdAtById: Record<string, number>, t: Translate, details: Record<string, SessionDetail> = {}) {
+		function sortArchivedGroups(groups: readonly ArchivedGroup[], sortBy: string, createdAtById: Record<string, number>, t: Translate, archivedSessionIds: readonly string[] = []) {
 			const compareText = (left: unknown, right: unknown) => String(left).localeCompare(String(right), void 0, { numeric: true, sensitivity: "base" });
+			const archiveIndexMap = new Map<string, number>();
+			if (Array.isArray(archivedSessionIds)) {
+				for (let i = 0; i < archivedSessionIds.length; i++) {
+					archiveIndexMap.set(archivedSessionIds[i], i);
+				}
+			}
 			const timestampOf = (session: ClientSession) => {
-				const value = sortBy === "created" ? (details[session.id]?.createdAt ?? createdAtById[session.id]) : session.updatedAt;
+				const value = sortBy === "created" ? createdAtById[session.id] : session.updatedAt;
 				return typeof value === "number" && Number.isFinite(value) ? value : Number.NEGATIVE_INFINITY;
 			};
 			const compareSessions = (left: ClientSession, right: ClientSession) => {
-                if (sortBy === "turnsAsc" || sortBy === "turnsDesc") {
-                    const difference = compareTurnCounts(details[left.id]?.turnCount, details[right.id]?.turnCount, sortBy);
-                    if (difference) return difference;
-                }
+				if (sortBy === "archived") {
+					const leftOrder = archiveIndexMap.get(left.id) ?? -1;
+					const rightOrder = archiveIndexMap.get(right.id) ?? -1;
+					const difference = rightOrder - leftOrder;
+					if (difference !== 0) return difference;
+				}
 				if (sortBy !== "alphabetical") {
 					const byTime = timestampOf(right) - timestampOf(left);
 					if (Number.isFinite(byTime) && byTime !== 0) return byTime;
@@ -2039,10 +2121,14 @@ export function startArchiveClient(require: HostRequire) {
 			};
 			const result = groups.map((group) => ({ ...group, sessions: [...group.sessions].sort(compareSessions) }));
 			return result.sort((left, right) => {
-                if (sortBy === "turnsAsc" || sortBy === "turnsDesc") {
-                    const difference = compareTurnCounts(details[left.sessions[0]?.id]?.turnCount, details[right.sessions[0]?.id]?.turnCount, sortBy);
-                    if (difference) return difference;
-                }
+				if (sortBy === "archived") {
+					const leftTop = left.sessions[0]?.id;
+					const rightTop = right.sessions[0]?.id;
+					const leftOrder = leftTop !== undefined ? (archiveIndexMap.get(leftTop) ?? -1) : -1;
+					const rightOrder = rightTop !== undefined ? (archiveIndexMap.get(rightTop) ?? -1) : -1;
+					const difference = rightOrder - leftOrder;
+					if (difference !== 0) return difference;
+				}
 				if (sortBy !== "alphabetical") {
 					const byTime = timestampOf(right.sessions[0]) - timestampOf(left.sessions[0]);
 					if (Number.isFinite(byTime) && byTime !== 0) return byTime;
@@ -2052,7 +2138,7 @@ export function startArchiveClient(require: HostRequire) {
 		}
 
 		const zh = {
-			...organizerZh, ...discoveryZh, ...healthZh,
+			...organizerZh, ...discoveryZh,
             "locale.language": "zh", "service.unavailable": "服务尚未就绪，请重试",
 			"sidebar.entry.title": "侧边栏入口",
 			"sidebar.entry.desc": "在左侧主导航栏显示归档管理器。设置里的入口不变。",
@@ -2126,6 +2212,7 @@ export function startArchiveClient(require: HostRequire) {
 			"archives.sortBy": "排序方式",
 			"archives.sortLabel": "排序方式",
 			"archives.viewOptions": "视图选项",
+			"archives.sortArchived": "最近归档",
 			"archives.sortUpdated": "更新时间",
 			"archives.sortCreated": "创建时间",
 			"archives.sortAlphabetical": "按字母顺序",
@@ -2221,7 +2308,7 @@ export function startArchiveClient(require: HostRequire) {
 		};
 		/** English dictionary, checked complete against the zh key set. */
 		const en = {
-			...organizerEn, ...discoveryEn, ...healthEn,
+			...organizerEn, ...discoveryEn,
             "locale.language": "en", "service.unavailable": "The service is not ready. Please retry.",
 			"sidebar.entry.title": "Sidebar entry",
 			"sidebar.entry.desc": "Show Archived Sessions in the left sidebar. The Settings entry stays either way.",
@@ -2295,6 +2382,7 @@ export function startArchiveClient(require: HostRequire) {
 			"archives.sortBy": "Sort archived chats",
 			"archives.sortLabel": "Sort order",
 			"archives.viewOptions": "View options",
+			"archives.sortArchived": "Recently archived",
 			"archives.sortUpdated": "Last updated",
 			"archives.sortCreated": "Created",
 			"archives.sortAlphabetical": "Alphabetical",
@@ -2389,7 +2477,7 @@ export function startArchiveClient(require: HostRequire) {
 			"time.ago": "{t} ago"
 		};
 		const ru = {
-			...organizerRu, ...discoveryRu, ...healthRu,
+			...organizerRu, ...discoveryRu,
             "locale.language": "ru", "service.unavailable": "Сервис ещё не готов. Повторите.",
 			"sidebar.entry.title": "Пункт боковой панели",
 			"sidebar.entry.desc": "Показывать архив сессий на левой панели. Пункт в настройках сохраняется.",
@@ -2463,6 +2551,7 @@ export function startArchiveClient(require: HostRequire) {
 			"archives.sortBy": "Сортировка заархивированных чатов",
 			"archives.sortLabel": "Сортировка",
 			"archives.viewOptions": "Параметры вида",
+			"archives.sortArchived": "Недавно архивированные",
 			"archives.sortUpdated": "Последнее обновление",
 			"archives.sortCreated": "Дата создания",
 			"archives.sortAlphabetical": "По алфавиту",
@@ -2695,9 +2784,8 @@ export function startArchiveClient(require: HostRequire) {
                 if (!result.ok) throw new Error(result.error.message);
                 return result.value;
             };
-            const sessionDetails: RegistryCalls["sessionDetails"] = input => registryCall("sessionDetails", input);
-            const diagnoseSession: RegistryCalls["diagnoseSession"] = input => registryCall("diagnoseSession", input);
-            const repairSession: RegistryCalls["repairSession"] = input => registryCall("repairSession", input);
+            const diagnoseOrphanSubagents: RegistryCalls["diagnoseOrphanSubagents"] = () => registryCall("diagnoseOrphanSubagents");
+            const cleanOrphanSubagents: RegistryCalls["cleanOrphanSubagents"] = (input = {}) => registryCall("cleanOrphanSubagents", input ?? {});
             const searchArchivedContent: RegistryCalls["searchArchivedContent"] = input => registryCall("searchArchivedContent", input);
             const searchSessionContent: RegistryCalls["searchSessionContent"] = input => registryCall("searchSessionContent", input);
             const previewArchivedSession: RegistryCalls["previewArchivedSession"] = input => registryCall("previewArchivedSession", input);
@@ -2744,13 +2832,6 @@ export function startArchiveClient(require: HostRequire) {
 				if (registry === void 0) throw new Error("archive-manager remote service is unavailable");
 				const result = await registry.archivedSessionMetadata();
 				if (!result.ok) throw new Error(result.error.message);
-				if (result.value.repairedSessionIds?.length > 0 && typeof ctx.sessions.refresh === "function") {
-					try {
-						await ctx.sessions.refresh();
-					} catch (error) {
-						console.warn("archive-manager: repaired archived projections but session list refresh failed:", error);
-					}
-				}
 				return result.value;
 			};
 			const sessionMenuSlot = "sidebar.workspaces.session.menu.item";
@@ -3544,7 +3625,7 @@ export function startArchiveClient(require: HostRequire) {
 				unarchiveSessions,
 				deleteArchivedSessions,
 				archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState: archiveViewState,
-				favoriteSessions, setSessionFavorite, organizeBatch, scheduledSessionIds: scheduledIdsOnce, diagnoseSession, repairSession, sessionDetails, searchSessionContent, searchArchivedContent, previewArchivedSession,
+				favoriteSessions, setSessionFavorite, organizeBatch, scheduledSessionIds: scheduledIdsOnce, diagnoseOrphanSubagents, cleanOrphanSubagents, searchSessionContent, searchArchivedContent, previewArchivedSession,
 				t: ctx.locale.bind(NS)
 			});
 

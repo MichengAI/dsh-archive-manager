@@ -14,19 +14,18 @@ import { gatewayCall } from "./helpers/gateway-peer.mjs";
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-/** 归档入口对网关暴露的全部方法；其余内部方法（删目录、墓碑维护等）不得成为 RPC。 */
+/** 归档入口对网关暴露的全部方法；内部删除与索引清理方法不得成为 RPC。 */
 const ARCHIVE_ENDPOINTS = [
 	"archivedSessionMetadata",
+	"cleanOrphanSubagents",
 	"deleteArchivedSessions",
 	"deleteSession",
-	"diagnoseSession",
+	"diagnoseOrphanSubagents",
 	"favoriteSessions",
 	"previewArchivedSession",
-	"repairSession",
 	"scheduledSessionIds",
 	"searchArchivedContent",
 	"searchSessionContent",
-	"sessionDetails",
 	"setSessionFavorite",
 	"unarchiveSession",
 ];
@@ -94,6 +93,54 @@ async function mountOfficialHost({ fileUploads } = {}) {
 	return { ctx, registry, cache, captured, call, enable };
 }
 
+test("安装入口不包装官方投影缓存写入方法，也不安装删除墓碑 API", async () => {
+	assert.equal(inject.includes("sessionProjectionCache"), false);
+	const host = await mountOfficialHost();
+	const originalWrite = host.cache.write;
+	const originalPut = host.cache.put;
+	const originalTable = host.cache.requireTable();
+	const fiber = await host.enable();
+	try {
+		assert.equal(host.cache.write, originalWrite);
+		assert.equal(host.cache.put, originalPut);
+		assert.equal(host.cache.requireTable(), originalTable);
+		assert.equal(host.cache.delete, undefined);
+		assert.equal(host.cache.whenIdle, undefined);
+		assert.equal(host.cache.clearTombstone, undefined);
+	} finally {
+		await fiber.dispose();
+	}
+});
+
+
+test("启用和重新启用不打开历史缓存域，也不核验会话日志", async () => {
+	const host = await mountOfficialHost();
+	const officialTable = host.cache.table;
+	const originalWrite = host.cache.write;
+	const originalPut = host.cache.put;
+	const opened = [];
+	let reads = 0;
+	host.ctx.storageDomain.open = async (spec) => {
+		opened.push(spec.name);
+		return fakeDomain();
+	};
+	host.ctx.sessionPersistence.stat = async () => { reads += 1; throw new Error("启用时不应读取会话"); };
+	host.ctx.sessionPersistence.open = async () => { reads += 1; throw new Error("启用时不应打开日志"); };
+	for (let activation = 0; activation < 2; activation += 1) {
+		const fiber = await host.enable();
+		try {
+			assert.equal(host.cache.table, officialTable);
+			assert.equal(host.cache.write, originalWrite);
+			assert.equal(host.cache.put, originalPut);
+			assert.equal(host.cache.delete, undefined);
+			assert.deepEqual(opened, [], "启用不扫描任何历史缓存域");
+			assert.equal(reads, 0);
+		} finally { await fiber.dispose(); }
+		assert.equal(host.cache.write, originalWrite);
+		assert.equal(host.cache.put, originalPut);
+	}
+});
+
 test("归档能力经真实网关从官方 workspace 实例派发", async () => {
 	const host = await mountOfficialHost();
 	const { registry, cache, captured, call } = host;
@@ -108,16 +155,17 @@ test("归档能力经真实网关从官方 workspace 实例派发", async () => 
 	assert.equal(Reflect.get(binding, "serviceKey"), "workspaceRegistry");
 	assert.equal(Reflect.get(binding, "namespace"), "workspaceRegistry");
 	assert.equal(captured.matches("workspaceRegistry/archivedSessionMetadata"), true);
-	assert.equal(captured.matches("workspaceRegistry/sessionDetails"), true);
-	assert.equal(captured.matches("workspaceRegistry/diagnoseSession"), true);
-	// 暴露面必须与子类入口一致：只有归档方法，内部方法（删目录、墓碑维护等）不得成为 RPC。
+	assert.equal(captured.matches("workspaceRegistry/diagnoseOrphanSubagents"), true);
+	// 暴露面必须与子类入口一致：只有归档方法，内部方法不得成为远程端点。
 	assert.deepEqual(remoteMethods(registry).map((marker) => marker.method).sort(), ARCHIVE_ENDPOINTS);
 	for (const internal of ["removeTranscriptDirectory", "cleanSpill", "deleteDescendants", "indexHeader", "deleteSessionCore"]) {
 		assert.equal(captured.matches(`workspaceRegistry/${internal}`), false, `内部方法 ${internal} 不得成为远程端点`);
 	}
 	assert.deepEqual(await call("workspaceRegistry/archivedSessionMetadata", {}), { ok: true, value: { items: [] } });
 	assert.deepEqual(await call("workspaceRegistry/favoriteSessions", {}), { ok: true, value: { favoriteSessionIds: [] } });
-	assert.equal((await call("workspaceRegistry/diagnoseSession", { input: { sessionId: "missing" } })).ok, true);
+	assert.equal((await call("workspaceRegistry/diagnoseOrphanSubagents", {})).ok, true);
+	assert.deepEqual(await call("workspaceRegistry/cleanOrphanSubagents", {}), { ok: true, value: { cleanedSessionIds: [], skippedSessionIds: [], failures: [] } });
+	assert.equal((await call("workspaceRegistry/cleanOrphanSubagents", { target: { sessionIds: 123 } })).ok, false, "非法参数必须被网关干净拒绝");
 	assert.equal(cache.table, officialTable);
 
 	await fiber.dispose();
@@ -138,7 +186,7 @@ test("停用后重新启用仍能派发归档端点", async () => {
 	assert.equal(Reflect.get(host.registry, "typertRemote"), undefined);
 });
 
-test("安全缓存域打开失败时，官方缓存仍支持删除且停用后恢复", async () => {
+test("物理删除直接清理官方缓存表，不安装墓碑写入守护", async () => {
 	const host = await mountOfficialHost();
 	const officialTable = host.cache.table;
 	const officialPut = host.cache.put;
@@ -147,26 +195,24 @@ test("安全缓存域打开失败时，官方缓存仍支持删除且停用后�
 	await officialTable.put("stale", { rows: {} });
 	const fiber = await host.enable();
 	try {
-		assert.equal(host.cache.table, officialTable, "安全域不可用时保留官方表");
-		assert.equal(typeof host.cache.delete, "function", "不能暴露一个无法清缓存的删除入口");
+		assert.equal(host.cache.table, officialTable, "安装不替换官方缓存表");
+		assert.equal(typeof host.cache.delete, "undefined", "不添加缓存删除或墓碑 API");
 		assert.deepEqual(await host.call("workspaceRegistry/deleteSession", { sessionId: "stale" }), { ok: true, value: { deleted: true } });
 		assert.equal(officialTable.has("stale"), false);
-		await host.cache.delete("deleted");
 		await host.cache.put("deleted", { formatVersion: 4, createdAt: 1 }, {});
-		assert.equal(officialTable.has("deleted"), false, "墓碑阻止删除后的缓存写回复活");
+		assert.equal(officialTable.has("deleted"), true, "官方缓存写入不再被删除墓碑拦截");
 	} finally {
 		await fiber.dispose();
 		host.ctx.storageDomain.open = open;
 	}
-	assert.equal(host.cache.delete, undefined);
 	assert.equal(host.cache.put, officialPut);
 	assert.equal(host.cache.table, officialTable);
 	const reenabled = await host.enable();
-	assert.equal(host.cache.table, officialTable, "恢复存储后重新启用仍使用官方域");
+	assert.equal(host.cache.table, officialTable, "重新启用仍使用官方域");
 	await reenabled.dispose();
 });
 
-test("安装入口容忍热重载遗留的文件上传解析器", async () => {
+test("安装入口不改写文件上传服务，普通解析器仍可注册和注销", async () => {
 	const uploads = {
 		agentResolver: undefined,
 		registerAgentResolver(resolve) {
@@ -175,11 +221,11 @@ test("安装入口容忍热重载遗留的文件上传解析器", async () => {
 			return () => { if (this.agentResolver === resolve) this.agentResolver = undefined; };
 		},
 	};
-	// 残留解析器：插件与官方实例同处一个宿主，热重载后注册会撞上它。
-	uploads.registerAgentResolver(() => "stale");
+	const register = uploads.registerAgentResolver;
 	const host = await mountOfficialHost({ fileUploads: uploads });
 	const fiber = await host.enable();
 	try {
+		assert.equal(uploads.registerAgentResolver, register, "归档安装不得包装宿主上传注册器");
 		const next = () => "new";
 		const dispose = uploads.registerAgentResolver(next);
 		assert.equal(uploads.agentResolver, next);

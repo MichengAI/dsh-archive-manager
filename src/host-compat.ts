@@ -4,7 +4,6 @@ import type { WorkspaceRegistry, WorkspaceRecord, WorkspaceDomainState } from "@
 import type { CheckpointRecord } from "@deepseek-ai/dsh-session-projection-cache";
 import type { KvTable } from "@deepseek-ai/dsh-storage-domain";
 import type { TypertContribution } from "@deepseek-ai/dsh-typert-registry";
-import type { RepairFormat } from "./session-repair.js";
 
 /** 旧宿主使用普通字符串 ID；只在经现有 schema 校验的兼容边界消除新版本品牌。 */
 export type Header = Omit<SessionHeader, "id"> & { id: string; header?: Header };
@@ -12,10 +11,11 @@ export type WorkspaceRow = Omit<WorkspaceRecord, "sessionIds"> & { sessionIds: s
 export type WorkspaceState = Omit<WorkspaceDomainState, "workspaceIds" | "archivedSessionIds" | "pinnedSessionIds"> & { workspaceIds: string[]; archivedSessionIds: string[]; pinnedSessionIds: string[] };
 export interface StoredSource { meta: Header; events: SessionEvent[]; inheritedEventCount?: number }
 export interface PersistenceCompat {
-  name: string; root?: string; config?: { root?: string }; generationFormat: RepairFormat;
+  name: string; root?: string; config?: { root?: string }; generationFormat?: unknown;
   locate(header: Header): { kind: string; path: string } | undefined;
   list(): Promise<{ header: Header }[]>;
   stat(id: string): Promise<unknown>;
+  findLog?(id: string): Promise<unknown>;
   open(id: string, mode: "read"): Promise<{ header: Header; inheritedEventCount: number; read(offset: number): Promise<{ events: SessionEvent[] }>; close(): Promise<void> }>;
   prepare?(id: string): Promise<{ session: Session; [Symbol.dispose](): void }>;
   readZstdPrefix?(bytes: Buffer): Promise<{ meta: Header; tornTruncateTo?: number }>;
@@ -31,15 +31,12 @@ export interface SessionsCompat {
   announce(session: Session): void;
 }
 interface CacheCompat {
-  whenIdle?(): Promise<void>; delete(id: string): Promise<void>; clearTombstone?(id: string): void;
-  cachedSnapshot(header: Header, keys?: readonly string[]): unknown;
-  put(id: string, identity: Omit<CheckpointRecord["identity"], "inheritedEventCount"> & { inheritedEventCount: number }, rows: CheckpointRecord["rows"]): Promise<void>;
+  requireTable(): Pick<KvTable<string, CheckpointRecord>, "delete">;
 }
 interface HostServices {
   sessions: SessionsCompat;
   sessionPersistence: PersistenceCompat;
   sessionProjectionCache: CacheCompat;
-  sessionProjections: { restore(initial: object, events: SessionEvent[], offset: number, header: Header, inheritedEventCount: number): { checkpoint: CheckpointRecord["rows"] } | undefined };
   spillStore: { root?: string };
   typert: { register(value: TypertContribution): unknown };
   /** 宿主定时任务服务；旧宿主不提供，取不到时按「没有定时任务」处理。 */

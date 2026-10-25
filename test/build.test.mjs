@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 
 const run = promisify(execFile);
 const root = new URL("../", import.meta.url);
-const modules = ["index", "workspace", "projcache", "tombstone", "client", "contracts"];
+const modules = ["index", "workspace", "projcache", "client", "contracts"];
 
 test("src 是唯一维护源码，lib 是完整发布产物", async () => {
 	for (const module of modules) {

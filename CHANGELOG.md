@@ -4,11 +4,30 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
-## 1.1.11 - 2026-10-24
+## Unreleased
 
 - Archiving no longer destroys scheduled tasks: a session bound to an active reminder is skipped instead of archived, because the host stops and deletes those tasks during archiving. The guard applies even when the new switch is off.
 - Added a "Skip sessions with scheduled tasks when archiving" switch to the idle-archive preview and the archive confirmation dialog. It is on by default.
 - Added a read-only `scheduledSessionIds` host method backed by the schedule catalog; it degrades to an empty set when the schedule service is absent or unreadable, so archiving keeps working on hosts without reminders.
+
+## 1.1.12 - 2026-10-24
+
+- Upgrade host admission policy: Declare `engines.dsh: ">=0.2.0-rc.1 <0.3.0-0"` to support the entire DeepSeek Harness `0.2.x` line (including `0.2.0-rc.1` onwards, future alphas, RCs, and stable releases) without requiring routine plugin version bumps.
+- Decouple peerDependencies locks: Broaden all `@deepseek-ai/dsh-*` peer dependencies to the `0.2.x` generation range.
+- Upgrade build-time development dependencies: Synchronize all 24 `@deepseek-ai/dsh-*` devDependencies to latest `0.2.1-rc.3`.
+
+## 1.1.11 - 2026-10-24
+
+- Remove session turn counting and turn-based sorting: purged background batch uncompressed event reading logic for counting dialogue turns (sessionDetails / turnCount / countConversationTurns), removed turn indicators from session metadata rows, and removed "Most/Fewest turns" sort options, significantly reducing CPU and disk IO overhead during list navigation.
+- Remove obsolete session log mutation and repair logic: purged the defunct diagnoseSession and repairSession methods along with the session-repair module, removing the log error warning banner from the UI. Orphan subagent cleanup is now directly integrated into the Organizer panel for clean one-click reclamation.
+- Support detecting and cleaning up orphan subagents left behind by external deletions (#72): verify physical artifact absence to confirm parent deletion, accurately recognize both regular and context-seeded subagents (excluding user fork branches), and enforce safety gates in cleanup to prevent deleting live subagents.
+- Support sorting by recently archived order (#75): added a "Recently archived" option to the sort menu in the archived sessions view, ordering sessions and projects based on the host's archive queue order so newly archived chats can be quickly found and restored.
+- Remove all historical projection-cache scanning, identity checks, and handoff logic (#76), so activation no longer waits for per-record session-log reads. Cache rebuilding is host-owned and on demand; permanent deletion directly removes the cache row without suppressing later official writes.
+- Align date range filter text color: removed the faded placeholder styling when no date is selected, matching the primary text color used by adjacent view and project dropdown buttons.
+- Remove automatic full-log reads and official projection-cache write-backs when opening the archive list, along with the follow-up list refresh. Archive metadata only returns header creation times; preview and search remain available.
+- Remove the historical file-upload resolver conflict shim: the current entry overlays the official workspace instance without replacing the service or restarting `sessionController`; the plugin no longer mutates the global `fileUploads` registrar.
+- Remove all write-barrier and workspace deletion tombstones for permanent deletion. Deletion directly removes transcript directories, cleans the official cache row, and clears in-memory indexing; subsequent cache writes and host indexing follow native behavior.
+- Upgrade boundary: historical plugin cache files are no longer read or automatically deleted. Cold sessions without official cache entries may initially lack list titles; log reads recover titles, and restoring a live session lets the host persist its cache. No extra activation is required to import old caches.
 
 ## 1.1.10 - 2026-10-24
 

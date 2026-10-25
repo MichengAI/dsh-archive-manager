@@ -1,6 +1,6 @@
 import type * as React from "react";
-import type { SessionSummary, SessionDetail, BatchResult, BatchProgress, OrganizeKind, OrganizeOptions, Translate } from "./contracts.js";
-import type { ArchivePreviewResult, RepairResult } from "./archive-discovery.js";
+import type { SessionSummary, BatchResult, BatchProgress, OrganizeKind, OrganizeOptions, Translate } from "./contracts.js";
+import type { ArchivePreviewResult } from "./archive-discovery.js";
 
 /** 给预编译 JSX 调用补回属性与事件上下文，运行时仍使用宿主的 jsx-runtime。 */
 interface TypedJsx {
@@ -52,9 +52,6 @@ export interface ArchiveProps {
   archivedSessionMetadata(): Promise<{ items: { sessionId: string; createdAt: number }[] }>;
   openConversation(id: string): unknown; focusSessionWorkspace?(id: string): Promise<unknown>;
   viewState?: { query?: string; project?: string; sortBy?: string }; close?(): void; t: Translate;
-  diagnoseSession: (input: {sessionId: string}) => Promise<RepairResult>;
-  repairSession: (input: {sessionId: string; token?: string}) => Promise<RepairResult>;
-  sessionDetails(input: {sessionIds: string[]}): Promise<{ items: SessionDetail[] }>;
   searchSessionContent?: (input: {sessionIds: string[]; query: string}) => Promise<unknown>;
   searchArchivedContent?: (input: {sessionIds: string[]; query: string}) => Promise<unknown>;
   previewArchivedSession: (input: {sessionId: string; query: string}) => Promise<ArchivePreviewResult>;
@@ -62,6 +59,8 @@ export interface ArchiveProps {
   /** 绑定了活动定时任务的会话；宿主未提供该能力时省略，归档保护自动降级。 */
   scheduledSessionIds?(): Promise<{ scheduledSessionIds: string[] }>;
   setSessionFavorite(input: {sessionId: string; favorite: boolean}): Promise<{favoriteSessionIds: string[]}>;
+  diagnoseOrphanSubagents?(): Promise<{ count: number; items: { sessionId: string; parentSessionId: string; createdAt: number; sizeBytes: number }[]; totalSizeBytes: number }>;
+  cleanOrphanSubagents?(target?: { sessionIds?: string[] }): Promise<{ cleanedSessionIds: string[]; skippedSessionIds: string[]; failures: { sessionId: string; message: string }[] }>;
   organizeBatch?: (kind: OrganizeKind, ids: readonly string[], options?: OrganizeOptions) => Promise<BatchResult>;
   useSessionPendingInteraction?: PendingHook; useSessionStatus?: StatusHook;
 }
@@ -113,4 +112,4 @@ export interface DropOver { id: string; half: "before" | "after" }
 export interface SessionDrag { sessionId: string; accountKey: string; over: DropOver | null }
 export interface WorkspaceDrag { workspaceId: string; over: DropOver | null }
 export interface RowDrag { marker?: "before" | "after" | null; active: boolean; start(): void; end(): void; hover(half: "before" | "after"): void; drop(half: "before" | "after"): void }
-export type { Translate, BatchResult, BatchProgress, OrganizeKind, OrganizeOptions, SessionDetail };
+export type { Translate, BatchResult, BatchProgress, OrganizeKind, OrganizeOptions };

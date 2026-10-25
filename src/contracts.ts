@@ -20,7 +20,6 @@ export interface SearchHit { sessionId: string; seq: number; snippet: string }
 export interface SearchResult { items: SearchHit[]; failures: Failure[] }
 export interface SearchInput { sessionIds: string[]; query: string }
 export interface SearchProgress extends SearchResult { done: number; total: number }
-export interface SessionDetail { sessionId: string; createdAt?: number; turnCount: number | null; path: string | null; error: string; errorKey?: string }
 export interface SessionSummary {
   id: string;
   title?: string;
