@@ -4,7 +4,7 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
-## Unreleased
+## 1.1.13 - 2026-10-26
 
 - Add opt-in official list-cache rebuilding (#88). Opening Archive Manager checks only stored headers and official cached projections for ordinary cold sessions in registered workspaces, ungrouped lists, or archives, while filtering out special IM channel sessions (`im:`). A repair card appears only when needed. Clicking reads logs sequentially through read-only handles and calls official `coldSnapshot`, without opening sessions, calling models, changing archives/schedules, importing old caches, or writing JSON directly.
 - Accelerate diagnostic scanning: prioritize the host workspace registry's in-memory header snapshot to avoid expensive full-disk JSONL log inspections that can cause client timeouts.
