@@ -42,6 +42,8 @@ interface HostServices {
   sessionProjections: { restore(initial: object, events: SessionEvent[], offset: number, header: Header, inheritedEventCount: number): { checkpoint: CheckpointRecord["rows"] } | undefined };
   spillStore: { root?: string };
   typert: { register(value: TypertContribution): unknown };
+  /** 宿主定时任务服务；旧宿主不提供，取不到时按「没有定时任务」处理。 */
+  schedule?: { catalog?(): Promise<unknown> };
 }
 export interface HostContext extends Omit<Context, "get" | "sessionPersistence" | "emit"> {
   get<K extends keyof HostServices>(name: K): HostServices[K];

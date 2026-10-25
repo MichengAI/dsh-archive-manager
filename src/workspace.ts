@@ -17,7 +17,7 @@ import { bindTypertRemote, Remote } from "@deepseek-ai/dsh-typert-protocol";
 import { sessionDir } from "@deepseek-ai/dsh-spill-local";
 import { trackTombstone } from "./tombstone.js";
 import { defineDomain } from "@deepseek-ai/dsh-storage-domain";
-import { favoriteInputSchema, favoriteStateSchema, favoriteInvocations } from "./archive-organizer.js";
+import { favoriteInputSchema, favoriteStateSchema, favoriteInvocations, scheduledInvocations, sessionIdSet } from "./archive-organizer.js";
 
 const favoriteDomainSpec = defineDomain({
 	name: "archive_manager_favorites", version: 1, tables: {},
@@ -146,6 +146,7 @@ const ARCHIVE_REMOTE_METHODS = [
 	"sessionDetails",
 	"diagnoseSession",
 	"repairSession",
+	"scheduledSessionIds",
 ] as const;
 function markRemoteMethod(instance: object, method: string) {
 	// 模拟 TS 装饰器管线 `@Remote(method)`：`Remote` 返回标准方法装饰器，
@@ -292,6 +293,7 @@ const archivedSessionMetadataSchema = {
 const ARCHIVE_MANAGER_INVOCATIONS = [
 	...favoriteInvocations(),
 	...discoveryInvocations(),
+	...scheduledInvocations(),
 	{
 		id: "@michengai/dsh-archive-manager#workspaceRegistry/unarchiveSession",
 		service: "workspaceRegistry",
@@ -622,6 +624,37 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Re
 			}).catch((error) => { this.favoriteDomainPromise = undefined; throw error; });
 		}
 		return this.favoriteDomainPromise;
+	}
+	/**
+	 * 返回当前绑定了活动定时任务的会话 ID，供归档前跳过这些会话。
+	 *
+	 * 宿主 schedule 服务不在时（旧宿主或未启用定时任务插件）返回空集合，
+	 * 归档功能照常可用。读取失败同样降级为空集合：本方法只用于「额外保护」，
+	 * 真正的安全底线在归档路径本身（不调用 stopActivity）。
+	 */
+	async scheduledSessionIds() {
+		// 必须用 ctx.get 取服务：插件 fiber 上直接读属性会抛「without inject」，降级分支根本走不到。
+		const schedule = this.ctx.get("schedule") as { catalog?: () => Promise<unknown> } | undefined;
+		if (schedule === undefined || typeof schedule.catalog !== "function") return { scheduledSessionIds: [] as string[] };
+		let catalog: unknown;
+		try {
+			catalog = await schedule.catalog();
+		} catch (error) {
+			this.ctx.logger?.warn?.(`archive-manager: schedule catalog read failed: ${String(error)}`);
+			return { scheduledSessionIds: [] as string[] };
+		}
+		if (!Array.isArray(catalog)) return { scheduledSessionIds: [] as string[] };
+		const active: string[] = [];
+		for (const entry of catalog) {
+			if (entry === null || typeof entry !== "object") continue;
+			const task = entry as { sessionId?: unknown; status?: unknown };
+			// 只认活动任务：已结束（inactive）的任务不会再投递，也不阻止归档。
+			if (task.status !== "active") continue;
+			if (typeof task.sessionId !== "string") continue;
+			active.push(task.sessionId);
+		}
+		// 与客户端 schema 共用同一份 ID 规则（长度上限 + 去重），避免两侧漂移。
+		return { scheduledSessionIds: sessionIdSet(active) };
 	}
 	/** 返回宿主保存的收藏；读取时清理已确认不存在的会话。 */
 	async favoriteSessions() {

@@ -1881,6 +1881,54 @@ test("markRemoteMethod registers single and batch archive methods on the service
 		methods.includes("archivedSessionMetadata"),
 		"archivedSessionMetadata must be marked Remote",
 	);
+	assert.ok(
+		methods.includes("scheduledSessionIds"),
+		"scheduledSessionIds must be marked Remote",
+	);
+});
+
+test("scheduledSessionIds 只返回绑定活动定时任务的会话，去重且忽略已结束任务", async () => {
+	const env = buildRoot({
+		headers: [header(s1, cwdA), header(s2, cwdA)],
+		workspaces: { [A]: workspace("D:\proj-a", [s1, s2]) },
+	});
+	const registry = await mountWorkspaceRegistry(env);
+	const catalog = [
+		{ id: "t1", sessionId: s1, status: "active" },
+		{ id: "t2", sessionId: s1, status: "active" },
+		{ id: "t3", sessionId: s2, status: "inactive" },
+		{ id: "t4", sessionId: "session-unknown", status: "active" },
+	];
+	env.ctx.provide("schedule", { catalog: async () => catalog });
+	assert.deepEqual(await registry.scheduledSessionIds(), {
+		scheduledSessionIds: [s1, "session-unknown"],
+	});
+});
+
+test("scheduledSessionIds 在宿主没有 schedule 服务或读取失败时降级为空集合", async () => {
+	const env = buildRoot({
+		headers: [header(s1, cwdA)],
+		workspaces: { [A]: workspace("D:\proj-a", [s1]) },
+	});
+	const registry = await mountWorkspaceRegistry(env);
+	assert.deepEqual(await registry.scheduledSessionIds(), { scheduledSessionIds: [] });
+
+	// 独立环境：同一 Cordis 上下文不允许对同名服务重复 provide。
+	const throwingEnv = buildRoot({
+		headers: [header(s1, cwdA)],
+		workspaces: { [A]: workspace("D:\proj-a", [s1]) },
+	});
+	throwingEnv.ctx.provide("schedule", { catalog: async () => { throw new Error("catalog down"); } });
+	const throwingRegistry = await mountWorkspaceRegistry(throwingEnv);
+	assert.deepEqual(await throwingRegistry.scheduledSessionIds(), { scheduledSessionIds: [] });
+
+	const malformedEnv = buildRoot({
+		headers: [header(s1, cwdA)],
+		workspaces: { [A]: workspace("D:\proj-a", [s1]) },
+	});
+	malformedEnv.ctx.provide("schedule", { catalog: async () => "not-an-array" });
+	const malformedRegistry = await mountWorkspaceRegistry(malformedEnv);
+	assert.deepEqual(await malformedRegistry.scheduledSessionIds(), { scheduledSessionIds: [] });
 });
 
 test("deleteSession cascade skips already-deleted subagent children", async () => {

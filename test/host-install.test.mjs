@@ -23,6 +23,7 @@ const ARCHIVE_ENDPOINTS = [
 	"favoriteSessions",
 	"previewArchivedSession",
 	"repairSession",
+	"scheduledSessionIds",
 	"searchArchivedContent",
 	"searchSessionContent",
 	"sessionDetails",

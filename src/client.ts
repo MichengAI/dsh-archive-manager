@@ -13,7 +13,7 @@ import { allowArchivedNavigation, openArchivedConversation, formatArchiveNavigat
 import { observePluginUpdate } from "./plugin-update-ui.js";
 import { setupSidebarEntry } from "./sidebar-entry.js";
 import { resolveApiUrl } from "./api-base.js";
-import { favoriteInvocations, idleArchiveCandidate, createSessionOrganizer, runSessionBatch } from "./archive-organizer.js";
+import { favoriteInvocations, idleArchiveCandidate, createSessionOrganizer, runSessionBatch, scheduledInvocations } from "./archive-organizer.js";
 import { createOrganizerPanel, organizerZh, organizerEn, organizerRu } from "./archive-organizer-ui.js";
 import { createPortal } from "react-dom";
 import { SelectionCheckbox } from "./plugin-ui.js";
@@ -196,6 +196,7 @@ export function startArchiveClient(require: HostRequire) {
 			descriptors: [
 				...favoriteInvocations(),
 				...discoveryInvocations(),
+				...scheduledInvocations(),
 				{
 					id: "@michengai/dsh-archive-manager#workspaceRegistry/unarchiveSession",
 					service: "workspaceRegistry",
@@ -404,7 +405,7 @@ export function startArchiveClient(require: HostRequire) {
 		/**
 		* 归档管理设置页：集中处理筛选、多选、恢复、删除和原生会话导航。
 		*/
-		function ArchivedSessionsSection({ archiveSessions, archiveSession, sessionStore, workspaceStore, unarchiveSession, deleteSession, unarchiveSessions, deleteArchivedSessions, archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState, close, t, diagnoseSession, repairSession, sessionDetails, searchSessionContent, searchArchivedContent, previewArchivedSession, favoriteSessions, setSessionFavorite, organizeBatch, useSessionPendingInteraction, useSessionStatus }: ArchiveProps) {
+		function ArchivedSessionsSection({ archiveSessions, archiveSession, sessionStore, workspaceStore, unarchiveSession, deleteSession, unarchiveSessions, deleteArchivedSessions, archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState, close, t, diagnoseSession, repairSession, sessionDetails, searchSessionContent, searchArchivedContent, previewArchivedSession, favoriteSessions, setSessionFavorite, organizeBatch, scheduledSessionIds, useSessionPendingInteraction, useSessionStatus }: ArchiveProps) {
 			const sessions = (0, react.useSyncExternalStore)(sessionStore.subscribe, sessionStore.getSnapshot);
 			const workspaceState = (0, react.useSyncExternalStore)(workspaceStore.subscribe, workspaceStore.getSnapshot);
 			const [archiveTab, setArchiveTab] = (0, react.useState)("archived");
@@ -439,6 +440,10 @@ export function startArchiveClient(require: HostRequire) {
             const [collapsedGroups, setCollapsedGroups] = (0, react.useState)(() => new Set<string>());
 			const [idleDays, setIdleDays] = (0, react.useState)("30");
 			const [idleRequest, setIdleRequest] = (0, react.useState)(false);
+			// 绑定了活动定时任务的会话：归档会连带删除任务，因此默认跳过。
+			const [scheduledIds, setScheduledIds] = (0, react.useState)<string[]>([]);
+			const [skipScheduled, setSkipScheduled] = (0, react.useState)(true);
+			const [scheduledSkipped, setScheduledSkipped] = (0, react.useState)(0);
 			const [batchProgress, setBatchProgress] = (0, react.useState)<BatchProgress | null>(null);
 			const [batchResult, setBatchResult] = (0, react.useState)<ArchiveBatchResult | null>(null);
 			const [lastArchive, setLastArchive] = (0, react.useState)<string[]>([]);
@@ -454,6 +459,14 @@ export function startArchiveClient(require: HostRequire) {
 				catch (reason) { setFavoritesReady(false); setError(errorMessage(reason)); }
 			};
 			(0, react.useEffect)(() => { let active = true; if (favoriteSessions) favoriteSessions().then((value) => { if (active) { setFavoriteIds(value.favoriteSessionIds); setFavoritesReady(true); } }).catch((reason) => { if (active) setError(errorMessage(reason)); }); return () => { active = false; }; }, [favoriteSessions]);
+			(0, react.useEffect)(() => { let active = true; if (typeof scheduledSessionIds === "function") scheduledSessionIds().then((value) => { if (active) setScheduledIds(value.scheduledSessionIds); }).catch((reason) => { if (active) { console.warn("archive-manager: scheduled session lookup failed", reason); setScheduledIds([]); } }); return () => { active = false; }; }, [scheduledSessionIds]);
+			const scheduledSet = (0, react.useMemo)(() => new Set(scheduledIds), [scheduledIds]);
+			/** 读取一次最新的定时任务会话集合；宿主没提供该能力时按空集合处理，不阻塞归档。 */
+			const readScheduled = async (): Promise<ReadonlySet<string>> => {
+				if (typeof scheduledSessionIds !== "function") return new Set();
+				try { return new Set((await scheduledSessionIds()).scheduledSessionIds); }
+				catch (reason) { console.warn("archive-manager: scheduled session lookup failed", reason); return new Set(); }
+			};
 			const toggleFavorite = async (sessionId: string) => {
 				if (favoriteLock.current || busy || !favoritesReady) return;
 				favoriteLock.current = true; setFavoriteBusy(true); setError(null);
@@ -461,12 +474,15 @@ export function startArchiveClient(require: HostRequire) {
 				catch (reason) { setError(errorMessage(reason)); }
 				finally { favoriteLock.current = false; setFavoriteBusy(false); }
 			};
-			const executeBatch = async (kind: OrganizeKind, ids: string[], { idle = false, retry = false } = {}) => {
+			const executeBatch = async (kind: OrganizeKind, ids: string[], { idle = false, retry = false, protectedIds }: { idle?: boolean; retry?: boolean; protectedIds?: ReadonlySet<string> } = {}) => {
 				if (batchLock.current || favoriteLock.current || unarchivingSessionIdsRef.current.size > 0 || !organizeBatch) return;
 				batchLock.current = true; setBusy(true); setError(null); setNotice(null); setBatchResult(null);
 				if (kind === "archive" && !retry) setLastArchive([]);
 				try {
-					const result = await organizeBatch(kind, ids, { idleDays: idle ? Number(idleDays) : undefined, getPending: () => pendingRef.current, onProgress: (progress) => {
+					// 归档前重新取一次定时任务集合：页面开着期间也可能新挂上任务。
+					// 这层保护不看界面开关——开关只决定预览里显不显示，归档路径始终认。
+					const scheduled = kind === "archive" ? (protectedIds ?? await readScheduled()) : undefined;
+					const result = await organizeBatch(kind, ids, { idleDays: idle ? Number(idleDays) : undefined, getPending: () => pendingRef.current, skipScheduled: scheduled, onProgress: (progress) => {
 						setBatchProgress(progress);
 						// 列表刷新可能很慢。条目已经处理完就关掉确认框，不要把窗口留在 15/15。
 						if (kind === "archive" && progress.total > 0 && progress.done >= progress.total) {
@@ -533,14 +549,31 @@ export function startArchiveClient(require: HostRequire) {
 			const performArchive = async (ids: string[] | null, idle = false) => {
 				if (archiveBusy.current || busy || !ids?.length) return;
 				if (organizeBatch) {
+					// 先上锁再 await：否则并发两次提交会同时穿过 archiveBusy 锁，发两遍请求。
 					archiveBusy.current = true;
 					try {
-						const result = await executeBatch("archive", ids, { idle });
-						const active = result?.failures.map((failure) => activeArchiveFromMessage(failure.sessionId, failure.message)).find((item) => item !== undefined);
-						if (active !== undefined && typeof archiveSession === "function") {
-							const session = sessions.byId[active.sessionId];
-							setStopArchive({ sessionId: active.sessionId, title: session === undefined ? active.sessionId : displayTitle(session, t), kinds: active.kinds.join(", ") });
+						// 取一次最新的定时任务集合：本批哪些会话会被保护、归档路径是否认这层保护，都用这一份。
+						const scheduled = await readScheduled();
+						setScheduledSkipped(ids.filter((id) => scheduled.has(id)).length);
+						const result = await executeBatch("archive", ids, { idle, protectedIds: scheduled });
+						const refusals = (result?.failures ?? []).flatMap((failure) => {
+							const refusal = activeArchiveFromMessage(failure.sessionId, failure.message);
+							return refusal === undefined ? [] : [refusal];
+						});
+						const scheduleRefusals = refusals.filter((refusal) => scheduleRefusal(refusal.kinds));
+						const other = refusals.find((refusal) => !scheduleRefusal(refusal.kinds));
+						if (other !== undefined && typeof archiveSession === "function") {
+							// 与定时任务无关的拒绝：照旧提供「停止并归档」。
+							const session = sessions.byId[other.sessionId];
+							setStopArchive({ sessionId: other.sessionId, title: session === undefined ? other.sessionId : displayTitle(session, t), kinds: other.kinds.join(", ") });
 							setArchiveTarget(null); setArchiveGroup(null); setError(null);
+							if (scheduleRefusals.length > 0) setNotice(t("archives.archiveSkippedScheduled", { n: scheduleRefusals.length }));
+							return;
+						}
+						if (scheduleRefusals.length > 0) {
+							// 因定时任务被拒：跳过，不提供「停止并归档」，否则会删除任务。
+							setArchiveTarget(null); setArchiveGroup(null); setError(null);
+							setNotice(t("archives.archiveSkippedScheduled", { n: scheduleRefusals.length }));
 							return;
 						}
 						if (result) { setArchiveTarget(null); setArchiveGroup(null); setIdleRequest(false); }
@@ -549,7 +582,10 @@ export function startArchiveClient(require: HostRequire) {
 				}
 				archiveBusy.current = true; setBusy(true); setError(null); setNotice(null);
 				try {
-					const result = await archiveSessions(ids);
+					// 非批量路径同样不归档含定时任务的会话。
+					const scheduled = await readScheduled();
+					setScheduledSkipped(ids.filter((id) => scheduled.has(id)).length);
+					const result = await archiveSessions(ids.filter((id) => !scheduled.has(id)));
 					setArchiveTarget(null); setArchiveGroup(null);
 					if (result.archivedSessionIdsAdded.length > 0) setNotice(t("archives.archiveSuccess", { n: result.archivedSessionIdsAdded.length }));
 					if (result.failures && result.failures.length > 0) setError(formatBatchFailures(result.failures, t));
@@ -561,7 +597,10 @@ export function startArchiveClient(require: HostRequire) {
 					}
 				} catch (reason) {
 					const active = activeSessionRefusal(reason);
-					if (active !== undefined && typeof archiveSession === "function") {
+					if (active !== undefined && scheduleRefusal(active.kinds)) {
+						setArchiveTarget(null); setArchiveGroup(null); setError(null);
+						setNotice(t("archives.archiveSkippedScheduled", { n: 1 }));
+					} else if (active !== undefined && typeof archiveSession === "function") {
 						const session = sessions.byId[active.sessionId];
 						setStopArchive({ sessionId: active.sessionId, title: session === undefined ? active.sessionId : displayTitle(session, t), kinds: active.kinds.join(", ") });
 						setArchiveTarget(null); setArchiveGroup(null); setError(null);
@@ -613,7 +652,9 @@ export function startArchiveClient(require: HostRequire) {
             const preview = useArchivePreview(previewArchivedSession, isArchived ? workspaceState.archivedSessionIds : []);
             const normalizedQuery = query.trim().toLocaleLowerCase();
             const filteredGroups = candidateGroups.map(group => ({ ...group, sessions: group.sessions.filter(session => !normalizedQuery || displayTitle(session, t).toLocaleLowerCase().includes(normalizedQuery) || contentMatches.has(session.id)) })).filter(group => group.sessions.length);
-            const idleCandidates = favoritesReady ? filteredGroups.flatMap((group) => group.sessions).filter((session) => idleArchiveCandidate(session, { days: Number(idleDays), favorites: favoriteSet, currentId: currentSessionId(sessions), pending: uiFacts.pending })).map((session) => session.id) : [];
+            // 参数对象提到过滤链外：currentSessionId 会全表扫描 byId，写在回调里会退化成 O(N²)。
+            const idleOptions = { days: Number(idleDays), favorites: favoriteSet, currentId: currentSessionId(sessions), pending: uiFacts.pending, scheduled: skipScheduled ? scheduledSet : undefined };
+            const idleCandidates = favoritesReady ? filteredGroups.flatMap((group) => group.sessions).filter((session) => idleArchiveCandidate(session, idleOptions)).map((session) => session.id) : [];
 			const visibleSessionIds = (0, react.useMemo)(() => archivedSessionIdsInGroups(filteredGroups), [filteredGroups]);
 			const selectedSessionIdSet = (0, react.useMemo)(() => new Set(selectedSessionIds), [selectedSessionIds]);
 			const undoableArchiveCount = (0, react.useMemo)(() => {
@@ -865,7 +906,8 @@ export function startArchiveClient(require: HostRequire) {
 					progress: batchProgress, result: batchResult?.tab === archiveTab ? batchResult : null,
 					onRetry: () => { const retry = retryBatch.current; if (retry) { if (retry.kind === "delete") requestDelete({ kind: "batch", target: { scope: "sessions", sessionIds: retry.ids }, count: retry.ids.length }); else executeBatch(retry.kind, retry.ids, { idle: retry.idle, retry: true }); } },
 					undoCount: undoableArchiveCount,
-					onUndo: () => executeBatch("undo", lastArchive, { retry: true }), onReload: loadFavorites
+					onUndo: () => executeBatch("undo", lastArchive, { retry: true }), onReload: loadFavorites,
+					skipScheduled, onSkipScheduled: setSkipScheduled, scheduledSkipped
 				}), groups.length > 0 && (0, react_jsx_runtime.jsx)(ArchiveSelectionToolbar, {
 					selectedCount: selectedSessionIds.length,
 					hiddenCount: selectedSessionIds.length - selectedVisibleCount,
@@ -918,6 +960,11 @@ export function startArchiveClient(require: HostRequire) {
 						modalFooterButton({ variant: "primary", disabled: busy || !archiveTarget?.length, onClick: confirmArchive, children: t("archives.archiveSelected") })
 					] }), children: (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
 						organizeBatch && (0, react_jsx_runtime.jsx)("p", { children: t(idleRequest ? "organizer.idleConfirm" : "organizer.manualConfirm") }),
+						organizeBatch && (0, react_jsx_runtime.jsxs)("label", { className: "dsham_switchRow", children: [
+							(0, react_jsx_runtime.jsx)("input", { type: "checkbox", className: "dsham_checkbox", checked: skipScheduled, disabled: busy, "aria-label": t("organizer.skipScheduled"), onChange: (event: { target: { checked: boolean } }) => setSkipScheduled(event.target.checked) }),
+							(0, react_jsx_runtime.jsx)("span", { children: t("organizer.skipScheduled") })
+						] }),
+						organizeBatch && (0, react_jsx_runtime.jsx)("p", { children: t("organizer.skipScheduledHint") }),
 						organizeBatch && (0, react_jsx_runtime.jsx)("div", { className: "dsham_archivePreview", children: (archiveTarget ?? []).map((id) => (0, react_jsx_runtime.jsxs)("label", { children: [(0, react_jsx_runtime.jsx)(SelectionCheckbox, { checked: true, disabled: busy, label: displayTitle(sessions.byId[id] ?? { id }, t), onChange: () => setArchiveTarget((current) => (current ?? []).filter((value) => value !== id)) }), displayTitle(sessions.byId[id] ?? { id }, t)] }, id)) }),
 						batchProgress && (0, react_jsx_runtime.jsxs)("div", { role: "status", children: [(0, react_jsx_runtime.jsx)("progress", { value: batchProgress.done, max: Math.max(1, batchProgress.total) }), t("organizer.progressCount", { done: batchProgress.done, total: batchProgress.total })] }),
 						error !== null && (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsError", role: "alert", children: error })
@@ -1057,6 +1104,16 @@ export function startArchiveClient(require: HostRequire) {
 			if (match === null) return;
 			const kinds = match[1].split(", ").filter((kind) => kind.length > 0);
 			return kinds.length > 0 ? { sessionId, kinds } : undefined;
+		}
+		/**
+		 * 判定一次归档拒绝是否涉及定时任务。
+		 *
+		 * 这种拒绝绝不能走「停止并归档」：宿主会随之删除该会话的全部定时任务，
+		 * 属于不可逆的数据损失。因此只提示跳过，不提供停止入口。
+		 * 混合拒绝（定时任务 + 其它活动）同样不能走停止入口，否则会连带删掉任务。
+		 */
+		function scheduleRefusal(kinds: readonly string[] | undefined) {
+			return kinds !== undefined && kinds.length > 0 && kinds.includes("schedule");
 		}
 		function formatForkError(reason: unknown, t: Translate) {
 			const detail = reason instanceof Error ? reason.message : String(reason);
@@ -2109,6 +2166,7 @@ export function startArchiveClient(require: HostRequire) {
 			"archives.archiveUnknown": "会话已不存在，无法归档。",
 			"archives.archiveFailed": "归档失败：{detail}",
 			"archives.archiveActive": "会话仍在运行（{kinds}）。",
+			"archives.archiveSkippedScheduled": "已跳过 {n} 个含定时任务的会话；归档会删除这些任务，因此不会停止它们。",
 			"archiveActive.title": "停止并归档",
 			"archiveActive.desc": "“{name}”仍有正在进行的工作：{kinds}。归档前会停止这些工作。",
 			"archiveActive.confirm": "停止并归档",
@@ -2277,6 +2335,7 @@ export function startArchiveClient(require: HostRequire) {
 			"archives.archiveUnknown": "This session no longer exists, so it cannot be archived.",
 			"archives.archiveFailed": "Could not archive the session: {detail}",
 			"archives.archiveActive": "This conversation is still running ({kinds}).",
+			"archives.archiveSkippedScheduled": "Skipped {n} session(s) with scheduled tasks; archiving would delete those tasks, so they were not stopped.",
 			"archiveActive.title": "Stop and archive",
 			"archiveActive.desc": "“{name}” still has work in progress: {kinds}. Archiving stops that work first.",
 			"archiveActive.confirm": "Stop and archive",
@@ -2444,6 +2503,7 @@ export function startArchiveClient(require: HostRequire) {
 			"archives.archiveUnknown": "Эта сессия больше не существует, поэтому её нельзя заархивировать.",
 			"archives.archiveFailed": "Не удалось заархивировать сессию: {detail}",
 			"archives.archiveActive": "Этот разговор всё ещё выполняется ({kinds}).",
+			"archives.archiveSkippedScheduled": "Пропущено сессий с задачами по расписанию: {n}. Архивация удалила бы эти задачи, поэтому они не остановлены.",
 			"archiveActive.title": "Остановить и заархивировать",
 			"archiveActive.desc": "В «{name}» ещё идёт работа: {kinds}. Архивация сначала остановит её.",
 			"archiveActive.confirm": "Остановить и заархивировать",
@@ -3016,9 +3076,19 @@ export function startArchiveClient(require: HostRequire) {
 					return false;
 				}
 			}
+			/** 读取绑定活动定时任务的会话一次；失败降级为空，不阻塞归档。 */
+			const scheduledIdsOnce = async (): Promise<{ scheduledSessionIds: string[] }> => {
+				try {
+					return await registryCall("scheduledSessionIds");
+				} catch (reason) {
+					console.warn("archive-manager: scheduled session lookup failed", reason);
+					return { scheduledSessionIds: [] };
+				}
+			};
 			function ArchiveWorkspaceOverlay({ t }: { t: Translate }) {
 				const request = useArchiveWsRequest();
 				const [archiving, setArchiving] = (0, react.useState)(false);
+				const [skippedScheduledCount, setSkippedScheduledCount] = (0, react.useState)(0);
 				const [error, setError] = (0, react.useState)<string | null>(null);
 				const [cardPos, setCardPos] = (0, react.useState)<{ top: number; left: number } | null>(null);
 				const cardRef = (0, react.useRef)<HTMLDivElement>(null);
@@ -3153,14 +3223,29 @@ export function startArchiveClient(require: HostRequire) {
 					}
 				};
 
-				const confirm = () => {
+				const confirm = async () => {
 					setArchiving(true);
 					setError(null);
 					const items = ctx.workspaces.list?.getSnapshot?.()?.items ?? [];
 					const workspace = items.find((item) => item.workspaceId === request.workspaceId);
 					const sessionMap = ctx.sessions.list?.getSnapshot?.()?.byId ?? {};
 					const archived = new Set(ctx.workspaces.list?.getSnapshot?.()?.archivedSessionIds ?? []);
-					const candidateIds = (workspace?.sessionIds ?? []).filter((id) => isWorkspaceTaskCandidate(id, sessionMap, archived));
+					// 绑定了活动定时任务的会话必须排除：归档会让宿主停止并删除这些任务。
+					const scheduled = new Set((await scheduledIdsOnce()).scheduledSessionIds);
+					const allCandidates = (workspace?.sessionIds ?? []).filter((id) => isWorkspaceTaskCandidate(id, sessionMap, archived));
+					const candidateIds = allCandidates.filter((id) => !scheduled.has(id));
+					if (allCandidates.length === 0) {
+						setArchiving(false);
+						publishArchiveWsTarget(null);
+						return;
+					}
+					// 每次都重设计数：卡片不卸载，上一次的跳过条数不能带到下一次。
+					setSkippedScheduledCount(allCandidates.length - candidateIds.length);
+					if (candidateIds.length === 0) {
+						// 候选全被定时任务保护：留在卡片上显示跳过条数，不静默关窗。
+						setArchiving(false);
+						return;
+					}
 
 					archiveSessionsViaOfficial(ctx.workspaces, candidateIds, refreshSessionList).then((result) => {
 						setArchiving(false);
@@ -3203,6 +3288,11 @@ export function startArchiveClient(require: HostRequire) {
 									className: "dsham_sidebarCardDesc",
 									role: "status",
 									children: t("archiveWorkspace.pending")
+								}),
+								skippedScheduledCount > 0 && (0, react_jsx_runtime.jsx)("div", {
+									className: "dsham_sidebarCardDesc",
+									role: "status",
+									children: t("organizer.skippedScheduled", { n: skippedScheduledCount })
 								}),
 								error !== null && (0, react_jsx_runtime.jsx)("div", {
 									className: "dsham_sidebarCardError",
@@ -3454,7 +3544,7 @@ export function startArchiveClient(require: HostRequire) {
 				unarchiveSessions,
 				deleteArchivedSessions,
 				archivedSessionMetadata, openConversation, focusSessionWorkspace, viewState: archiveViewState,
-				favoriteSessions, setSessionFavorite, organizeBatch, diagnoseSession, repairSession, sessionDetails, searchSessionContent, searchArchivedContent, previewArchivedSession,
+				favoriteSessions, setSessionFavorite, organizeBatch, scheduledSessionIds: scheduledIdsOnce, diagnoseSession, repairSession, sessionDetails, searchSessionContent, searchArchivedContent, previewArchivedSession,
 				t: ctx.locale.bind(NS)
 			});
 
@@ -3541,6 +3631,7 @@ export function startArchiveClient(require: HostRequire) {
 			mutationTouches,
 			activeSessionActivity,
 			activeSessionRefusal,
+			scheduleRefusal,
 			activeArchiveFromMessage,
 			archiveSessionsViaOfficial,
 			unarchiveSessionsViaOfficial,

@@ -88,6 +88,7 @@ root.provide("connection", {
 				: endpoint === "workspaceRegistry/sessionDetails" ? { items: [{ sessionId: "s1", turnCount: 1, path: null, error: "" }] }
 				: endpoint === "workspaceRegistry/previewArchivedSession" ? { sessionId: "s1", messages: [], hasEarlier: false, hasLater: false }
 				: /workspaceRegistry\/(?:diagnose|repair)Session$/.test(endpoint) ? { sessionId: "s1", repairable: false, repaired: false, reason: "", advice: "", code: "healthy" }
+				: endpoint === "workspaceRegistry/scheduledSessionIds" ? { scheduledSessionIds: ["s2"] }
 				: endpoint === "workspaceRegistry/favoriteSessions" || endpoint === "workspaceRegistry/setSessionFavorite" ? { favoriteSessionIds: ["s1"] }
 				: endpoint === "workspaceRegistry/deleteArchivedSessions" ? { requestedSessionIds: ["s1"], deletedSessionIds: ["s1"], skippedSessionIds: [], failures: [] }
 				: endpoint === "workspaceRegistry/archivedSessionMetadata" ? { items: [{ sessionId: "s1", createdAt: 1700000000000 }], repairedSessionIds: ["s1"] }

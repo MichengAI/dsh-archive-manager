@@ -1,4 +1,4 @@
-import { record, errorMessage, errorCode } from "./contracts.js";
+import { archiveCodec, record, errorMessage, errorCode } from "./contracts.js";
 import type { Schema, ConversationEvent, TextMessage, SearchHit, Failure, SearchInput, SearchProgress, SessionSummary } from "./contracts.js";
 /** 归档正文检索和只读预览的共享协议与纯函数。正文只包含用户和助手的文本。 */
 const id = (value: unknown) => {
@@ -97,12 +97,11 @@ export async function copySessionText(text: string, clipboard = globalThis.navig
   catch { throw Object.assign(new Error("复制失败，请允许浏览器访问剪贴板后重试"), { code: "copy.denied" }); }
 }
 export function discoveryInvocations() {
-  const codec = (name: string, schema: Schema<unknown>) => ({ mode: "strict", typeSymbol: `@michengai/dsh-archive-manager/types#${name}`, create: () => schema, schema });
   const methods: [string, Schema<unknown>, Schema<unknown>][] = [["searchSessionContent", searchInputSchema, searchResultSchema], ["diagnoseSession", repairInputSchema, repairResultSchema], ["repairSession", repairInputSchema, repairResultSchema], ["sessionDetails", detailsInputSchema, detailsResultSchema], ["searchArchivedContent", searchInputSchema, searchResultSchema], ["previewArchivedSession", previewInputSchema, previewResultSchema]];
   return methods.map(([method, input, output]) => ({
     id: `@michengai/dsh-archive-manager#workspaceRegistry/${method}`, service: "workspaceRegistry", namespace: "workspaceRegistry", method,
-    invocation: { kind: "direct" }, parameters: [{ name: "input", wire: "input", source: "json", codec: codec(method + "Input", input) }],
-    result: codec(method + "Result", output), sourceLocation: { file: "@michengai/dsh-archive-manager/lib/workspace.js", line: 1, column: 1 }
+    invocation: { kind: "direct" }, parameters: [{ name: "input", wire: "input", source: "json", codec: archiveCodec(method + "Input", input) }],
+    result: archiveCodec(method + "Result", output), sourceLocation: { file: "@michengai/dsh-archive-manager/lib/workspace.js", line: 1, column: 1 }
   }));
 }
 /** 读取持久化事件的原始对话文本，不把工具输出、推理或插件注入当作正文。 */

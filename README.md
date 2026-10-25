@@ -19,7 +19,7 @@
 
 > DSH Archive Manager is a community-maintained DeepSeek Harness (DSH) plugin, not an official DeepSeek AI product.
 
-This document describes **1.1.10**. See [Changelog](CHANGELOG.md) for published releases.
+This document describes **1.1.11**. See [Changelog](CHANGELOG.md) for published releases.
 
 ## Overview
 
@@ -31,6 +31,7 @@ Put inactive conversations away and find them again when needed, keeping everyda
 - **Unified full-text search & Codex composite menu**: Search automatically covers both conversation titles and body history (including user and assistant messages) by default; consolidates session filtering (all / favorites only) and sorting into a two-section Codex-style menu with native checkmarks.
 - **Lightweight DateRange capsule & calendar popover**: Completely replaces the native date input to eliminate dark-mode inversion and focus loss (#74); displays the selected range in a single line with a dedicated clear button; supports quick presets, localized English/Chinese/Russian typography, and full WAI-ARIA keyboard navigation (arrows, Home/End, PageUp/Down with month-end clamping) with real-time range stretch preview.
 - **Automated idle session cleanup**: Specify an idle threshold in days to discover inactive chats, automatically protecting running tasks, interactive prompts, and starred items, with instant undo support.
+- **Scheduled-task protection**: Sessions bound to active scheduled tasks are never archived, because archiving makes the host stop and delete those tasks. They are skipped by default, and the idle preview and archive dialog expose a "Skip sessions with scheduled tasks when archiving" switch (on by default). Turning it off still never deletes a task.
 - **Native workspace menu integration**: Securely injects an **Archive session** action into the sidebar workspace `...` menu, anchoring an in-place frosted glass confirmation modal following the "what you see is what you archive" principle.
 - **Permanent deletion**: Thoroughly purge unwanted transcripts, cache rows, and indexes with per-item retry reporting.
 - **Diagnostic & repair center**: Diagnose corrupted single-frame Zstandard transcripts and legacy format anomalies with in-place verified repair.
@@ -92,7 +93,7 @@ dsh plugin --profile web add @michengai/dsh-archive-manager@latest --registry=ht
 
 Restart DSH Web, then refresh the page (or hard-refresh with `Ctrl+Shift+R`). Open **Settings → Archived sessions** to get started. To update, click **Check for updates** or re-run the installation command.
 
-- Plugin `1.1.10` is tested with DeepSeek Harness `0.2.0-rc.1`, `0.2.0-rc.2`, `0.2.1-rc.1`, `0.2.1-rc.2`, `0.2.1-rc.3`.
+- Plugin `1.1.11` is tested with DeepSeek Harness `0.2.0-rc.1`, `0.2.0-rc.2`, `0.2.1-rc.1`, `0.2.1-rc.2`, `0.2.1-rc.3`.
 - Hosts before `0.2.0` are no longer supported. If you still use a `0.1.x` host, install plugin `1.0.20` instead of `@latest`.
 - **Reverse proxy deployment**: Supports hosting DSH behind prefix-stripping reverse proxies (e.g. `/app/dsh/`). API and update endpoints automatically resolve against the page base URI (`document.baseURI`), preventing 404 errors caused by lost prefix segments.
 

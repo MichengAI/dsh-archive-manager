@@ -35,3 +35,59 @@ test("删除结果独立于闲置整理区域并保留失败重试", () => {
   assert.match(html, /重试剩余/);
   assert.doesNotMatch(html, /闲置天数|预览闲置归档/);
 });
+test("未归档页提供「跳过含定时任务的会话」开关，并默认可见", () => {
+  const changes = [];
+  const html = renderToStaticMarkup(React.createElement(Panel, {
+    ...props, archived: false, skipScheduled: true, onSkipScheduled: value => changes.push(value)
+  }));
+  assert.match(html, /跳过含定时任务的会话/);
+  assert.match(html, /type="checkbox"/);
+  assert.match(html, /checked=""/);
+});
+
+test("开关状态受控，关闭时复选框不勾选", () => {
+  const html = renderToStaticMarkup(React.createElement(Panel, {
+    ...props, archived: false, skipScheduled: false, onSkipScheduled: () => {}
+  }));
+  assert.match(html, /跳过含定时任务的会话/);
+  assert.doesNotMatch(html, /checked=""/);
+});
+
+test("已归档页不显示定时任务开关", () => {
+  const html = renderToStaticMarkup(React.createElement(Panel, {
+    ...props, archived: true, skipScheduled: true, onSkipScheduled: () => {}
+  }));
+  assert.doesNotMatch(html, /跳过含定时任务的会话/);
+});
+
+test("因定时任务跳过时显示条数提示", () => {
+  const t = (key, values) => {
+    let text = organizerZh[key] ?? key;
+    if (values) for (const [name, value] of Object.entries(values)) text = text.replaceAll(`{${name}}`, String(value));
+    return text;
+  };
+  const html = renderToStaticMarkup(React.createElement(Panel, {
+    ...props, t, archived: false, skipScheduled: true, onSkipScheduled: () => {}, scheduledSkipped: 3
+  }));
+  assert.match(html, /已跳过 3 个含定时任务的会话/);
+});
+
+test("没有跳过项时不显示提示", () => {
+  const html = renderToStaticMarkup(React.createElement(Panel, {
+    ...props, archived: false, skipScheduled: true, onSkipScheduled: () => {}, scheduledSkipped: 0
+  }));
+  assert.doesNotMatch(html, /已跳过/);
+});
+
+test("开关点击回调传出新状态", () => {
+  const changes = [];
+  const tree = Panel({ ...props, archived: false, skipScheduled: true, onSkipScheduled: value => changes.push(value) });
+  const collect = node => {
+    if (node === null || typeof node !== "object") return [];
+    return [node, ...[node.props?.children].flat(Infinity).flatMap(collect)];
+  };
+  const checkbox = collect(tree).find(node => node.props?.type === "checkbox" && node.props?.["aria-label"] === "归档时跳过含定时任务的会话");
+  assert.ok(checkbox, "必须渲染定时任务开关");
+  checkbox.props.onChange({ target: { checked: false } });
+  assert.deepEqual(changes, [false]);
+});

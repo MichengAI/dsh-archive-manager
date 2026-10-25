@@ -1,6 +1,10 @@
 /** 插件拥有的数据契约；宿主版本差异在适配层处理。 */
 export type Translate = (key: string, values?: Record<string, unknown>) => string;
 export interface Schema<T> { parse(value: unknown): T }
+/** 插件自有类型的编解码器工厂；宿主与客户端共用同一份形状，避免两端接口漂移。 */
+export function archiveCodec(name: string, schema: Schema<unknown>) {
+  return { mode: "strict", typeSymbol: `@michengai/dsh-archive-manager/types#${name}`, create: () => schema, schema };
+}
 export interface Failure { sessionId: string; message: string }
 export interface ConversationMessage {
   source?: { kind?: string };
@@ -39,6 +43,8 @@ export interface BatchResult {
 export interface BatchOptions { onProgress?: (progress: BatchProgress) => void; refresh?: () => void | Promise<unknown> }
 export interface OrganizeOptions extends BatchOptions {
   idleDays?: number; pending?: ReadonlyMap<string, unknown>; getPending?: () => ReadonlyMap<string, unknown>;
+  /** 绑定活动定时任务的会话：归档时跳过，避免宿主连带删除任务。 */
+  skipScheduled?: ReadonlySet<string>;
 }
 export type OrganizeKind = "archive" | "restore" | "undo" | "delete";
 export interface OrganizerServices {
