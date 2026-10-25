@@ -56,6 +56,8 @@ export interface ArchiveProps {
   searchArchivedContent?: (input: {sessionIds: string[]; query: string}) => Promise<unknown>;
   previewArchivedSession: (input: {sessionId: string; query: string}) => Promise<ArchivePreviewResult>;
   favoriteSessions(): Promise<{ favoriteSessionIds: string[] }>;
+  /** 绑定了活动定时任务的会话；宿主未提供该能力时省略，归档保护自动降级。 */
+  scheduledSessionIds?(): Promise<{ scheduledSessionIds: string[] }>;
   setSessionFavorite(input: {sessionId: string; favorite: boolean}): Promise<{favoriteSessionIds: string[]}>;
   diagnoseOrphanSubagents?(): Promise<{ count: number; items: { sessionId: string; parentSessionId: string; createdAt: number; sizeBytes: number }[]; totalSizeBytes: number }>;
   cleanOrphanSubagents?(target?: { sessionIds?: string[] }): Promise<{ cleanedSessionIds: string[]; skippedSessionIds: string[]; failures: { sessionId: string; message: string }[] }>;

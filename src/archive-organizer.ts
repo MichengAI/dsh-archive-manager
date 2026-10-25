@@ -1,9 +1,31 @@
-import { record } from "./contracts.js";
-import type { Schema, SessionSummary, BatchOptions, BatchResult, OrganizerServices, OrganizeKind, OrganizeOptions } from "./contracts.js";
+import { archiveCodec, record, remoteInvocation } from "./contracts.js";
+import type { SessionSummary, BatchOptions, BatchResult, OrganizerServices, OrganizeKind, OrganizeOptions } from "./contracts.js";
 /** 收藏及批量整理共用的校验与业务规则；不依赖浏览器或宿主实例。 */
+const isSessionId = (value: unknown): value is string => typeof value === "string" && value.length > 0 && value.length <= 1024;
 function checkedId(value: unknown) {
-  if (typeof value !== "string" || value.length === 0 || value.length > 1024) throw new TypeError("会话 ID 长度须为 1～1024 个字符");
+  if (!isSessionId(value)) throw new TypeError("会话 ID 长度须为 1～1024 个字符");
   return value;
+}
+
+/** 会话 ID 集合的宽松收口：逐项按 checkedId 规则校验（非法项只影响自身），并去重。 */
+export function sessionIdSet(values: readonly unknown[]) {
+  return [...new Set(values.filter(isSessionId))];
+}
+
+/** 会话 ID 集合 schema 工厂：字段名与错误文案不同，校验规则完全一致。 */
+function idSetSchema<K extends string>(field: K, label: string) {
+  return {
+    parse(input: unknown): Record<K, string[]> {
+      const value = record(input);
+      const list = value[field];
+      if (!Array.isArray(list) || list.length > 100000) throw new TypeError(label);
+      return { [field]: [...new Set(list.map(checkedId))] } as Record<K, string[]>;
+    },
+    safeParse(value: unknown) {
+      try { return { success: true, data: this.parse(value) }; }
+      catch (error) { return { success: false, error }; }
+    }
+  };
 }
 
 export const favoriteInputSchema = {
@@ -14,35 +36,30 @@ export const favoriteInputSchema = {
   }
 };
 
-export const favoriteStateSchema = {
-  parse(input: unknown) {
-    const value = record(input);
-    if (!value || !Array.isArray(value.favoriteSessionIds) || value.favoriteSessionIds.length > 100000) throw new TypeError("收藏集合无效");
-    return { favoriteSessionIds: [...new Set(value.favoriteSessionIds.map(checkedId))] };
-  },
-  safeParse(value: unknown) {
-    try { return { success: true, data: this.parse(value) }; }
-    catch (error) { return { success: false, error }; }
-  }
-};
+export const favoriteStateSchema = idSetSchema("favoriteSessionIds", "收藏集合无效");
 
 /** 宿主与客户端使用同一份描述符，防止两端接口漂移。 */
 export function favoriteInvocations() {
-  const codec = (name: string, schema: Schema<unknown>) => ({ mode: "strict", typeSymbol: `@michengai/dsh-archive-manager/types#${name}`, create: () => schema, schema });
-  return ["favoriteSessions", "setSessionFavorite"].map((method) => ({
-    id: `@michengai/dsh-archive-manager#workspaceRegistry/${method}`,
-    service: "workspaceRegistry", namespace: "workspaceRegistry", method,
-    invocation: { kind: "direct" },
-    parameters: method === "favoriteSessions" ? [] : [{ name: "input", wire: "input", source: "json", codec: codec("FavoriteInput", favoriteInputSchema) }],
-    result: codec("FavoriteState", favoriteStateSchema),
-    sourceLocation: { file: "@michengai/dsh-archive-manager/lib/workspace.js", line: 1, column: 1 }
+  return ["favoriteSessions", "setSessionFavorite"].map((method) => remoteInvocation(method, {
+    parameters: method === "favoriteSessions" ? [] : [{ name: "input", wire: "input", source: "json", codec: archiveCodec("FavoriteInput", favoriteInputSchema) }],
+    result: archiveCodec("FavoriteState", favoriteStateSchema)
   }));
 }
 
+/** 只读查询：当前绑定了活动定时任务的会话 ID 集合。宿主 schedule 服务缺失时返回空集合。 */
+export const scheduledSetSchema = idSetSchema("scheduledSessionIds", "定时任务会话集合无效");
+
+/** 宿主与客户端共用同一份描述符，避免两端接口漂移。 */
+export function scheduledInvocations() {
+  return [remoteInvocation("scheduledSessionIds", { result: archiveCodec("ScheduledSessionIds", scheduledSetSchema) })];
+}
+
 /** 闲置归档只接受有效时间；执行前也复核此规则，避免归档刚恢复活动的会话。 */
-export function idleArchiveCandidate(session: SessionSummary | undefined, { days, now = Date.now(), favorites = new Set(), currentId, pending = new Map() }: { days: number; now?: number; favorites?: ReadonlySet<string>; currentId?: string; pending?: ReadonlyMap<string, unknown> }) {
+export function idleArchiveCandidate(session: SessionSummary | undefined, { days, now = Date.now(), favorites = new Set(), currentId, pending = new Map(), scheduled }: { days: number; now?: number; favorites?: ReadonlySet<string>; currentId?: string; pending?: ReadonlyMap<string, unknown>; scheduled?: ReadonlySet<string> }) {
   if (!session || !Number.isInteger(days) || days < 1 || days > 36500) return false;
   if (favorites.has(session.id) || session.id === currentId || (session.retainedBy?.mainView ?? 0) > 0) return false;
+  // 绑定了活动定时任务的会话不进候选：归档会连带删除任务，属于不可逆的数据损失。
+  if (scheduled?.has(session.id)) return false;
   if (session.running || (session.runningSubagentCount ?? 0) > 0 || session.pendingInteraction != null || pending.has(session.id)) return false;
   const updated = typeof session.updatedAt === "number" ? session.updatedAt : Date.parse(session.updatedAt ?? "");
   return Number.isFinite(updated) && updated <= now - days * 86400000;
@@ -83,6 +100,9 @@ export function createSessionOrganizer({ workspaces, sessions, archive, restore,
       const archived = before.archivedSessionIds.includes(id);
       if (kind === "archive") {
         if (archived) return false;
+        // 安全底线：即使界面没预筛，绑定了定时任务的会话也绝不进入归档路径，
+        // 否则宿主的 stopActivity 会连带删除任务。
+        if (options.skipScheduled?.has(id)) return false;
         const snapshot = sessions.getSnapshot();
         const session = snapshot.byId[id];
         if (!session) return false;

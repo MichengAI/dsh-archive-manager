@@ -1,6 +1,23 @@
 /** 插件拥有的数据契约；宿主版本差异在适配层处理。 */
 export type Translate = (key: string, values?: Record<string, unknown>) => string;
 export interface Schema<T> { parse(value: unknown): T }
+/** alpha.1 读 schema.parse；alpha.2 只接受 create()。两套字段一起带上。 */
+export function strictCodec(typeSymbol: string, schema: Schema<unknown>) {
+  return { mode: "strict" as const, typeSymbol, create: () => schema, schema };
+}
+/** 插件自有类型的编解码器工厂；宿主与客户端共用同一份形状，避免两端接口漂移。 */
+export function archiveCodec(name: string, schema: Schema<unknown>) {
+  return strictCodec(`@michengai/dsh-archive-manager/types#${name}`, schema);
+}
+/** workspaceRegistry 远程方法描述符；宿主与客户端共用同一份骨架，避免两端漂移。 */
+export function remoteInvocation(method: string, { parameters = [], result }: { parameters?: unknown[]; result: unknown }) {
+  return {
+    id: `@michengai/dsh-archive-manager#workspaceRegistry/${method}`,
+    service: "workspaceRegistry", namespace: "workspaceRegistry", method,
+    invocation: { kind: "direct" }, parameters, result,
+    sourceLocation: { file: "@michengai/dsh-archive-manager/lib/workspace.js", line: 1, column: 1 }
+  };
+}
 export interface Failure { sessionId: string; message: string }
 export interface ConversationMessage {
   source?: { kind?: string };
@@ -38,6 +55,8 @@ export interface BatchResult {
 export interface BatchOptions { onProgress?: (progress: BatchProgress) => void; refresh?: () => void | Promise<unknown> }
 export interface OrganizeOptions extends BatchOptions {
   idleDays?: number; pending?: ReadonlyMap<string, unknown>; getPending?: () => ReadonlyMap<string, unknown>;
+  /** 绑定活动定时任务的会话：归档时跳过，避免宿主连带删除任务。 */
+  skipScheduled?: ReadonlySet<string>;
 }
 export type OrganizeKind = "archive" | "restore" | "undo" | "delete";
 export interface OrganizerServices {

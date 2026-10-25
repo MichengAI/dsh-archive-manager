@@ -4,6 +4,12 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## Unreleased
+
+- Archiving no longer destroys scheduled tasks: a session bound to an active reminder is skipped instead of archived, because the host stops and deletes those tasks during archiving. The guard applies even when the new switch is off.
+- Added a "Skip sessions with scheduled tasks when archiving" switch to the idle-archive preview and the archive confirmation dialog. It is on by default.
+- Added a read-only `scheduledSessionIds` host method backed by the schedule catalog; it degrades to an empty set when the schedule service is absent or unreadable, so archiving keeps working on hosts without reminders.
+
 ## 1.1.12 - 2026-10-24
 
 - Upgrade host admission policy: Declare `engines.dsh: ">=0.2.0-rc.1 <0.3.0-0"` to support the entire DeepSeek Harness `0.2.x` line (including `0.2.0-rc.1` onwards, future alphas, RCs, and stable releases) without requiring routine plugin version bumps.

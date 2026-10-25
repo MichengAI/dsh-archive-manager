@@ -3,7 +3,7 @@ import { symbols } from "@deepseek-ai/cordis";
 import type { Domain, DomainGlobalSpec } from "@deepseek-ai/dsh-storage-domain";
 import type { TypertContribution } from "@deepseek-ai/dsh-typert-registry";
 import type { Header, HostContext, PersistenceCompat, SessionsCompat, WorkspaceConstructor } from "./host-compat.js";
-import { record, errorMessage, errorCode } from "./contracts.js";
+import { record, errorMessage, errorCode, strictCodec } from "./contracts.js";
 import type { Schema } from "./contracts.js";
 import type { TypertGatewayBinding } from "@deepseek-ai/dsh-typert-protocol";
 type BatchTarget = { scope: "all" | "ungrouped" } | { scope: "workspace"; workspaceId: string } | { scope: "sessions"; sessionIds: string[] };
@@ -14,7 +14,7 @@ import { WorkspaceRegistry } from "@deepseek-ai/dsh-workspace";
 import { bindTypertRemote, Remote } from "@deepseek-ai/dsh-typert-protocol";
 import { sessionDir } from "@deepseek-ai/dsh-spill-local";
 import { defineDomain } from "@deepseek-ai/dsh-storage-domain";
-import { favoriteInputSchema, favoriteStateSchema, favoriteInvocations } from "./archive-organizer.js";
+import { favoriteInputSchema, favoriteStateSchema, favoriteInvocations, scheduledInvocations, sessionIdSet } from "./archive-organizer.js";
 
 const favoriteDomainSpec = defineDomain({
 	name: "archive_manager_favorites", version: 1, tables: {},
@@ -135,16 +135,6 @@ function deletionFailureMessage(error: unknown) {
 	return errorMessage(error).slice(0, 400);
 }
 
-/** alpha.1 读 schema.parse；alpha.2 只接受 create()。两套字段一起带上。 */
-function strictCodec(typeSymbol: string, schema: Schema<unknown>) {
-	return {
-		mode: "strict" as const,
-		typeSymbol,
-		create: () => schema,
-		schema,
-	};
-}
-
 /** 经 typert Gateway 暴露的方法。子类与 overlay 共用一份，避免把内部方法（如目录删除和索引清理）也变成 RPC 端点。 */
 const ARCHIVE_REMOTE_METHODS = [
 	"unarchiveSession",
@@ -158,6 +148,7 @@ const ARCHIVE_REMOTE_METHODS = [
 	"previewArchivedSession",
 	"diagnoseOrphanSubagents",
 	"cleanOrphanSubagents",
+	"scheduledSessionIds",
 ] as const;
 function markRemoteMethod(instance: object, method: string) {
 	// 模拟 TS 装饰器管线 `@Remote(method)`：`Remote` 返回标准方法装饰器，
@@ -309,6 +300,7 @@ const orphanCleanResultSchema = {
 const ARCHIVE_MANAGER_INVOCATIONS = [
 	...favoriteInvocations(),
 	...discoveryInvocations(),
+	...scheduledInvocations(),
 	{
 		id: "@michengai/dsh-archive-manager#workspaceRegistry/unarchiveSession",
 		service: "workspaceRegistry",
@@ -543,6 +535,33 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Re
 			}).catch((error) => { this.favoriteDomainPromise = undefined; throw error; });
 		}
 		return this.favoriteDomainPromise;
+	}
+	/**
+	 * 返回当前绑定了活动定时任务的会话 ID，供归档前跳过这些会话。
+	 *
+	 * 宿主 schedule 服务不在时（旧宿主或未启用定时任务插件）返回空集合，
+	 * 归档功能照常可用。读取失败同样降级为空集合：本方法只用于「额外保护」，
+	 * 真正的安全底线在归档路径本身（不调用 stopActivity）。
+	 */
+	async scheduledSessionIds() {
+		let catalog: unknown;
+		try {
+			// 必须用 ctx.get 取服务：插件 fiber 上直接读属性会抛「without inject」。
+			catalog = await this.ctx.get("schedule")?.catalog?.();
+		} catch (error) {
+			this.ctx.logger?.warn?.(`archive-manager: schedule catalog read failed: ${String(error)}`);
+		}
+		const active: string[] = [];
+		for (const entry of Array.isArray(catalog) ? catalog : []) {
+			if (entry === null || typeof entry !== "object") continue;
+			const task = entry as { sessionId?: unknown; status?: unknown };
+			// 只认活动任务：已结束（inactive）的任务不会再投递，也不阻止归档。
+			if (task.status !== "active") continue;
+			if (typeof task.sessionId !== "string") continue;
+			active.push(task.sessionId);
+		}
+		// 与客户端 schema 共用同一份 ID 规则（长度上限 + 去重），避免两侧漂移。
+		return { scheduledSessionIds: sessionIdSet(active) };
 	}
 	/** 返回宿主保存的收藏；读取时清理已确认不存在的会话。 */
 	async favoriteSessions() {

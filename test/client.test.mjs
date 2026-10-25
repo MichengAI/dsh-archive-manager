@@ -229,12 +229,21 @@ test("运行中的会话记入失败并保留会话 ID，不中断后续", async
 test("active archive refusals expose their activity kinds", () => {
 	assert.deepEqual(t.activeSessionRefusal({ name: "WorkspaceActiveSessionError", sessionId: "s2", activity: [{ kind: "turn" }] }), { sessionId: "s2", kinds: ["turn"] });
 	assert.deepEqual(t.activeArchiveFromMessage("s2", "cannot archive session 's2': the session is active (turn, job)"), { sessionId: "s2", kinds: ["turn", "job"] });
+	assert.deepEqual(t.activeArchiveFromMessage("s2", "workspace session archive failed: workspace/session-active: cannot archive session 's2': the session is active (turn, schedule)"), { sessionId: "s2", kinds: ["turn", "schedule"] });
 	assert.deepEqual(t.activeSessionActivity({ name: "WorkspaceActiveSessionError", activity: [{ kind: "turn" }, { kind: "job" }] }), ["turn", "job"]);
 	assert.deepEqual(t.activeSessionActivity({
 		name: "WorkspaceArchiveError",
 		rpcError: { code: "workspace/session-active", details: { activity: [{ kind: "subagent" }] } },
 	}), ["subagent"]);
 	assert.equal(t.activeSessionActivity(new Error("archive failed")), undefined);
+});
+
+test("schedule refusals never offer stop-and-archive, including mixed activity", () => {
+	assert.equal(t.scheduleRefusal(["schedule"]), true);
+	assert.equal(t.scheduleRefusal(["turn", "schedule"]), true);
+	assert.equal(t.scheduleRefusal(["turn", "job"]), false);
+	assert.equal(t.scheduleRefusal([]), false);
+	assert.equal(t.scheduleRefusal(undefined), false);
 });
 
 test("legacy workspace view prefs migrate onto the archive-manager persist key", () => {
