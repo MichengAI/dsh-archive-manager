@@ -1,7 +1,6 @@
 import type { ClientContext, Workspaces, Registry, RegistryCalls, DiscoveryMethod } from "./client-compat.js";
 import type { ArchiveDeleteTarget } from "./client-types.js";
-import { record, errorMessage, errorCode } from "./contracts.js";
-import type { Schema } from "./contracts.js";
+import { record, errorMessage, errorCode, strictCodec } from "./contracts.js";
 import type { ClientSession, ClientList, ClientWorkspace, WorkspaceSnapshot, Observable, WorkspaceView, UiFacts, PendingHook, StatusHook, StatusMap, BatchTarget, DeletedBatch, ArchivedGroup, ArchiveProps, ArchiveBatchResult, ArchiveRetry, Translate, BatchProgress, OrganizeKind } from "./client-types.js";
 import type { NavigationSource } from "./archive-experience.js";
 import type { RemoteResult } from "./client-compat.js";
@@ -180,10 +179,6 @@ export function startArchiveClient(require: HostRequire) {
 				return value;
 			}
 		};
-		/** alpha.1 读 schema.parse；alpha.2 只接受 create()。 */
-		function strictCodec(typeSymbol: string, schema: Schema<unknown>) {
-			return { mode: "strict", typeSymbol, create: () => schema, schema };
-		}
 		/**
 		* 客户端通过 `ctx.remote.$mount` 注册 workspaceRegistry 的远程方法。
 		* 调用走 typert gateway SRC 路径，不影响既有 `/api/workspace.*` 网关。
@@ -451,6 +446,12 @@ export function startArchiveClient(require: HostRequire) {
 			const IconEditOutlineRegular = (_deepseek_ai_dsh_client_ui_primitives as Record<string, unknown>).IconEditOutlineRegular as React.ComponentType<{ size?: number }>;
 			return (0, react_jsx_runtime.jsx)(IconEditOutlineRegular, { size: 16 });
 		}
+		/** 读取一次绑定活动定时任务的会话 ID；宿主没提供该能力或读取失败时降级为空数组。 */
+		async function readScheduledSessionIds(source: ArchiveProps["scheduledSessionIds"]): Promise<string[]> {
+			if (typeof source !== "function") return [];
+			try { return (await source()).scheduledSessionIds; }
+			catch (reason) { console.warn("archive-manager: scheduled session lookup failed", reason); return []; }
+		}
 		/**
 		* 归档管理设置页：集中处理筛选、多选、恢复、删除和原生会话导航。
 		*/
@@ -490,7 +491,7 @@ export function startArchiveClient(require: HostRequire) {
 			const [idleDays, setIdleDays] = (0, react.useState)("30");
 			const [idleRequest, setIdleRequest] = (0, react.useState)(false);
 			// 绑定了活动定时任务的会话：归档会连带删除任务，因此默认跳过。
-			const [scheduledIds, setScheduledIds] = (0, react.useState)<string[]>([]);
+			const [scheduledSet, setScheduledSet] = (0, react.useState)<ReadonlySet<string>>(() => /* @__PURE__ */ new Set());
 			const [skipScheduled, setSkipScheduled] = (0, react.useState)(true);
 			const [scheduledSkipped, setScheduledSkipped] = (0, react.useState)(0);
 			const [batchProgress, setBatchProgress] = (0, react.useState)<BatchProgress | null>(null);
@@ -508,13 +509,13 @@ export function startArchiveClient(require: HostRequire) {
 				catch (reason) { setFavoritesReady(false); setError(errorMessage(reason)); }
 			};
 			(0, react.useEffect)(() => { let active = true; if (favoriteSessions) favoriteSessions().then((value) => { if (active) { setFavoriteIds(value.favoriteSessionIds); setFavoritesReady(true); } }).catch((reason) => { if (active) setError(errorMessage(reason)); }); return () => { active = false; }; }, [favoriteSessions]);
-			(0, react.useEffect)(() => { let active = true; if (typeof scheduledSessionIds === "function") scheduledSessionIds().then((value) => { if (active) setScheduledIds(value.scheduledSessionIds); }).catch((reason) => { if (active) { console.warn("archive-manager: scheduled session lookup failed", reason); setScheduledIds([]); } }); return () => { active = false; }; }, [scheduledSessionIds]);
-			const scheduledSet = (0, react.useMemo)(() => new Set(scheduledIds), [scheduledIds]);
+			// 已归档页不使用这份预览数据；切回未归档页时再取，省一次远程查询。
+			(0, react.useEffect)(() => { if (isArchived) return; let active = true; readScheduledSessionIds(scheduledSessionIds).then((ids) => { if (active) setScheduledSet(new Set(ids)); }); return () => { active = false; }; }, [scheduledSessionIds, isArchived]);
 			/** 读取一次最新的定时任务会话集合；宿主没提供该能力时按空集合处理，不阻塞归档。 */
 			const readScheduled = async (): Promise<ReadonlySet<string>> => {
+				// 无宿主能力时同步返回，避免多一层 await 推迟「处理完就关框」的时序。
 				if (typeof scheduledSessionIds !== "function") return new Set();
-				try { return new Set((await scheduledSessionIds()).scheduledSessionIds); }
-				catch (reason) { console.warn("archive-manager: scheduled session lookup failed", reason); return new Set(); }
+				return new Set(await readScheduledSessionIds(scheduledSessionIds));
 			};
 			const toggleFavorite = async (sessionId: string) => {
 				if (favoriteLock.current || busy || !favoritesReady) return;
@@ -1188,7 +1189,7 @@ export function startArchiveClient(require: HostRequire) {
 		 * 混合拒绝（定时任务 + 其它活动）同样不能走停止入口，否则会连带删掉任务。
 		 */
 		function scheduleRefusal(kinds: readonly string[] | undefined) {
-			return kinds !== undefined && kinds.length > 0 && kinds.includes("schedule");
+			return kinds?.includes("schedule") === true;
 		}
 		function formatForkError(reason: unknown, t: Translate) {
 			const detail = reason instanceof Error ? reason.message : String(reason);
@@ -3158,17 +3159,13 @@ export function startArchiveClient(require: HostRequire) {
 				}
 			}
 			/** 读取绑定活动定时任务的会话一次；失败降级为空，不阻塞归档。 */
-			const scheduledIdsOnce = async (): Promise<{ scheduledSessionIds: string[] }> => {
-				try {
-					return await registryCall("scheduledSessionIds");
-				} catch (reason) {
-					console.warn("archive-manager: scheduled session lookup failed", reason);
-					return { scheduledSessionIds: [] };
-				}
-			};
+			const scheduledIdsOnce = async (): Promise<{ scheduledSessionIds: string[] }> => ({
+				scheduledSessionIds: await readScheduledSessionIds(() => registryCall("scheduledSessionIds"))
+			});
 			function ArchiveWorkspaceOverlay({ t }: { t: Translate }) {
 				const request = useArchiveWsRequest();
 				const [archiving, setArchiving] = (0, react.useState)(false);
+				const archivingRef = (0, react.useRef)(false);
 				const [skippedScheduledCount, setSkippedScheduledCount] = (0, react.useState)(0);
 				const [error, setError] = (0, react.useState)<string | null>(null);
 				const [cardPos, setCardPos] = (0, react.useState)<{ top: number; left: number } | null>(null);
