@@ -1,9 +1,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { idleArchiveCandidate, runSessionBatch, favoriteInputSchema, favoriteStateSchema, createSessionOrganizer } from "../src/archive-organizer.ts";
+import { idleArchiveCandidate, runSessionBatch, favoriteInputSchema, favoriteStateSchema, createSessionOrganizer, scheduledSetSchema } from "../src/archive-organizer.ts";
 
 const now = Date.parse("2026-09-20T00:00:00Z");
 const old = { id: "a", updatedAt: now - 31 * 86400000 };
+function makeOrganizer({ archivedSessionIds = [], byId = {} } = {}) {
+  const state = { archivedSessionIds: [...archivedSessionIds] };
+  const calls = { archived: [], restored: [], deleted: [] };
+  const organize = createSessionOrganizer({
+    workspaces: { getSnapshot: () => state }, sessions: { getSnapshot: () => ({ current: undefined, byId }) },
+    archive: async id => { calls.archived.push(id); state.archivedSessionIds.push(id); },
+    restore: async id => { calls.restored.push(id); state.archivedSessionIds = state.archivedSessionIds.filter(value => value !== id); return state; },
+    deleteOne: async id => { calls.deleted.push(id); state.archivedSessionIds = state.archivedSessionIds.filter(value => value !== id); },
+    getFavorites: async () => ({ favoriteSessionIds: [] }), currentSessionId: () => undefined
+  });
+  return { organize, state, calls };
+}
 
 test("闲置候选按最后活动时间判断，排除收藏、当前会话及执行和审批中的会话", () => {
   const options = { days: 30, now, favorites: new Set(), currentId: "current", pending: new Map() };
@@ -87,40 +99,23 @@ test("绑定了活动定时任务的会话不进闲置候选", () => {
 });
 
 test("归档路径对定时任务会话一律跳过，且绝不调用归档写入", async () => {
-  const state = { archivedSessionIds: [] };
-  const sessionState = { current: undefined, byId: Object.fromEntries(["a", "scheduled"].map(id => [id, { ...old, id }])) };
-  const calls = [];
-  const organize = createSessionOrganizer({
-    workspaces: { getSnapshot: () => state }, sessions: { getSnapshot: () => sessionState },
-    archive: async id => { calls.push(id); state.archivedSessionIds.push(id); },
-    restore: async () => state, deleteOne: async () => {},
-    getFavorites: async () => ({ favoriteSessionIds: [] }), currentSessionId: () => undefined
-  });
+  const { organize, calls } = makeOrganizer({ byId: Object.fromEntries(["a", "scheduled"].map(id => [id, { ...old, id }])) });
   const result = await organize("archive", ["a", "scheduled"], { skipScheduled: new Set(["scheduled"]) });
   assert.deepEqual(result.succeeded, ["a"]);
   assert.deepEqual(result.skipped, ["scheduled"]);
-  assert.deepEqual(calls, ["a"], "定时任务会话不得进入归档写入");
+  assert.deepEqual(calls.archived, ["a"], "定时任务会话不得进入归档写入");
 });
 
 test("跳过定时任务不影响恢复与删除路径", async () => {
-  const state = { archivedSessionIds: ["scheduled"] };
-  const sessionState = { current: undefined, byId: { scheduled: { ...old, id: "scheduled" } } };
-  const restored = [], deleted = [];
-  const organize = createSessionOrganizer({
-    workspaces: { getSnapshot: () => state }, sessions: { getSnapshot: () => sessionState },
-    archive: async () => {}, restore: async id => { restored.push(id); state.archivedSessionIds = state.archivedSessionIds.filter(value => value !== id); return state; },
-    deleteOne: async id => { deleted.push(id); state.archivedSessionIds = state.archivedSessionIds.filter(value => value !== id); },
-    getFavorites: async () => ({ favoriteSessionIds: [] }), currentSessionId: () => undefined
-  });
+  const { organize, state, calls } = makeOrganizer({ archivedSessionIds: ["scheduled"], byId: { scheduled: { ...old, id: "scheduled" } } });
   await organize("restore", ["scheduled"], { skipScheduled: new Set(["scheduled"]) });
-  assert.deepEqual(restored, ["scheduled"], "恢复不受定时任务保护影响");
+  assert.deepEqual(calls.restored, ["scheduled"], "恢复不受定时任务保护影响");
   state.archivedSessionIds = ["scheduled"];
   await organize("delete", ["scheduled"], { skipScheduled: new Set(["scheduled"]) });
-  assert.deepEqual(deleted, ["scheduled"], "删除不受定时任务保护影响");
+  assert.deepEqual(calls.deleted, ["scheduled"], "删除不受定时任务保护影响");
 });
 
-test("定时任务会话集合严格校验并去重", async () => {
-  const { scheduledSetSchema } = await import("../src/archive-organizer.ts");
+test("定时任务会话集合严格校验并去重", () => {
   assert.deepEqual(scheduledSetSchema.parse({ scheduledSessionIds: ["a", "a", "b"] }), { scheduledSessionIds: ["a", "b"] });
   assert.deepEqual(scheduledSetSchema.parse({ scheduledSessionIds: [] }), { scheduledSessionIds: [] });
   for (const value of [null, {}, { scheduledSessionIds: "a" }, { scheduledSessionIds: [1] }, { scheduledSessionIds: ["x".repeat(1025)] }]) {

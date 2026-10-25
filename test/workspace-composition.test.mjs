@@ -566,9 +566,10 @@ test("整理页收藏、闲置预览、部分失败重试及撤回形成完整�
   await nodes(tree).find(node => node.props["aria-label"] === "organizer.unfavoritecommon.separatora").props.onClick(); render();
   panel().props.onPreview(); render();
   const dialog = nodes(tree).find(node => node.props.open === true);
+  const dialogNodes = nodes(dialog.props.children);
   // 会话选择框带 label；定时任务开关用 aria-label，分开统计避免互相干扰。
-  assert.equal(nodes(dialog.props.children).filter(node => node.props?.checked === true && node.props?.label !== undefined).length, 3);
-  assert.equal(nodes(dialog.props.children).filter(node => node.props?.checked === true && node.props?.["aria-label"] === "organizer.skipScheduled").length, 1, "归档确认框默认开启定时任务保护");
+  assert.equal(dialogNodes.filter(node => node.props?.checked === true && node.props?.label !== undefined).length, 3);
+  assert.equal(dialogNodes.filter(node => node.props?.checked === true && node.props?.["aria-label"] === "organizer.skipScheduled").length, 1, "归档确认框默认开启定时任务保护");
   const confirm = nodes(dialog.props.footer).find(node => node.props.children === "archives.archiveSelected");
   await Promise.all([confirm.props.onClick(), confirm.props.onClick()]); render();
   assert.deepEqual(calls, ["a", "b", "c"]);

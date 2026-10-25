@@ -1812,22 +1812,17 @@ test("scheduledSessionIds 在宿主没有 schedule 服务或读取失败时降�
 	const registry = await mountWorkspaceRegistry(env);
 	assert.deepEqual(await registry.scheduledSessionIds(), { scheduledSessionIds: [] });
 
-	// 独立环境：同一 Cordis 上下文不允许对同名服务重复 provide。
-	const throwingEnv = buildRoot({
+	// 同一 Cordis 上下文只能 provide 一次：用可变 catalog 依次模拟抛错与畸形返回。
+	let mode = "throw";
+	const envWithSchedule = buildRoot({
 		headers: [header(s1, cwdA)],
 		workspaces: { [A]: workspace("D:\proj-a", [s1]) },
 	});
-	throwingEnv.ctx.provide("schedule", { catalog: async () => { throw new Error("catalog down"); } });
-	const throwingRegistry = await mountWorkspaceRegistry(throwingEnv);
-	assert.deepEqual(await throwingRegistry.scheduledSessionIds(), { scheduledSessionIds: [] });
-
-	const malformedEnv = buildRoot({
-		headers: [header(s1, cwdA)],
-		workspaces: { [A]: workspace("D:\proj-a", [s1]) },
-	});
-	malformedEnv.ctx.provide("schedule", { catalog: async () => "not-an-array" });
-	const malformedRegistry = await mountWorkspaceRegistry(malformedEnv);
-	assert.deepEqual(await malformedRegistry.scheduledSessionIds(), { scheduledSessionIds: [] });
+	envWithSchedule.ctx.provide("schedule", { catalog: async () => { if (mode === "throw") throw new Error("catalog down"); return "not-an-array"; } });
+	const registryWithSchedule = await mountWorkspaceRegistry(envWithSchedule);
+	assert.deepEqual(await registryWithSchedule.scheduledSessionIds(), { scheduledSessionIds: [] });
+	mode = "malformed";
+	assert.deepEqual(await registryWithSchedule.scheduledSessionIds(), { scheduledSessionIds: [] });
 });
 
 test("级联删除对已删除的子代理工件保持幂等", async () => {
