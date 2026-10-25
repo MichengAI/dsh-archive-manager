@@ -9,6 +9,7 @@ import type { ReactNode, RefObject, AriaAttributes, HTMLAttributes, DragEvent as
 import { createDiscoveryTools, discoveryCss, discoveryZh, discoveryEn, discoveryRu } from "./archive-discovery-ui.js";
 import { copySessionText, discoveryInvocations, matchesUpdatedRange, validUpdatedRange } from "./archive-discovery.js";
 import { cacheRebuildInvocations } from "./cache-rebuild-contract.js";
+import type { CacheDiagnosis } from "./cache-rebuild-contract.js";
 import { createCacheRebuildController } from "./cache-rebuild-client.js";
 import type { CacheRepairState } from "./cache-rebuild-client.js";
 import { allowArchivedNavigation, openArchivedConversation, formatArchiveNavigationError, ArchiveNavigationError, currentSessionId } from "./archive-experience.js";
@@ -539,17 +540,31 @@ export function startArchiveClient(require: HostRequire) {
 				finally { batchLock.current = false; setBusy(false); setBatchProgress(null); }
 			};
 			const [orphanInfo, setOrphanInfo] = (0, react.useState)<{ count: number; items: { sessionId: string; parentSessionId: string; createdAt: number; sizeBytes: number }[]; totalSizeBytes: number } | null>(null);
-			const cacheController = (0, react.useRef)<ReturnType<typeof createCacheRebuildController> | null>(null);
 			const [cacheRepair, setCacheRepair] = (0, react.useState)<CacheRepairState>({ diagnosis: { count: 0, items: [] }, busy: false, progress: null, result: null, error: null, refreshError: null });
+			const cacheController = (0, react.useRef)<ReturnType<typeof createCacheRebuildController> | null>(null);
 			(0, react.useEffect)(() => {
 				if (!diagnoseSessionCaches || !rebuildSessionCaches || !refreshCacheLists) return;
 				const controller = createCacheRebuildController({ diagnose: diagnoseSessionCaches, rebuild: rebuildSessionCaches, refresh: refreshCacheLists });
 				cacheController.current = controller;
-				const off = controller.subscribe(() => setCacheRepair(controller.snapshot()));
+				const off = controller.subscribe(() => {
+					const snap = controller.snapshot();
+					console.log("[archive-manager] cacheController state:", snap);
+					setCacheRepair(snap);
+				});
 				void controller.load();
+				if (typeof window !== "undefined") {
+					(window as unknown as Record<string, unknown>).__dshArchiveManager = {
+						diagnose: diagnoseSessionCaches,
+						rebuild: rebuildSessionCaches,
+						refresh: refreshCacheLists,
+						controller,
+					};
+				}
 				return () => { off(); controller.dispose(); cacheController.current = null; };
 			}, [diagnoseSessionCaches, rebuildSessionCaches, refreshCacheLists]);
-			(0, react.useEffect)(() => { if (!cacheController.current?.snapshot().busy) void cacheController.current?.load(); }, [workspaceState]);
+			(0, react.useEffect)(() => {
+				if (!cacheController.current?.snapshot().busy) void cacheController.current?.load();
+			}, [workspaceState.archivedSessionIds]);
 			const runCacheRebuild = async (retry = false) => {
 				if (busy || batchLock.current || !cacheController.current || cacheController.current.snapshot().busy) return;
 				batchLock.current = true; setBusy(true);

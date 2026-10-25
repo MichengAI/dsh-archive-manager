@@ -45,3 +45,22 @@ test('Issue88 controller ignores stale loads/unmount and stops sending subsequen
   controller.dispose(); const prior = notify; resolve(); await running;
   assert.equal(count, 1); assert.equal(notify, prior);
 });
+
+test('Issue88 controller retries diagnostic load if remote service is temporarily unavailable', async () => {
+  const { createCacheRebuildController } = await import('../src/cache-rebuild-client.ts');
+  let attempts = 0;
+  const controller = createCacheRebuildController({
+    diagnose: async () => {
+      attempts++;
+      if (attempts < 3) throw new Error('service.unavailable');
+      return { count: 1, items: [{ sessionId: 'recovered', identity: 'id' }] };
+    },
+    rebuild: async () => ({ rebuiltSessionIds: [], skippedSessionIds: [], failures: [] }),
+    refresh: async () => {}
+  }, { maxLoadRetries: 3, retryDelayMs: 20 });
+  await controller.load();
+  await new Promise(r => setTimeout(r, 100));
+  assert.equal(controller.snapshot().diagnosis.count, 1);
+  assert.equal(controller.snapshot().error, null);
+  controller.dispose();
+});

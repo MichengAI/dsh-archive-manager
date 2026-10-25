@@ -70,7 +70,7 @@ export function createOrganizerPanel(React: typeof import("react"), Button?: imp
 
 export const organizerZh = {
   "organizer.cacheTitle": "发现 {n} 个会话缺少可用列表缓存",
-  "organizer.cacheDesc": "仅检查登记工作区和归档普通会话的头部与官方缓存。点击后逐条只读日志并重建官方列表缓存；跳过活动会话，不打开会话、不调用模型，也不改变归档或定时任务。超时表示保存未确认，可重试。",
+  "organizer.cacheDesc": "检查工作区、未分组及归档普通会话的头部与官方缓存。点击后逐条只读日志并重建官方列表缓存；跳过活动会话，不打开会话、不调用模型，也不改变归档或定时任务。超时表示保存未确认，可重试。",
   "organizer.cacheRebuild": "重建列表缓存", "organizer.cacheRebuilding": "重建中…", "organizer.cacheRetry": "重试失败 {n} 条", "organizer.cacheCheck": "刷新列表并重新检测", "organizer.cacheError": "缓存检测失败：{detail}",
   "organizer.feedback": "操作反馈",
   "organizer.allSessions": "全部会话", "organizer.favoriteFilter": "收藏筛选",
@@ -94,7 +94,7 @@ export const organizerZh = {
 
 export const organizerEn = {
   "organizer.cacheTitle": "Found {n} sessions without usable list caches",
-  "organizer.cacheDesc": "Checks only headers and official caches for ordinary sessions in registered workspaces and archives. On click, reads logs one at a time and rebuilds official caches. Skips active sessions; never opens sessions, calls models or changes archives or schedules. Timeout means persistence is unconfirmed and can be retried.",
+  "organizer.cacheDesc": "Checks headers and official caches for workspace, ungrouped, and archived ordinary sessions. On click, reads logs one at a time and rebuilds official caches. Skips active sessions; never opens sessions, calls models or changes archives or schedules. Timeout means persistence is unconfirmed and can be retried.",
   "organizer.cacheRebuild": "Rebuild list caches", "organizer.cacheRebuilding": "Rebuilding…", "organizer.cacheRetry": "Retry {n} failed", "organizer.cacheCheck": "Refresh lists and check again", "organizer.cacheError": "Cache check failed: {detail}",
   "organizer.feedback": "Operation feedback",
   "organizer.allSessions": "All sessions", "organizer.favoriteFilter": "Favorites filter",
@@ -118,7 +118,7 @@ export const organizerEn = {
 
 export const organizerRu = {
   "organizer.cacheTitle": "Найдено {n} сессий без пригодного кеша списка",
-  "organizer.cacheDesc": "Проверяются только заголовки и официальный кеш обычных сессий зарегистрированных рабочих областей и архива. По нажатию журналы читаются по одному для восстановления официального кеша. Активные сессии пропускаются; сессии не открываются, модели не вызываются, архивы и расписания не меняются. Тайм-аут означает неподтверждённое сохранение; доступен повтор.",
+  "organizer.cacheDesc": "Проверяются заголовки и официальный кеш сессий рабочих областей, без группы и архива. По нажатию журналы читаются по одному для восстановления официального кеша. Активные сессии пропускаются; сессии не открываются, модели не вызываются, архивы и расписания не меняются. Тайм-аут означает неподтверждённое сохранение; доступен повтор.",
   "organizer.cacheRebuild": "Восстановить кеш списков", "organizer.cacheRebuilding": "Восстановление…", "organizer.cacheRetry": "Повторить {n} ошибок", "organizer.cacheCheck": "Обновить списки и проверить", "organizer.cacheError": "Ошибка проверки кеша: {detail}",
   "organizer.feedback": "Отзыв об операции",
   "organizer.allSessions": "Все сессии", "organizer.favoriteFilter": "Фильтр избранного",

@@ -18,16 +18,16 @@ function fixture() {
   return { registry, rows, reads, writes, cache, state, ctx };
 }
 
-test('Issue88 diagnosis uses only headers/cache and restricts scope, live sessions and subagents', async () => {
+test('Issue88 diagnosis uses only headers/cache and covers workspaces, archives, and ungrouped ordinary sessions', async () => {
   const f = fixture();
   const value = await f.registry.diagnoseSessionCaches();
-  assert.deepEqual(value.items.map(v => v.sessionId), ['archived', 'workspace']);
-  assert.equal(value.count, 2);
+  assert.deepEqual(value.items.map(v => v.sessionId), ['archived', 'workspace', 'stray']);
+  assert.equal(value.count, 3);
   assert.deepEqual(f.reads, []); assert.deepEqual(f.writes, []);
   const result = await f.registry.rebuildSessionCaches({ items: value.items });
-  assert.deepEqual(result.rebuiltSessionIds, ['archived', 'workspace']);
-  assert.equal(f.reads.filter(v => v === 'closed').length, 2);
-  assert.deepEqual(f.reads.filter(Array.isArray), [['archived', 'read'], ['workspace', 'read']]);
+  assert.deepEqual(result.rebuiltSessionIds, ['archived', 'workspace', 'stray']);
+  assert.equal(f.reads.filter(v => v === 'closed').length, 3);
+  assert.deepEqual(f.reads.filter(Array.isArray), [['archived', 'read'], ['workspace', 'read'], ['stray', 'read']]);
   assert.deepEqual(f.state.archivedSessionIds, ['archived', 'child', 'live']);
   assert.equal((await f.registry.diagnoseSessionCaches()).count, 0);
 });
@@ -40,15 +40,15 @@ test('Issue88 rebuilding queries authoritative targets without full-library list
   f.registry.listStoredHeaders = async () => { listings++; return list(); };
   f.ctx.sessionPersistence.stat = async id => { stats++; return stat(id); };
   const result = await f.registry.rebuildSessionCaches({ items: diagnosis.items });
-  assert.deepEqual(result.rebuiltSessionIds, ['archived', 'workspace']);
+  assert.deepEqual(result.rebuiltSessionIds, ['archived', 'workspace', 'stray']);
   assert.equal(listings, 0, 'rebuilding must not scan all stored headers');
-  assert.equal(stats, 4, 'check each target before and after reading');
+  assert.equal(stats, 6, 'check each target before and after reading');
 });
 
 test('Issue88 partial cache without compatible title is a repair candidate', async () => {
   const f = fixture();
   f.cache.cachedSnapshot = () => ({ asOfSeq: -1, values: { unrelated: true } });
-  assert.equal((await f.registry.diagnoseSessionCaches()).count, 2);
+  assert.equal((await f.registry.diagnoseSessionCaches()).count, 3);
 });
 
 test('Issue88 stale diagnostic token cannot rebuild deleted/recreated ID', async () => {

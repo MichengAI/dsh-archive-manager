@@ -5,19 +5,37 @@ export interface CacheRepairState {
   diagnosis: CacheDiagnosis; busy: boolean; progress: { done: number; total: number } | null;
   result: CacheRebuildResult | null; error: string | null; refreshError: string | null;
 }
+export interface CacheRebuildControllerOptions {
+  maxLoadRetries?: number;
+  retryDelayMs?: number;
+}
 /** 页面局部状态：每条会话单独调用 RPC，仅重试失败项，卸载后不再开始后续处理。 */
 export function createCacheRebuildController(api: {
   diagnose(): Promise<CacheDiagnosis>; rebuild(input: { items: CacheCandidate[] }): Promise<CacheRebuildResult>; refresh(): Promise<unknown>;
-}) {
+}, options: CacheRebuildControllerOptions = {}) {
+  const { maxLoadRetries = 3, retryDelayMs = 200 } = options;
   let state: CacheRepairState = { diagnosis: { count: 0, items: [] }, busy: false, progress: null, result: null, error: null, refreshError: null };
   let active = true, sequence = 0, retry: CacheCandidate[] = [];
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
   const listeners = new Set<() => void>();
   const update = (value: Partial<CacheRepairState>) => { if (!active) return; state = { ...state, ...value }; for (const fn of listeners) fn(); };
-  const load = async () => {
+  const load = async (retries = maxLoadRetries) => {
     if (!active) return;
+    if (retryTimer !== undefined) { clearTimeout(retryTimer); retryTimer = undefined; }
     const current = ++sequence;
-    try { const diagnosis = cacheDiagnosisSchema.parse(await api.diagnose()); if (active && current === sequence) update({ diagnosis, error: null }); }
-    catch (error) { if (active && current === sequence) update({ error: errorMessage(error) }); }
+    try {
+      const diagnosis = cacheDiagnosisSchema.parse(await api.diagnose());
+      if (active && current === sequence) update({ diagnosis, error: null });
+    } catch (error) {
+      if (retries > 0 && active && current === sequence) {
+        retryTimer = setTimeout(() => {
+          retryTimer = undefined;
+          if (active && current === sequence) void load(retries - 1);
+        }, retryDelayMs);
+        return;
+      }
+      if (active && current === sequence) update({ error: errorMessage(error) });
+    }
   };
   return {
     snapshot: () => state,
@@ -26,6 +44,7 @@ export function createCacheRebuildController(api: {
     async run(failedOnly = false) {
       if (!active || state.busy) return;
       ++sequence;
+      if (retryTimer !== undefined) { clearTimeout(retryTimer); retryTimer = undefined; }
       const items = failedOnly ? [...retry] : [...state.diagnosis.items];
       const result: CacheRebuildResult = { rebuiltSessionIds: [], skippedSessionIds: [], failures: [] };
       retry = [];
@@ -46,6 +65,11 @@ export function createCacheRebuildController(api: {
       await load();
       update({ busy: false, progress: null });
     },
-    dispose() { active = false; ++sequence; listeners.clear(); },
+    dispose() {
+      active = false;
+      ++sequence;
+      if (retryTimer !== undefined) { clearTimeout(retryTimer); retryTimer = undefined; }
+      listeners.clear();
+    },
   };
 }
