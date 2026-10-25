@@ -3,7 +3,7 @@ import { symbols } from "@deepseek-ai/cordis";
 import type { Domain, DomainGlobalSpec } from "@deepseek-ai/dsh-storage-domain";
 import type { TypertContribution } from "@deepseek-ai/dsh-typert-registry";
 import type { Header, HostContext, PersistenceCompat, SessionsCompat, WorkspaceConstructor } from "./host-compat.js";
-import { record, errorMessage, errorCode } from "./contracts.js";
+import { record, errorMessage, errorCode, strictCodec } from "./contracts.js";
 import type { Schema } from "./contracts.js";
 import type { TypertGatewayBinding } from "@deepseek-ai/dsh-typert-protocol";
 type BatchTarget = { scope: "all" | "ungrouped" } | { scope: "workspace"; workspaceId: string } | { scope: "sessions"; sessionIds: string[] };
@@ -133,16 +133,6 @@ class PersistenceStillPresentError extends Error {
 function deletionFailureMessage(error: unknown) {
 	// 失败详情会进各语言模板的 {detail}。这里只留宿主原文，不拼中文诊断。
 	return errorMessage(error).slice(0, 400);
-}
-
-/** alpha.1 读 schema.parse；alpha.2 只接受 create()。两套字段一起带上。 */
-function strictCodec(typeSymbol: string, schema: Schema<unknown>) {
-	return {
-		mode: "strict" as const,
-		typeSymbol,
-		create: () => schema,
-		schema,
-	};
 }
 
 /** 经 typert Gateway 暴露的方法。子类与 overlay 共用一份，避免把内部方法（如目录删除和索引清理）也变成 RPC 端点。 */
@@ -554,19 +544,15 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Re
 	 * 真正的安全底线在归档路径本身（不调用 stopActivity）。
 	 */
 	async scheduledSessionIds() {
-		// 必须用 ctx.get 取服务：插件 fiber 上直接读属性会抛「without inject」，降级分支根本走不到。
-		const schedule = this.ctx.get("schedule") as { catalog?: () => Promise<unknown> } | undefined;
-		if (schedule === undefined || typeof schedule.catalog !== "function") return { scheduledSessionIds: [] as string[] };
 		let catalog: unknown;
 		try {
-			catalog = await schedule.catalog();
+			// 必须用 ctx.get 取服务：插件 fiber 上直接读属性会抛「without inject」。
+			catalog = await this.ctx.get("schedule")?.catalog?.();
 		} catch (error) {
 			this.ctx.logger?.warn?.(`archive-manager: schedule catalog read failed: ${String(error)}`);
-			return { scheduledSessionIds: [] as string[] };
 		}
-		if (!Array.isArray(catalog)) return { scheduledSessionIds: [] as string[] };
 		const active: string[] = [];
-		for (const entry of catalog) {
+		for (const entry of Array.isArray(catalog) ? catalog : []) {
 			if (entry === null || typeof entry !== "object") continue;
 			const task = entry as { sessionId?: unknown; status?: unknown };
 			// 只认活动任务：已结束（inactive）的任务不会再投递，也不阻止归档。

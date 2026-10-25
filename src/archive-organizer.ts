@@ -1,28 +1,25 @@
-import { archiveCodec, record } from "./contracts.js";
+import { archiveCodec, record, remoteInvocation } from "./contracts.js";
 import type { SessionSummary, BatchOptions, BatchResult, OrganizerServices, OrganizeKind, OrganizeOptions } from "./contracts.js";
 /** 收藏及批量整理共用的校验与业务规则；不依赖浏览器或宿主实例。 */
+const isSessionId = (value: unknown): value is string => typeof value === "string" && value.length > 0 && value.length <= 1024;
 function checkedId(value: unknown) {
-  if (typeof value !== "string" || value.length === 0 || value.length > 1024) throw new TypeError("会话 ID 长度须为 1～1024 个字符");
+  if (!isSessionId(value)) throw new TypeError("会话 ID 长度须为 1～1024 个字符");
   return value;
 }
 
 /** 会话 ID 集合的宽松收口：逐项按 checkedId 规则校验（非法项只影响自身），并去重。 */
 export function sessionIdSet(values: readonly unknown[]) {
-  const kept: string[] = [];
-  for (const value of values) {
-    try { kept.push(checkedId(value)); } catch { /* 非法 ID 跳过，不影响其它会话 */ }
-  }
-  return [...new Set(kept)];
+  return [...new Set(values.filter(isSessionId))];
 }
 
 /** 会话 ID 集合 schema 工厂：字段名与错误文案不同，校验规则完全一致。 */
-function idSetSchema<F extends "favoriteSessionIds" | "scheduledSessionIds">(field: F, label: string) {
+function idSetSchema<K extends string>(field: K, label: string) {
   return {
-    parse(input: unknown): { [K in F]: string[] } {
+    parse(input: unknown): Record<K, string[]> {
       const value = record(input);
       const list = value[field];
       if (!Array.isArray(list) || list.length > 100000) throw new TypeError(label);
-      return { [field]: [...new Set(list.map(checkedId))] } as { [K in F]: string[] };
+      return { [field]: [...new Set(list.map(checkedId))] } as Record<K, string[]>;
     },
     safeParse(value: unknown) {
       try { return { success: true, data: this.parse(value) }; }
@@ -43,13 +40,9 @@ export const favoriteStateSchema = idSetSchema("favoriteSessionIds", "收藏集�
 
 /** 宿主与客户端使用同一份描述符，防止两端接口漂移。 */
 export function favoriteInvocations() {
-  return ["favoriteSessions", "setSessionFavorite"].map((method) => ({
-    id: `@michengai/dsh-archive-manager#workspaceRegistry/${method}`,
-    service: "workspaceRegistry", namespace: "workspaceRegistry", method,
-    invocation: { kind: "direct" },
+  return ["favoriteSessions", "setSessionFavorite"].map((method) => remoteInvocation(method, {
     parameters: method === "favoriteSessions" ? [] : [{ name: "input", wire: "input", source: "json", codec: archiveCodec("FavoriteInput", favoriteInputSchema) }],
-    result: archiveCodec("FavoriteState", favoriteStateSchema),
-    sourceLocation: { file: "@michengai/dsh-archive-manager/lib/workspace.js", line: 1, column: 1 }
+    result: archiveCodec("FavoriteState", favoriteStateSchema)
   }));
 }
 
@@ -58,25 +51,15 @@ export const scheduledSetSchema = idSetSchema("scheduledSessionIds", "定时任�
 
 /** 宿主与客户端共用同一份描述符，避免两端接口漂移。 */
 export function scheduledInvocations() {
-  return [{
-    id: "@michengai/dsh-archive-manager#workspaceRegistry/scheduledSessionIds",
-    service: "workspaceRegistry", namespace: "workspaceRegistry", method: "scheduledSessionIds",
-    invocation: { kind: "direct" },
-    parameters: [],
-    result: archiveCodec("ScheduledSessionIds", scheduledSetSchema),
-    sourceLocation: { file: "@michengai/dsh-archive-manager/lib/workspace.js", line: 1, column: 1 }
-  }];
+  return [remoteInvocation("scheduledSessionIds", { result: archiveCodec("ScheduledSessionIds", scheduledSetSchema) })];
 }
 
-/** 热路径上的空集合常量：每次调用都新建空 Set 会放大渲染开销。 */
-const NO_SCHEDULED: ReadonlySet<string> = new Set();
-
 /** 闲置归档只接受有效时间；执行前也复核此规则，避免归档刚恢复活动的会话。 */
-export function idleArchiveCandidate(session: SessionSummary | undefined, { days, now = Date.now(), favorites = new Set(), currentId, pending = new Map(), scheduled = NO_SCHEDULED }: { days: number; now?: number; favorites?: ReadonlySet<string>; currentId?: string; pending?: ReadonlyMap<string, unknown>; scheduled?: ReadonlySet<string> }) {
+export function idleArchiveCandidate(session: SessionSummary | undefined, { days, now = Date.now(), favorites = new Set(), currentId, pending = new Map(), scheduled }: { days: number; now?: number; favorites?: ReadonlySet<string>; currentId?: string; pending?: ReadonlyMap<string, unknown>; scheduled?: ReadonlySet<string> }) {
   if (!session || !Number.isInteger(days) || days < 1 || days > 36500) return false;
   if (favorites.has(session.id) || session.id === currentId || (session.retainedBy?.mainView ?? 0) > 0) return false;
   // 绑定了活动定时任务的会话不进候选：归档会连带删除任务，属于不可逆的数据损失。
-  if (scheduled.has(session.id)) return false;
+  if (scheduled?.has(session.id)) return false;
   if (session.running || (session.runningSubagentCount ?? 0) > 0 || session.pendingInteraction != null || pending.has(session.id)) return false;
   const updated = typeof session.updatedAt === "number" ? session.updatedAt : Date.parse(session.updatedAt ?? "");
   return Number.isFinite(updated) && updated <= now - days * 86400000;
@@ -127,7 +110,7 @@ export function createSessionOrganizer({ workspaces, sessions, archive, restore,
           const favorites = new Set((await getFavorites()).favoriteSessionIds);
           // 收藏查询期间状态也可能变化，因此在真正写入前重新取会话投影。
           const latest = sessions.getSnapshot();
-          if (!idleArchiveCandidate(latest.byId[id], { days: options.idleDays, favorites, currentId: currentSessionId(latest), pending: options.getPending?.() ?? options.pending, scheduled: options.skipScheduled })) return false;
+          if (!idleArchiveCandidate(latest.byId[id], { days: options.idleDays, favorites, currentId: currentSessionId(latest), pending: options.getPending?.() ?? options.pending })) return false;
         }
         await archive(id);
         return workspaces.getSnapshot().archivedSessionIds.includes(id);

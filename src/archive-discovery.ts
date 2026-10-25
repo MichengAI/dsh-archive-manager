@@ -1,4 +1,4 @@
-import { archiveCodec, record, errorMessage, errorCode } from "./contracts.js";
+import { archiveCodec, remoteInvocation, record, errorMessage, errorCode } from "./contracts.js";
 import type { Schema, ConversationEvent, TextMessage, SearchHit, Failure, SearchInput, SearchProgress, SessionSummary } from "./contracts.js";
 /** 归档正文检索和只读预览的共享协议与纯函数。正文只包含用户和助手的文本。 */
 const id = (value: unknown) => {
@@ -70,10 +70,9 @@ export function discoveryInvocations() {
     ["searchArchivedContent", searchInputSchema, searchResultSchema],
     ["previewArchivedSession", previewInputSchema, previewResultSchema]
   ];
-  return methods.map(([method, input, output]) => ({
-    id: `@michengai/dsh-archive-manager#workspaceRegistry/${method}`, service: "workspaceRegistry", namespace: "workspaceRegistry", method,
-    invocation: { kind: "direct" }, parameters: [{ name: "input", wire: "input", source: "json", codec: archiveCodec(method + "Input", input) }],
-    result: archiveCodec(method + "Result", output), sourceLocation: { file: "@michengai/dsh-archive-manager/lib/workspace.js", line: 1, column: 1 }
+  return methods.map(([method, input, output]) => remoteInvocation(method, {
+    parameters: [{ name: "input", wire: "input", source: "json", codec: archiveCodec(method + "Input", input) }],
+    result: archiveCodec(method + "Result", output)
   }));
 }
 /** 读取持久化事件的原始对话文本，不把工具输出、推理或插件注入当作正文。 */
