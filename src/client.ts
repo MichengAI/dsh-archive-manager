@@ -365,7 +365,7 @@ export function startArchiveClient(require: HostRequire) {
 		const SIDEBAR_POPOVER_CSS = ".dsham_sidebarCardRoot{position:fixed;inset:0;z-index:1200;pointer-events:none}.dsham_sidebarCardBackdrop{position:fixed;inset:0;pointer-events:auto;background:transparent}.dsham_sidebarCard{position:fixed;pointer-events:auto;box-sizing:border-box;width:290px;max-height:calc(100vh - 32px);overflow-y:auto;padding:16px 18px 14px;border-radius:var(--dsw-radius-lg,14px);background:var(--dsw-menu-surface-fill);backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));-webkit-backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));border:none;box-shadow:var(--dsw-elevation-prominent);color:var(--dsw-alias-label-primary);display:flex;flex-direction:column;gap:8px}.dsham_sidebarCardTitle{margin:0;font-size:14px;font-weight:600;line-height:20px;color:var(--dsw-alias-label-primary)}.dsham_sidebarCardDesc{margin:0;font-size:13px;line-height:18px;color:var(--dsw-alias-label-secondary)}.dsham_sidebarCardError{margin-top:2px;font-size:12px;line-height:16px;color:var(--dsw-alias-state-error-primary,#ef7272);white-space:pre-line}.dsham_sidebarCardFooter{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:10px}.dsham_sidebarCardBtn{border:none;background:transparent;padding:5px 12px;border-radius:var(--dsw-radius-sm,6px);font:inherit;font-size:13px;font-weight:500;line-height:18px;cursor:pointer;transition:background-color .15s ease,opacity .15s ease}.dsham_sidebarCardBtnCancel{color:var(--dsw-alias-label-primary)}.dsham_sidebarCardBtnCancel:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}.dsham_sidebarCardBtnDanger{color:var(--dsw-alias-state-error-primary,#ef7272)}.dsham_sidebarCardBtnDanger:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover-danger,#f25a5a26)}.dsham_sidebarCardBtn:disabled{opacity:.4;cursor:default}";
 		ensurePluginStyle("dsh-archive-manager/SidebarPopover.css", SIDEBAR_POPOVER_CSS);
 		/** 移动会话二级悬浮菜单样式 */
-		const MOVE_SUBMENU_CSS = ".dsham_moveSessionWrap{position:relative}.dsham_moveSubmenu{position:fixed;z-index:99999;min-width:160px;max-width:260px;max-height:340px;overflow-y:auto;background:var(--dsw-menu-surface-fill,var(--dsw-alias-surface-overlay,#1e1e22));backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));-webkit-backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));border:1px solid var(--dsw-alias-border-l1,rgba(255,255,255,0.12));border-radius:var(--dsw-radius-md,8px);box-shadow:var(--dsw-elevation-prominent,0 6px 20px rgba(0,0,0,0.45));padding:4px;display:flex;flex-direction:column;gap:2px}.dsham_moveSubmenuBtn{display:flex;align-items:center;width:100%;padding:6px 10px;border:none;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-primary,#ededed);font:inherit;font-size:13px;line-height:20px;text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background-color .12s ease}.dsham_moveSubmenuBtn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,0.08))}.dsham_moveSubmenuBtn:focus-visible:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,0.08));outline:none}";
+		const MOVE_SUBMENU_CSS = ".dsham_moveSessionWrap{position:relative}.dsham_moveSubmenu{position:fixed;z-index:99999;min-width:160px;max-width:260px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.25) transparent;background:var(--dsw-menu-surface-fill,var(--dsw-alias-surface-overlay,#1e1e22));backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));-webkit-backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));border:1px solid var(--dsw-alias-border-l1,rgba(255,255,255,0.12));border-radius:var(--dsw-radius-md,8px);box-shadow:var(--dsw-elevation-prominent,0 6px 20px rgba(0,0,0,0.45));padding:4px;display:flex;flex-direction:column;gap:2px}.dsham_moveSubmenu::-webkit-scrollbar{width:6px}.dsham_moveSubmenu::-webkit-scrollbar-track{background:transparent}.dsham_moveSubmenu::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.2);border-radius:3px}.dsham_moveSubmenu::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.35)}.dsham_moveSubmenuBtn{display:flex;align-items:center;width:100%;padding:6px 10px;border:none;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-primary,#ededed);font:inherit;font-size:13px;line-height:20px;text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background-color .12s ease}.dsham_moveSubmenuBtn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,0.08))}.dsham_moveSubmenuBtn:focus-visible:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,0.08));outline:none}";
 		ensurePluginStyle("dsh-archive-manager/MoveSubmenu.css", MOVE_SUBMENU_CSS);
 		/**
 		 * 收藏星住在一个**独立容器**里，容器紧跟在宿主的前导格（`_slot`，状态点/定时标记）之后：
@@ -3389,7 +3389,7 @@ export function startArchiveClient(require: HostRequire) {
 			function MoveSessionMenuItem({ sessionId, displayTitle: title, useMenuOpenState, t }: { sessionId: string; displayTitle: string; useMenuOpenState: () => readonly [boolean, (open: boolean) => void]; t: Translate }) {
 				const [, setMenuOpen] = useMenuOpenState();
 				const [subOpen, setSubOpen] = react.useState(false);
-				const [subPos, setSubPos] = react.useState<{ top: number; left: number } | null>(null);
+				const [subPos, setSubPos] = react.useState<{ top: number; left: number; maxHeight: number } | null>(null);
 				const [moving, setMoving] = react.useState(false);
 				const rowRef = react.useRef<HTMLDivElement>(null);
 				const leaveTimerRef = react.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -3401,17 +3401,28 @@ export function startArchiveClient(require: HostRequire) {
 					if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
 					if (rowRef.current) {
 						const rect = rowRef.current.getBoundingClientRect();
-						let top = rect.top - 4;
+						const winWidth = typeof window !== "undefined" ? window.innerWidth : 1024;
+						const winHeight = typeof window !== "undefined" ? window.innerHeight : 768;
+
+						// 二级菜单宽度约 180~240px，最大高度自适应屏幕并留出上下安全边距
+						const menuWidth = 220;
+						const maxAvailableHeight = Math.max(140, winHeight - 20);
+						const targetMaxHeight = Math.min(360, maxAvailableHeight);
+
+						// 水平位置：优先右侧，右侧空间不足时翻转到左侧
 						let left = rect.right + 2;
-						if (typeof window !== "undefined") {
-							if (left + 220 > window.innerWidth) {
-								left = Math.max(10, rect.left - 222);
-							}
-							if (top + 320 > window.innerHeight) {
-								top = Math.max(10, window.innerHeight - 330);
-							}
+						if (left + menuWidth > winWidth - 10) {
+							left = Math.max(10, rect.left - menuWidth - 4);
 						}
-						setSubPos({ top, left });
+
+						// 垂直位置：优先与菜单项顶部平齐，若底部超出屏幕，则向上平移，确保整个菜单都在可视区域内
+						let top = rect.top - 4;
+						if (top + targetMaxHeight > winHeight - 10) {
+							top = Math.max(10, winHeight - targetMaxHeight - 10);
+						}
+						if (top < 10) top = 10;
+
+						setSubPos({ top, left, maxHeight: targetMaxHeight });
 					}
 					setSubOpen(true);
 				};
@@ -3493,7 +3504,8 @@ export function startArchiveClient(require: HostRequire) {
 								onMouseLeave: handleMouseLeave,
 								style: {
 									top: subPos.top,
-									left: subPos.left
+									left: subPos.left,
+									maxHeight: subPos.maxHeight
 								},
 								children: [
 									(0, react_jsx_runtime.jsx)("div", {
