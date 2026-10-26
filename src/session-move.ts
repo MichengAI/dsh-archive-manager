@@ -80,6 +80,11 @@ function normalizePath(p: string | undefined): string | undefined {
 	return process.platform === "win32" ? norm.toLowerCase() : norm;
 }
 
+function rawWorkspaceSessionIds(ws: WorkspaceEntityLike): readonly string[] {
+	const raw = (ws as unknown as { record?: { sessionIds?: readonly string[] } }).record?.sessionIds;
+	return Array.isArray(raw) ? raw : (Array.isArray(ws.sessionIds) ? ws.sessionIds : []);
+}
+
 /**
  * 解析并定位多帧 zstd 压缩的第一个 frame（Header 帧）边界。
  */
@@ -251,16 +256,19 @@ export async function moveSessionToWorkspace(
 
 	const currentNormalizedCwd = normalizePath(header.cwd);
 	const targetNormalizedCwd = normalizePath(targetPath);
+	const targetNorm = normalizePath(targetWorkspace.path);
+
+	// 提前记录原先包含该会话的工作区列表（必须在预热修改 headers 之前捕获，因为 ws.sessionIds 会根据 candidateMatches(cwd) 动态过滤）
+	const sourceWorkspaces = registry.list().filter((ws) => {
+		const wsNorm = normalizePath(ws.path);
+		const isOther = (ws.id && targetWorkspace.id) ? ws.id !== targetWorkspace.id : wsNorm !== targetNorm;
+		return isOther && rawWorkspaceSessionIds(ws).includes(cleanSessionId);
+	});
 
 	// 4. 路径比对：若 cwd 相同，仅需调整工作区记账，无需改动物理文件
 	if (currentNormalizedCwd && targetNormalizedCwd && currentNormalizedCwd === targetNormalizedCwd) {
-		const targetNorm = normalizePath(targetWorkspace.path);
-		for (const ws of registry.list()) {
-			const wsNorm = normalizePath(ws.path);
-			const isOther = (ws.id && targetWorkspace.id) ? ws.id !== targetWorkspace.id : wsNorm !== targetNorm;
-			if (isOther && Array.isArray(ws.sessionIds) && ws.sessionIds.includes(cleanSessionId)) {
-				await ws.detachSession(cleanSessionId);
-			}
+		for (const ws of sourceWorkspaces) {
+			await ws.detachSession(cleanSessionId);
 		}
 		await targetWorkspace.attachSession(cleanSessionId);
 		registry.sessionPaths?.set(cleanSessionId, targetPath);
@@ -371,14 +379,9 @@ export async function moveSessionToWorkspace(
 		}
 
 		// e. 宿主记账同步
-		const targetNorm = normalizePath(targetWorkspace.path);
-		for (const ws of registry.list()) {
-			const wsNorm = normalizePath(ws.path);
-			const isOther = (ws.id && targetWorkspace.id) ? ws.id !== targetWorkspace.id : wsNorm !== targetNorm;
-			if (isOther && Array.isArray(ws.sessionIds) && ws.sessionIds.includes(cleanSessionId)) {
-				await ws.detachSession(cleanSessionId);
-				detachedWorkspaces.push(ws);
-			}
+		for (const ws of sourceWorkspaces) {
+			await ws.detachSession(cleanSessionId);
+			detachedWorkspaces.push(ws);
 		}
 		await targetWorkspace.attachSession(cleanSessionId);
 		targetAttached = true;
