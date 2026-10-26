@@ -91,3 +91,48 @@ test("弹窗底部按钮用宿主默认尺寸，危险操作统一自带红色�
   assert.doesNotMatch(client, /dsham_archiveWorkspaceConfirm/);
   assert.doesNotMatch(client, /border-color:var\(--dsw-alias-state-error-primary\)!important/);
 });
+test("预览弹窗直挂 body 并配置防穿透实色底、遮罩模糊与标准关闭按钮", async () => {
+  const client = await readFile(clientPath, "utf8");
+
+  // 1. 宽版预览弹窗显式 portalToBody 脱离 .dsham_settings 的 container-type 包含块
+  assert.match(client, /className:\s*\"dsham_modalWide\"/);
+  assert.match(client, /portalToBody:\s*true/);
+  assert.match(client, /closeLabel:\s*t\(\"cancel\"\)/);
+
+  // 2. 遮罩层与卡片具备防穿透实色与高斯模糊
+  assert.match(client, /\.dsham_modalMask\{[^}]*backdrop-filter:[^}]*blur/);
+  assert.match(client, /\.dsham_modalDialog\{[^}]*background-color:/);
+  assert.match(client, /\.dsham_modalDialog\{[^}]*backdrop-filter:/);
+  assert.match(client, /\.dsham_modalDialog\{[^}]*box-shadow:/);
+
+  // 3. 头部标题栏与关闭按钮结构
+  assert.match(client, /className:\s*\"dsham_modalHeader\"/);
+  assert.match(client, /className:\s*\"dsham_modalClose\"/);
+  assert.match(client, /\.dsham_modalHeader\{[^}]*justify-content:space-between/);
+  assert.match(client, /\.dsham_modalClose\{[^}]*cursor:pointer/);
+
+  // 4. 宽版预览弹窗单层滚动与视口自适应
+  assert.match(client, /\.dsham_modalWide\{[^}]*width:min\(900px/);
+  assert.match(client, /\.dsham_modalWide \.dsham_modalBody\{overflow:hidden/);
+  assert.match(client, /\.dsham_modalWide \.dsham_previewMessages\{[^}]*overflow-y:auto/);
+});
+
+test("工作区分组采用技能管理同款一体化卡片，列表超紧凑40px并美化暗色复选框", async () => {
+  const client = await readFile(clientPath, "utf8");
+
+  // 1. 工作区卡片一体化与标题栏
+  assert.match(client, /\.dsham_settingsGroup\{[^}]*border:1px solid var\(--dsw-alias-border-l2\)/);
+  assert.match(client, /\.dsham_settingsGroupHeading\{[^}]*min-height:38px/);
+  assert.match(client, /\.dsham_settingsList\{[^}]*border-top:1px solid var\(--dsw-alias-border-l2\)/);
+
+  // 2. 超紧凑行高 40px 与紧凑间距
+  assert.match(client, /\.dsham_settingsRow\{[^}]*min-height:40px/);
+  assert.match(client, /\.dsham_settingsRow\{[^}]*padding:4px 10px/);
+  assert.match(client, /\.dsham_settingsTitleLink\{[^}]*line-height:16px/);
+
+  // 3. 复选框消除系统原生生硬灰色方框，使用带圆角和 SVG 勾勾的定制控件
+  assert.match(client, /\.dsham_checkbox\{[^}]*appearance:none/);
+  assert.match(client, /\.dsham_checkbox\{[^}]*border-radius:var\(--dsw-radius-xs/);
+  assert.match(client, /\.dsham_checkbox:checked\{[^}]*background-image:/);
+  assert.match(client, /\.dsham_checkbox:indeterminate\{[^}]*background-image:/);
+});
