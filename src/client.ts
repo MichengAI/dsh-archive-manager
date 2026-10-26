@@ -424,7 +424,7 @@ export function startArchiveClient(require: HostRequire) {
 			}
 			let ungrouped = false;
 			for (const sessionId of favorites) if (!grouped.has(sessionId)) { ungrouped = true; break; }
-			return (groupKey) => groupKey === "ungrouped" ? ungrouped : withFavorite.get(groupKey) === true;
+			return (groupKey) => (groupKey === "" || groupKey === "ungrouped") ? ungrouped : withFavorite.get(groupKey) === true;
 		}
 		/**
 		 * 主界面「只看收藏」：在官方「视图选项 → 筛选会话」里插入一行开关，打开后
@@ -560,8 +560,9 @@ export function startArchiveClient(require: HostRequire) {
 				// 宿主的勾选图标是 CSS Module 类名，克隆不到就用自己的 ::after 勾号。
 				for (const svg of Array.from(button.querySelectorAll("svg"))) if (svg.closest("span") === null) svg.remove();
 				button.setAttribute(FAVORITES_ONLY_MARKER, "true");
+				button.setAttribute("role", "menuitemcheckbox");
 				button.dataset.active = String(enabled);
-				button.setAttribute("aria-pressed", String(enabled));
+				button.setAttribute("aria-checked", String(enabled));
 				button.setAttribute("aria-label", translate()("organizer.favoritesOnly"));
 				button.onclick = (event: MouseEvent) => {
 					event.preventDefault();
@@ -576,7 +577,7 @@ export function startArchiveClient(require: HostRequire) {
 				for (const button of Array.from(document.querySelectorAll<HTMLButtonElement>("button[" + FAVORITES_ONLY_MARKER + "]"))) {
 					// 菜单没关就走完一轮时，桌面上的勾选也要跟上当前状态。
 					button.dataset.active = String(enabled);
-					button.setAttribute("aria-pressed", String(enabled));
+					button.setAttribute("aria-checked", String(enabled));
 				}
 				for (const menu of Array.from(document.querySelectorAll<HTMLElement>('[role="menu"]'))) {
 					const anchor = Array.from(menu.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]')).find((item) => ONLY_ARCHIVED_TEXTS.some((text) => (item.textContent ?? "").includes(text)));
@@ -686,10 +687,24 @@ export function startArchiveClient(require: HostRequire) {
 					catch (reason) { console.warn("archive-manager: favorite listener failed", reason); }
 				}
 			};
-			const adopt = (favoriteSessionIds: readonly string[]) => {
-				const same = state.ids.size === favoriteSessionIds.length && favoriteSessionIds.every((id) => state.ids.has(id));
-				if (same && state.ready && state.pending.size === 0) return;
-				publish({ ready: true, ids: same ? state.ids : new Set(favoriteSessionIds), pending: /* @__PURE__ */ new Set<string>() });
+			const adopt = (favoriteSessionIds: readonly string[], settledSessionId?: string) => {
+				const nextIds = new Set(favoriteSessionIds);
+				// 如果当前还有正在飞行中的其他 pending 操作，保持其乐观状态叠加在服务端结果上
+				for (const pendingId of state.pending) {
+					if (pendingId === settledSessionId) continue;
+					if (state.ids.has(pendingId)) nextIds.add(pendingId);
+					else nextIds.delete(pendingId);
+				}
+				const nextPending = new Set(state.pending);
+				if (settledSessionId !== undefined) {
+					nextPending.delete(settledSessionId);
+				} else if (state.pending.size === 0) {
+					nextPending.clear();
+				}
+				const sameIds = state.ids.size === nextIds.size && [...nextIds].every((id) => state.ids.has(id));
+				const samePending = state.pending.size === nextPending.size && [...nextPending].every((id) => state.pending.has(id));
+				if (sameIds && samePending && state.ready) return;
+				publish({ ready: true, ids: nextIds, pending: nextPending });
 			};
 			return {
 				bind(next) { api = next; },
@@ -698,7 +713,7 @@ export function startArchiveClient(require: HostRequire) {
 					return () => { listeners.delete(listener); };
 				},
 				getSnapshot: () => state,
-				adopt,
+				adopt: (favoriteSessionIds) => adopt(favoriteSessionIds),
 				ensure() {
 					if (api === undefined || state.ready) return Promise.resolve();
 					if (loading !== undefined) return loading;
@@ -712,9 +727,9 @@ export function startArchiveClient(require: HostRequire) {
 				},
 				async toggle(sessionId) {
 					if (api === undefined || !state.ready || state.pending.has(sessionId)) return;
-					const previousIds = state.ids;
-					const favorite = !previousIds.has(sessionId);
-					const optimistic = new Set(previousIds);
+					const wasFavorite = state.ids.has(sessionId);
+					const favorite = !wasFavorite;
+					const optimistic = new Set(state.ids);
 					if (favorite) optimistic.add(sessionId);
 					else optimistic.delete(sessionId);
 					const pending = new Set(state.pending);
@@ -723,12 +738,16 @@ export function startArchiveClient(require: HostRequire) {
 					try {
 						const value = await api.setSessionFavorite({ sessionId, favorite });
 						if (!Array.isArray(value?.favoriteSessionIds)) throw new TypeError("favorite response is missing favoriteSessionIds");
-						adopt(value.favoriteSessionIds);
+						adopt(value.favoriteSessionIds, sessionId);
 					} catch (reason) {
 						console.warn("archive-manager: sidebar favorite toggle failed", reason);
+						// 差量反向回滚：只针对当前失败的 sessionId 回滚为 wasFavorite，不冲掉并发的其他成功项
+						const nextIds = new Set(state.ids);
+						if (wasFavorite) nextIds.add(sessionId);
+						else nextIds.delete(sessionId);
 						const settled = new Set(state.pending);
 						settled.delete(sessionId);
-						publish({ ready: true, ids: previousIds, pending: settled });
+						publish({ ready: true, ids: nextIds, pending: settled });
 					}
 				}
 			};
@@ -4091,6 +4110,7 @@ export function startArchiveClient(require: HostRequire) {
         exports.__test = {
             forkWithFeedback,
 			favoritesOnlyVisibility,
+			favoriteGroupPredicate,
 			createFavoriteRowStore,
 			unarchivedSessionIds,
 			ArchiveSelectionToolbar,

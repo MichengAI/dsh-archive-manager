@@ -174,3 +174,71 @@ test("写入失败回滚到点击前的收藏集合", async () => {
 	assert.equal(snapshot.pending.size, 0);
 	assert.equal(snapshot.ready, true);
 });
+
+test("P1: 未分组组（key 为空字符串）在收藏位于折叠区时，分组标题必须可见且 predicate 必须返回 true", async () => {
+	const favoritesOnlyVisibility = bundle.__test.favoritesOnlyVisibility;
+	const favoriteGroupPredicate = bundle.__test.favoriteGroupPredicate;
+	assert.equal(typeof favoritesOnlyVisibility, "function");
+	assert.equal(typeof favoriteGroupPredicate, "function");
+
+	// 收藏的会话 stray_cold 不在任何已知工作区中（即未分组会话）
+	const favorites = new Set(["stray_cold"]);
+	const workspaces = [{ workspaceId: "w1", sessionIds: ["w1_s1"] }];
+	const predicate = favoriteGroupPredicate(favorites, workspaces);
+
+	// 宿主 DOM 中未分组组的 groupKey 是空字符串 ""
+	assert.equal(predicate(""), true, "未分组组裸 key 空字符串必须识别为含收藏");
+	assert.equal(predicate("ungrouped"), true, "兼容字面量 ungrouped 也必须返回 true");
+	assert.equal(predicate("w1"), false, "w1 不含收藏应返回 false");
+
+	// 模拟未分组组未展开时的 DOM 行：
+	// workspace: 为未分组标题；stray1、stray2 为前台渲染的未收藏项；stray_cold 在折叠区尚未渲染；overflow: 为展开按钮
+	const rows = ["workspace:", "session:stray1", "session:stray2", "overflow:"];
+	const visibility = favoritesOnlyVisibility(rows, {
+		favorites,
+		groupHasFavorite: (key) => predicate(key)
+	});
+
+	// 未分组组标题必须保留可见（true），否则整组被隐藏；
+	// overflow 按钮在筛选开启期间收起（false）；未收藏普通会话隐藏（false）
+	assert.deepEqual(visibility, [true, false, false, false]);
+});
+
+test("P2: 并发收藏请求交错且其中一个失败时，失败回滚不得抹除已成功的其他收藏", async () => {
+	let serverFavorites = new Set(["s1"]);
+	const store = createFavoriteRowStore();
+	store.bind({
+		async favoriteSessions() { return { favoriteSessionIds: [...serverFavorites] }; },
+		async setSessionFavorite({ sessionId, favorite }) {
+			if (sessionId === "sA") {
+				// 慢请求，延迟 40ms 后失败
+				await sleep(40);
+				throw new Error("sA 模拟网络失败");
+			}
+			if (sessionId === "sB") {
+				// 快请求，延迟 10ms 后成功
+				await sleep(10);
+				if (favorite) serverFavorites.add("sB");
+				else serverFavorites.delete("sB");
+				return { favoriteSessionIds: [...serverFavorites] };
+			}
+			throw new Error("unexpected sessionId");
+		}
+	});
+
+	await store.ensure();
+	assert.deepEqual([...store.getSnapshot().ids], ["s1"]);
+
+	// 同时触发 sA（慢且失败）和 sB（快且成功）
+	const pA = store.toggle("sA");
+	const pB = store.toggle("sB");
+
+	await Promise.allSettled([pA, pB]);
+
+	const finalSnap = store.getSnapshot();
+	// sB 应该成功保留在收藏集合中，sA 失败被回滚，s1 原始项保留
+	assert.equal(finalSnap.ids.has("sB"), true, "快请求 sB 成功后必须保留在客户端状态中");
+	assert.equal(finalSnap.ids.has("sA"), false, "慢请求 sA 失败后必须被移除");
+	assert.equal(finalSnap.ids.has("s1"), true, "原始项 s1 必须保留");
+	assert.equal(finalSnap.pending.size, 0, "所有请求结束后 pending 集合必须清空");
+});
