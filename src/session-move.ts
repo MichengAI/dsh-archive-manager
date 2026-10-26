@@ -340,7 +340,24 @@ export async function moveSessionToWorkspace(
 		const readbackBytes = await readFile(targetLogPath);
 		if (readbackBytes.length === 0) throw new Error("目标写入工件为空");
 
-		// d. 宿主记账同步
+		// d. 内存映射与会话状态预热更新（必须在 attachSession 之前完成，供宿主 readSessionHeader 校验新 cwd）
+		const targetHeader = { ...header, cwd: targetPath };
+		registry.sessionPaths?.set(cleanSessionId, targetPath);
+		registry.headers?.set(cleanSessionId, targetHeader);
+		registry.invalidSessionPaths?.delete(cleanSessionId);
+
+		if (liveSession !== undefined) {
+			try {
+				if ("header" in liveSession && (liveSession as unknown as { header?: { cwd?: string } }).header) {
+					(liveSession as unknown as { header: { cwd?: string } }).header.cwd = targetPath;
+				}
+				if ("cwd" in liveSession) {
+					(liveSession as unknown as { cwd?: string }).cwd = targetPath;
+				}
+			} catch {}
+		}
+
+		// e. 宿主记账同步
 		for (const ws of registry.list()) {
 			if (ws.id !== targetWorkspace.id && Array.isArray(ws.sessionIds) && ws.sessionIds.includes(cleanSessionId)) {
 				await ws.detachSession(cleanSessionId);
@@ -349,11 +366,6 @@ export async function moveSessionToWorkspace(
 		}
 		await targetWorkspace.attachSession(cleanSessionId);
 		targetAttached = true;
-
-		// e. 内存映射与自愈
-		registry.sessionPaths?.set(cleanSessionId, targetPath);
-		registry.headers?.set(cleanSessionId, { ...header, cwd: targetPath });
-		registry.invalidSessionPaths?.delete(cleanSessionId);
 
 		if (ctx.sessionProjectionCache && typeof ctx.sessionProjectionCache.coldSnapshot === "function") {
 			await ctx.sessionProjectionCache.coldSnapshot(cleanSessionId).catch((err) => {
@@ -381,6 +393,22 @@ export async function moveSessionToWorkspace(
 			}
 		}
 	} catch (error) {
+		// 回滚内存映射
+		if (header) {
+			registry.headers?.set(cleanSessionId, header);
+			if (header.cwd) registry.sessionPaths?.set(cleanSessionId, header.cwd);
+		}
+		if (liveSession !== undefined && header) {
+			try {
+				if ("header" in liveSession && (liveSession as unknown as { header?: { cwd?: string } }).header) {
+					(liveSession as unknown as { header: { cwd?: string } }).header.cwd = header.cwd;
+				}
+				if ("cwd" in liveSession && header.cwd) {
+					(liveSession as unknown as { cwd?: string }).cwd = header.cwd;
+				}
+			} catch {}
+		}
+
 		// 回滚链路
 		if (stageFile) await rm(stageFile, { force: true }).catch(() => {});
 		await rm(targetSessionDir, { recursive: true, force: true }).catch(() => {});
