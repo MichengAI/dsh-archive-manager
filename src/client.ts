@@ -52,7 +52,7 @@ export function startArchiveClient(require: HostRequire) {
 				window.addEventListener("keydown", onKey, true);
 				return () => window.removeEventListener("keydown", onKey, true);
 			}, [open, onClose]);
-			const resolvedCloseLabel = closeLabel || (typeof t === "function" ? t("common.close") : "") || "关闭";
+			const resolvedCloseLabel = closeLabel || (typeof t === "function" ? t("common.close") : "");
 			const dialog = (0, react_jsx_runtime.jsxs)("div", { className: "dsham_modalRoot", role: "presentation", children: [
 				(0, react_jsx_runtime.jsx)("div", { className: "dsham_modalMask", onClick: onClose }),
 				(0, react_jsx_runtime.jsxs)("div", { role: "dialog", "aria-modal": true, "aria-label": typeof title === "string" ? title : undefined, className: clsx("dsham_modalDialog", className), style: { width: width ?? 560 }, children: [
@@ -1507,50 +1507,47 @@ export function startArchiveClient(require: HostRequire) {
                     footer: modalFooterButton({ variant: "primary", disabled: busy, onClick: () => { if (preview.target) { const session = preview.target.session; preview.close(); return viewConversation(session); } }, children: t("discovery.openFull") }),
                     children: react.createElement(PreviewContent, { preview, t, MarkdownText: _deepseek_ai_dsh_client_ui_primitives.MarkdownText })
                 }), archiveTarget === null && error !== null && (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsError", role: "alert", children: error }), notice !== null && (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsStatus", role: "status", children: notice }), (0, react_jsx_runtime.jsx)(SettingsModal, {
-					t,
-					portalToBody: true,
-					open: archiveTarget !== null,
-					onClose: closeArchive,
-					title: t("archives.archiveTitle", { n: archiveTarget?.length ?? 0 }), description: archiveGroup === null ? t("archives.archiveSelectedDesc") : t(archiveGroup.key === ARCHIVE_UNGROUPED_KEY ? "archives.archiveUngroupedDesc" : "archives.archiveProjectDesc", { name: archiveGroup.title, n: archiveTarget?.length ?? 0 }),
-					footer: (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
-						modalFooterButton({ disabled: busy, onClick: closeArchive, children: t("cancel") }),
-						modalFooterButton({ variant: "primary", disabled: busy || !archiveTarget?.length, onClick: confirmArchive, children: t("archives.archiveSelected") })
-					] }), children: (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
-						organizeBatch && (0, react_jsx_runtime.jsx)("p", { children: t(idleRequest ? "organizer.idleConfirm" : "organizer.manualConfirm") }),
-						organizeBatch && (0, react_jsx_runtime.jsx)("div", { className: "dsham_archivePreview", children: (archiveTarget ?? []).map((id) => (0, react_jsx_runtime.jsxs)("label", { children: [(0, react_jsx_runtime.jsx)(SelectionCheckbox, { checked: true, disabled: busy, label: displayTitle(sessions.byId[id] ?? { id }, t), onChange: () => setArchiveTarget((current) => (current ?? []).filter((value) => value !== id)) }), displayTitle(sessions.byId[id] ?? { id }, t)] }, id)) }),
-						batchProgress && (0, react_jsx_runtime.jsxs)("div", { role: "status", children: [(0, react_jsx_runtime.jsx)("progress", { value: batchProgress.done, max: Math.max(1, batchProgress.total) }), t("organizer.progressCount", { done: batchProgress.done, total: batchProgress.total })] }),
-						error !== null && (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsError", role: "alert", children: error })
-					] })
-					}), (0, react_jsx_runtime.jsx)(SettingsModal, {
-					t,
-					portalToBody: true,
-					open: stopArchive !== null,
-					onClose: () => { if (!busy) { setStopArchive(null); setError(null); } },
-					title: t("archiveActive.title"),
-					...stopArchive === null ? {} : { description: t("archiveActive.desc", { name: stopArchive.title, kinds: stopArchive.kinds }) },
-					footer: (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
-						modalFooterButton({ disabled: busy, onClick: () => { if (!busy) { setStopArchive(null); setError(null); } }, children: t("cancel") }),
-						modalFooterButton({ danger: true, disabled: busy, onClick: async () => {
-							if (archiveBusy.current || busy || stopArchive === null || typeof archiveSession !== "function") return;
-							archiveBusy.current = true; setBusy(true); setError(null);
-							try {
-								await archiveSession(stopArchive.sessionId, { stopActivity: true });
-								setSelectedSessionIds((previous) => previous.filter((id) => stopArchive === null || id !== stopArchive.sessionId));
-								setArchiveTab("archived");
-								setNotice(t("archives.archiveSuccess", { n: 1 }));
-								setStopArchive(null);
-							} catch (reason) {
-								setError(reason instanceof Error ? reason.message : String(reason));
-							} finally { archiveBusy.current = false; setBusy(false); }
-						}, children: t("archiveActive.confirm") })
-					] }),
-					children: error !== null && (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsError", role: "alert", children: error })
-				}), (0, react_jsx_runtime.jsx)(SettingsModal, {
-					t,
-					portalToBody: true,
-					open: deleteTarget !== null,
-					onClose: closeDelete,
-					title: deleteDialogTitle,
+                	t,
+                	open: archiveTarget !== null,
+                	onClose: closeArchive,
+                	title: t("archives.archiveTitle", { n: archiveTarget?.length ?? 0 }), description: archiveGroup === null ? t("archives.archiveSelectedDesc") : t(archiveGroup.key === ARCHIVE_UNGROUPED_KEY ? "archives.archiveUngroupedDesc" : "archives.archiveProjectDesc", { name: archiveGroup.title, n: archiveTarget?.length ?? 0 }),
+                	footer: (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
+                		modalFooterButton({ disabled: busy, onClick: closeArchive, children: t("cancel") }),
+                		modalFooterButton({ variant: "primary", disabled: busy || !archiveTarget?.length, onClick: confirmArchive, children: t("archives.archiveSelected") })
+                	] }), children: (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
+                		organizeBatch && (0, react_jsx_runtime.jsx)("p", { children: t(idleRequest ? "organizer.idleConfirm" : "organizer.manualConfirm") }),
+                		organizeBatch && (0, react_jsx_runtime.jsx)("div", { className: "dsham_archivePreview", children: (archiveTarget ?? []).map((id) => (0, react_jsx_runtime.jsxs)("label", { children: [(0, react_jsx_runtime.jsx)(SelectionCheckbox, { checked: true, disabled: busy, label: displayTitle(sessions.byId[id] ?? { id }, t), onChange: () => setArchiveTarget((current) => (current ?? []).filter((value) => value !== id)) }), displayTitle(sessions.byId[id] ?? { id }, t)] }, id)) }),
+                		batchProgress && (0, react_jsx_runtime.jsxs)("div", { role: "status", children: [(0, react_jsx_runtime.jsx)("progress", { value: batchProgress.done, max: Math.max(1, batchProgress.total) }), t("organizer.progressCount", { done: batchProgress.done, total: batchProgress.total })] }),
+                		error !== null && (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsError", role: "alert", children: error })
+                	] })
+                	}), (0, react_jsx_runtime.jsx)(SettingsModal, {
+                	t,
+                	open: stopArchive !== null,
+                	onClose: () => { if (!busy) { setStopArchive(null); setError(null); } },
+                	title: t("archiveActive.title"),
+                	...stopArchive === null ? {} : { description: t("archiveActive.desc", { name: stopArchive.title, kinds: stopArchive.kinds }) },
+                	footer: (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
+                		modalFooterButton({ disabled: busy, onClick: () => { if (!busy) { setStopArchive(null); setError(null); } }, children: t("cancel") }),
+                		modalFooterButton({ danger: true, disabled: busy, onClick: async () => {
+                			if (archiveBusy.current || busy || stopArchive === null || typeof archiveSession !== "function") return;
+                			archiveBusy.current = true; setBusy(true); setError(null);
+                			try {
+                				await archiveSession(stopArchive.sessionId, { stopActivity: true });
+                				setSelectedSessionIds((previous) => previous.filter((id) => stopArchive === null || id !== stopArchive.sessionId));
+                				setArchiveTab("archived");
+                				setNotice(t("archives.archiveSuccess", { n: 1 }));
+                				setStopArchive(null);
+                			} catch (reason) {
+                				setError(reason instanceof Error ? reason.message : String(reason));
+                			} finally { archiveBusy.current = false; setBusy(false); }
+                		}, children: t("archiveActive.confirm") })
+                	] }),
+                	children: error !== null && (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsError", role: "alert", children: error })
+                }), (0, react_jsx_runtime.jsx)(SettingsModal, {
+                	t,
+                	open: deleteTarget !== null,
+                	onClose: closeDelete,
+                	title: deleteDialogTitle,
 					...deleteDialogDescription === void 0 ? {} : { description: deleteDialogDescription },
 					footer: (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [modalFooterButton({ disabled: busy, onClick: closeDelete, children: t("cancel") }), modalFooterButton({ danger: true, disabled: busy, onClick: confirmDelete, children: deleteConfirmLabel })] }),
 					children: (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
