@@ -4,6 +4,22 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 1.1.15 - 2026-10-26
+
+- Fix sidebar star DOM child index conflict with custom theme skins like orca-link (#90): mount the star at the row end via `row.appendChild` and arrange visual order via CSS Flex `order: -1` and `order: -2` for the leading cell, preserving `:nth-child(2)` title and `:nth-child(3)` timestamp positioning and eliminating title truncation to 44px right-aligned.
+- Add quick actions to workspace "..." menu with concise labels:
+  - "Copy folder path" (`复制目录`): Copies the absolute workspace folder path to clipboard.
+  - "Open folder" (`打开目录`): Opens the workspace folder directly in the system file explorer (Windows Explorer, macOS Finder).
+  - "Archive sessions" (`归档会话`): Batch archives all unarchived conversations in the workspace.
+- Add "Move to workspace" hover submenu to session "..." menu:
+  - Expands target workspaces on hover with dynamic viewport overflow prevention and slim scrollbar styling.
+  - Implements process-level quiescence, atomic file rewriting, and pre-rewrite workspace static snapshotting to eliminate double-accounting.
+  - Immediately warms the projection cache using real events to eliminate temporary "untitled" title flicker after moving.
+  - Safely escapes colon and `@` characters for IM channel sessions on Windows NTFS filesystems with guarded rollback.
+- Align and streamline workspace and session menu ordering and labels:
+  - Workspace menu: Rename -> Copy folder path -> Open folder -> Archive sessions -> Delete workspace.
+  - Session menu: Favorite/Unfavorite -> Pin/Unpin -> Rename -> Fork session -> Archive session -> Copy Session ID -> Move to workspace -> Delete session.
+
 ## 1.1.14 - 2026-10-26
 
 - Add a sidebar session star (#89 by @DSLM): a star sits left of each session title in its own container right after the host's leading slot — always visible once favourited, hover-only otherwise — and reads/writes the plugin's existing favourite set; the session "…" menu gains a matching Favourite / Unfavourite row for keyboard use.
