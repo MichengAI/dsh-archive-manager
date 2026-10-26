@@ -1248,6 +1248,7 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Re
 					sessionPersistence: this.ctx.get("sessionPersistence") as unknown as SessionMoveContext["sessionPersistence"],
 					sessionProjectionCache: this.ctx.get("sessionProjectionCache") as unknown as SessionMoveContext["sessionProjectionCache"],
 					sessions: this.ctx.get("sessions") as unknown as SessionMoveContext["sessions"],
+					agents: (this.ctx as unknown as { get(k: string): unknown }).get("agents") as SessionMoveContext["agents"],
 					logger: this.ctx.logger,
 				},
 				sessionId,

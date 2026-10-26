@@ -37,6 +37,7 @@ export interface SessionMoveContext {
 		name?: string;
 		root?: string;
 		config?: { root?: string };
+		prepare?(sessionId: string): Promise<{ session?: unknown } | undefined>;
 		stat?(id: string): Promise<{ header?: { id?: string; cwd?: string; origin?: string; version?: number } } | undefined>;
 		open?(id: string, access: "read" | "write"): Promise<{
 			header?: { id?: string; cwd?: string; origin?: string; version?: number };
@@ -50,11 +51,26 @@ export interface SessionMoveContext {
 	};
 	sessions?: {
 		get?(sessionId: string): unknown;
+		flush?(session: unknown): Promise<void>;
+		enter?(session: unknown): () => void;
+		announce?(session: unknown): void;
+		prepare?(sessionId: string, options: unknown): { session?: unknown } | unknown;
+		store?: Map<string, { detach?(): void; session?: unknown }>;
+	};
+	agents?: {
+		get?(sessionId: string): {
+			status?: string;
+			busy?: boolean;
+			scope?: { dispose?(): Promise<void> | void };
+			cancel?(options?: { kind?: string }): void;
+			whenIdle?(): Promise<void>;
+		};
+		store?: Map<string, unknown>;
 	};
 	logger?: {
 		info?(msg: string): void;
-		warn?(msg: string): void;
-		error?(msg: string): void;
+		warn?(msg: string, ...args: unknown[]): void;
+		error?(msg: string, ...args: unknown[]): void;
 	};
 }
 
@@ -160,10 +176,49 @@ export async function moveSessionToWorkspace(
 	}
 	const targetPath = targetWorkspace.path;
 
-	// 1. 活跃状态检查：禁止移动正在内存活跃或运行中的会话
-	const liveSession = ctx.sessions?.get?.(cleanSessionId);
+	// 1. 活跃状态检查与静默停靠（Quiesce）
+	const liveSession = ctx.sessions?.get?.(cleanSessionId) as {
+		running?: boolean;
+		status?: string;
+	} | undefined;
+
+	const agent = ctx.agents?.get?.(cleanSessionId);
+
+	const isExecuting = liveSession?.running === true ||
+		liveSession?.status === "running" ||
+		liveSession?.status === "ongoing" ||
+		agent?.busy === true ||
+		agent?.status === "running";
+
+	if (isExecuting) {
+		throw new Error("该会话正处于执行或运行状态，请等待完成后再移动。");
+	}
+
+	// 若处于打开空闲态，先刷新缓冲并安全释放原有 entry，释放写所有权
+	let originalEntry: { detach?(): void } | undefined;
 	if (liveSession !== undefined) {
-		throw new Error("该会话正处于打开或运行状态，请关闭会话后再移动。");
+		if (typeof agent?.cancel === "function") {
+			try {
+				agent.cancel({ kind: "disposed" });
+				await agent.whenIdle?.();
+			} catch {}
+		}
+		if (typeof ctx.sessions?.flush === "function") {
+			try {
+				await ctx.sessions.flush(liveSession);
+			} catch {}
+		}
+		try {
+			await agent?.scope?.dispose?.();
+			ctx.agents?.store?.delete(cleanSessionId);
+		} catch {}
+
+		originalEntry = ctx.sessions?.store?.get?.(cleanSessionId);
+		if (typeof originalEntry?.detach === "function") {
+			try {
+				originalEntry.detach();
+			} catch {}
+		}
 	}
 
 	// 2. 检查持久化写锁状态（如果有 write handle 占用，如其他进程正在写入，拒绝移动）
@@ -318,6 +373,26 @@ export async function moveSessionToWorkspace(
 			await ctx.sessionProjectionCache.coldSnapshot(cleanSessionId).catch((err) => {
 				ctx.logger?.warn?.(`archive-manager: post-move coldSnapshot failed: ${String(err)}`);
 			});
+		}
+
+		// f. 若原会话曾处于 live 状态，在目标工作区重新将其装载
+		if (liveSession !== undefined && typeof ctx.sessions?.enter === "function") {
+			try {
+				const preparation = typeof ctx.sessionPersistence?.prepare === "function"
+					? await ctx.sessionPersistence.prepare(cleanSessionId)
+					: undefined;
+				const restoredSession = preparation?.session ?? ctx.sessions.prepare?.(cleanSessionId, {
+					seedSource: "persistence",
+					meta: { ...header, cwd: targetPath },
+					inheritedEventCount: 0,
+				});
+				if (restoredSession) {
+					ctx.sessions.enter(restoredSession);
+					ctx.sessions.announce?.(restoredSession);
+				}
+			} catch (reEnterErr) {
+				ctx.logger?.warn?.(`archive-manager: re-entering moved session ${cleanSessionId} failed: ${String(reEnterErr)}`);
+			}
 		}
 	} catch (error) {
 		// 回滚链路

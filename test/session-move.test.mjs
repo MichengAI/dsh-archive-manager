@@ -51,7 +51,7 @@ test("会话跨工作区移动：入参非法与特殊会话类型前置准入�
 	};
 	await assert.rejects(
 		() => moveSessionToWorkspace(liveCtx, "s-live", "ws-2"),
-		/正处于打开或运行状态/
+		/正处于执行或运行状态/
 	);
 });
 
