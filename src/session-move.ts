@@ -213,7 +213,10 @@ export async function moveSessionToWorkspace(
 			ctx.agents?.store?.delete(cleanSessionId);
 		} catch {}
 
-		originalEntry = ctx.sessions?.store?.get?.(cleanSessionId);
+		originalEntry = ctx.sessions?.store?.get?.(cleanSessionId)
+			?? (typeof (ctx.sessions as unknown as { liveEntryFor?: (s: unknown) => unknown })?.liveEntryFor === "function" ? (() => {
+				try { return (ctx.sessions as unknown as { liveEntryFor: (s: unknown) => unknown }).liveEntryFor(liveSession) as { detach?(): void }; } catch { return undefined; }
+			})() : undefined);
 		if (typeof originalEntry?.detach === "function") {
 			try {
 				originalEntry.detach();
@@ -221,25 +224,8 @@ export async function moveSessionToWorkspace(
 		}
 	}
 
-	// 2. 检查持久化写锁状态（如果有 write handle 占用，如其他进程正在写入，拒绝移动）
+	// 2. 读取会话 Header 并校验
 	const persistence = ctx.sessionPersistence;
-	if (persistence && typeof persistence.open === "function") {
-		let testHandle = null;
-		try {
-			testHandle = await persistence.open(cleanSessionId, "write");
-		} catch (error) {
-			const msg = String(error instanceof Error ? error.message : error);
-			if (/already owned/i.test(msg) || /SessionAlreadyOwnedError/i.test(msg)) {
-				throw new Error("会话正被 DSH 打开，暂时无法移动；请关闭会话后再试。");
-			}
-		} finally {
-			if (testHandle && typeof testHandle.close === "function") {
-				await testHandle.close().catch(() => {});
-			}
-		}
-	}
-
-	// 3. 读取会话 Header 并校验
 	let header: { id?: string; cwd?: string; origin?: string; version?: number } | undefined;
 	if (typeof registry.readSessionHeader === "function") {
 		header = await registry.readSessionHeader(cleanSessionId);
