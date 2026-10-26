@@ -1781,20 +1781,9 @@ export function startArchiveClient(require: HostRequire) {
 				if (btn.getAttribute("aria-haspopup") === "menu") return true;
 				const label = (btn.getAttribute("aria-label") ?? btn.getAttribute("title") ?? "").toLowerCase();
 				if (/new|create|新建|add|\+|созда/.test(label)) return false;
-				if (/action|操作|действи|more|更多|选项|options|menu/.test(label)) return true;
-				if (btn.querySelector("[data-row-actions-trigger]")) return true;
-				return false;
+				return /action|操作|действи|more|更多|选项|options|menu/.test(label);
 			});
-			if (actionBtn) return actionBtn;
-
-			const nonAddBtn = buttons.find((btn) => {
-				if (isStarButton(btn)) return false;
-				const label = (btn.getAttribute("aria-label") ?? btn.getAttribute("title") ?? "").toLowerCase();
-				if (/new|create|新建|add|\+|созда/.test(label)) return false;
-				const cls = (btn.getAttribute("class") ?? "").toLowerCase();
-				return cls.includes("action") || cls.includes("menu");
-			});
-			return nonAddBtn ?? null;
+			return actionBtn ?? null;
 		}
 		/** 判断一个被点击的按钮是否为行操作菜单触发按钮。 */
 		function isRowMenuButton(button: HTMLButtonElement, row: HTMLElement): boolean {

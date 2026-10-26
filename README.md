@@ -205,7 +205,7 @@ Yes. [Codex UI](https://github.com/MichengAI/dsh-codex-ui) keeps its sidebar app
 
 ### Coexisting with other archive plugins
 
-This plugin registers its Settings entry under the section ID `archive-manager`. If other session archive plugins (such as `@linxin666/dsh-session-archive`) are installed at the same time, two distinct "Archived sessions" entries will appear in the settings sidebar. Both operate independently as expected.
+This plugin registers its Settings entry under the section ID `archive-manager`. If other session archive plugins (such as `@linxin666/dsh-session-archive`) are installed at the same time, two distinct "Archived sessions" entries will appear in the settings sidebar. Both can be accessed independently as expected.
 
 For other problems, open an [issue](https://github.com/MichengAI/dsh-archive-manager/issues) with your DSH and plugin versions, reproduction steps, and error details.
 
