@@ -2711,9 +2711,9 @@ export function startArchiveClient(require: HostRequire) {
 			"delete.pending": "正在删除工作区…",
 			"menu.fork": "分叉会话",
 			"menu.archiveSession": "归档会话",
-			"menu.archiveWorkspace": "归档全部会话",
+			"menu.archiveWorkspace": "归档会话",
 			"menu.copyWorkspacePath": "复制目录",
-			"menu.openInExplorer": "打开工作区目录",
+			"menu.openInExplorer": "打开目录",
 			"menu.moveSession": "移动到工作区",
 			"moveSession.title": "移动会话到工作区",
 			"moveSession.desc": "将“{name}”移动到目标工作区，后续对话将在目标工作区环境中执行。",
@@ -2892,9 +2892,9 @@ export function startArchiveClient(require: HostRequire) {
 			"delete.pending": "Deleting workspace…",
 			"menu.fork": "Fork session",
 			"menu.archiveSession": "Archive session",
-			"menu.archiveWorkspace": "Archive all conversations",
+			"menu.archiveWorkspace": "Archive sessions",
 			"menu.copyWorkspacePath": "Copy folder path",
-			"menu.openInExplorer": "Open workspace folder",
+			"menu.openInExplorer": "Open folder",
 			"menu.moveSession": "Move to workspace",
 			"moveSession.title": "Move session to workspace",
 			"moveSession.desc": "Move “{name}” to target workspace. Subsequent turns will execute within the destination context.",
@@ -3072,9 +3072,9 @@ export function startArchiveClient(require: HostRequire) {
 			"delete.pending": "Удаление рабочего пространства…",
 			"menu.fork": "Создать ветку сессии",
 			"menu.archiveSession": "Заархивировать сессию",
-			"menu.archiveWorkspace": "Архивировать все сессии",
+			"menu.archiveWorkspace": "Архивировать сессии",
 			"menu.copyWorkspacePath": "Копировать путь к папке",
-			"menu.openInExplorer": "Открыть папку рабочей области",
+			"menu.openInExplorer": "Открыть папку",
 			"menu.moveSession": "Переместить в проект",
 			"moveSession.title": "Перемещение сессии",
 			"moveSession.desc": "Переместить «{name}» в целевое рабочее пространство. Дальнейшие реплики будут выполняться в контексте целевого проекта.",
@@ -4386,14 +4386,14 @@ export function startArchiveClient(require: HostRequire) {
 				disposeFavoriteMenu ??= ctx.slots.inject(sessionMenuSlot, () => ctx.slots.register({
 						name: sessionMenuSlot,
 						id: "archive-manager.favorite",
-						order: 350,
+						order: 50,
 						locale: NS,
 						inject: () => ({ favoriteRow: favoriteRowStore })
 					}, FavoriteMenuItem));
 				disposeMoveMenu ??= ctx.slots.inject(sessionMenuSlot, () => ctx.slots.register({
 						name: sessionMenuSlot,
 						id: "archive-manager.move-session",
-						order: 380,
+						order: 480,
 						locale: NS,
 						inject: () => ({})
 					}, MoveSessionMenuItem));
