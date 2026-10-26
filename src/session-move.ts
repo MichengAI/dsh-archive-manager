@@ -277,8 +277,20 @@ export async function moveSessionToWorkspace(
 			try {
 				if (ctx.sessionProjectionCache.coldSnapshot.length === 1) {
 					await ctx.sessionProjectionCache.coldSnapshot(cleanSessionId);
-				} else {
-					await (ctx.sessionProjectionCache.coldSnapshot as unknown as (m: unknown, c: number, ev: unknown[]) => Promise<unknown>)(header, 0, []);
+				} else if (persistence && typeof persistence.open === "function") {
+					const readHandle = await persistence.open(cleanSessionId, "read");
+					try {
+						const { events } = typeof readHandle.read === "function" ? await readHandle.read(0) : { events: [] };
+						const coldMeta = readHandle.header ?? header;
+						const inherited = (readHandle as unknown as { inheritedEventCount?: number }).inheritedEventCount ?? 0;
+						await (ctx.sessionProjectionCache.coldSnapshot as unknown as (m: unknown, c: number, ev: unknown[]) => Promise<unknown>)(
+							coldMeta,
+							inherited,
+							events ?? []
+						);
+					} finally {
+						await readHandle.close();
+					}
 				}
 			} catch (err) {
 				ctx.logger?.warn?.(`archive-manager: post-move coldSnapshot failed: ${String(err)}`);
@@ -390,8 +402,20 @@ export async function moveSessionToWorkspace(
 			try {
 				if (ctx.sessionProjectionCache.coldSnapshot.length === 1) {
 					await ctx.sessionProjectionCache.coldSnapshot(cleanSessionId);
-				} else {
-					await (ctx.sessionProjectionCache.coldSnapshot as unknown as (m: unknown, c: number, ev: unknown[]) => Promise<unknown>)(targetHeader, 0, []);
+				} else if (persistence && typeof persistence.open === "function") {
+					const readHandle = await persistence.open(cleanSessionId, "read");
+					try {
+						const { events } = typeof readHandle.read === "function" ? await readHandle.read(0) : { events: [] };
+						const coldMeta = readHandle.header ?? targetHeader;
+						const inherited = (readHandle as unknown as { inheritedEventCount?: number }).inheritedEventCount ?? 0;
+						await (ctx.sessionProjectionCache.coldSnapshot as unknown as (m: unknown, c: number, ev: unknown[]) => Promise<unknown>)(
+							coldMeta,
+							inherited,
+							events ?? []
+						);
+					} finally {
+						await readHandle.close();
+					}
 				}
 			} catch (err) {
 				ctx.logger?.warn?.(`archive-manager: post-move coldSnapshot failed: ${String(err)}`);
