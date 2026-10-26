@@ -385,7 +385,8 @@ export function startArchiveClient(require: HostRequire) {
 				? '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="' + STAR_PATH + '"/></svg>'
 				: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="' + STAR_PATH + '"/></svg>';
 		}
-		const ROW_FAVORITE_CSS = ".dsham_starSlot{display:none;align-items:center;justify-content:center;box-sizing:border-box;width:16px;min-width:16px;height:20px;flex:none;margin:0 3px 0 0}"
+		const ROW_FAVORITE_CSS = ".dsham_starSlot{display:none;align-items:center;justify-content:center;box-sizing:border-box;width:16px;min-width:16px;height:20px;flex:none;margin:0 3px 0 0;order:-1}"
+			+ "[data-row-key^='session:']>span:first-child{order:-2}"
 			+ "[data-row-key^='session:']:hover .dsham_starSlot,.dsham_starSlot[data-favorited='true']{display:inline-flex}"
 			+ ".dsham_rowStar{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:16px;height:16px;padding:0;border:0;background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer;flex:none;border-radius:var(--dsw-radius-xs,4px)}"
 			+ ".dsham_starSlot[data-favorited='true'] .dsham_rowStar{color:#e8b931}"
@@ -500,14 +501,13 @@ export function startArchiveClient(require: HostRequire) {
 						holder?.remove();
 						continue;
 					}
-					if (holder !== null && holder.previousElementSibling !== cell) {
-						holder.remove();
-						holder = null;
+					if (holder !== null && (holder.parentElement !== row || holder.nextElementSibling !== null)) {
+						row.appendChild(holder);
 					}
 					if (holder === null) {
 						holder = document.createElement("span");
 						holder.className = ROW_STAR_SLOT_CLASS;
-						cell.after(holder);
+						row.appendChild(holder);
 					}
 					holder.dataset.sessionId = sessionId;
 					let star = holder.querySelector<HTMLButtonElement>("." + ROW_STAR_CLASS);
