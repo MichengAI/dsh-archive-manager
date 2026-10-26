@@ -3386,6 +3386,60 @@ export function startArchiveClient(require: HostRequire) {
 				if (typeof Item === "function") return (0, react_jsx_runtime.jsx)(Item, { icon, onSelect, children: label });
 				return (0, react_jsx_runtime.jsx)("button", { type: "button", role: "menuitem", onClick: onSelect, children: label });
 			}
+			let globalToast: { text: string; tone?: "success" | "danger"; seq: number } | null = null;
+			const toastListeners = new Set<() => void>();
+			function showToast(text: string, tone: "success" | "danger" = "success") {
+				globalToast = { text, tone, seq: Date.now() };
+				for (const listener of toastListeners) listener();
+			}
+			function GlobalToastOverlay() {
+				const toast = react.useSyncExternalStore(
+					(listener: () => void) => {
+						toastListeners.add(listener);
+						return () => { toastListeners.delete(listener); };
+					},
+					() => globalToast,
+					() => globalToast
+				);
+				if (!toast) return null;
+				const ToastComp = (_deepseek_ai_dsh_client_ui_primitives as Record<string, unknown>).Toast as React.ComponentType<{
+					text: React.ReactNode;
+					tone?: "success" | "danger";
+					holdMs?: number;
+					onDone?: () => void;
+				}> | undefined;
+				if (typeof ToastComp === "function") {
+					return (0, react_jsx_runtime.jsx)(ToastComp, {
+						key: toast.seq,
+						text: toast.text,
+						tone: toast.tone,
+						holdMs: 3000,
+						onDone: () => {
+							if (globalToast?.seq === toast.seq) {
+								globalToast = null;
+								for (const listener of toastListeners) listener();
+							}
+						}
+					});
+				}
+				return (0, react_jsx_runtime.jsx)("div", {
+					key: toast.seq,
+					style: {
+						position: "fixed",
+						top: 16,
+						left: "50%",
+						transform: "translateX(-50%)",
+						zIndex: 99999,
+						padding: "8px 16px",
+						borderRadius: 8,
+						background: toast.tone === "danger" ? "#7f1d1d" : "#14532d",
+						color: "#fff",
+						fontSize: 13,
+						boxShadow: "0 4px 16px rgba(0,0,0,0.4)"
+					},
+					children: toast.text
+				});
+			}
 			function MoveSessionMenuItem({ sessionId, displayTitle: title, useMenuOpenState, t }: { sessionId: string; displayTitle: string; useMenuOpenState: () => readonly [boolean, (open: boolean) => void]; t: Translate }) {
 				const [, setMenuOpen] = useMenuOpenState();
 				const [subOpen, setSubOpen] = react.useState(false);
@@ -3433,19 +3487,18 @@ export function startArchiveClient(require: HostRequire) {
 					}, 180);
 				};
 
-				const handleSelectWorkspace = async (targetWsId: string) => {
+				const handleSelectWorkspace = async (targetWsId: string, targetTitle: string) => {
 					if (moving) return;
+					setMoving(true);
 					setSubOpen(false);
 					setMenuOpen(false);
-					setMoving(true);
 					try {
 						await moveSession(sessionId, targetWsId);
+						showToast(t("moveSession.success", { name: targetTitle }) || `会话已成功移动到“${targetTitle}”`, "success");
 					} catch (error: unknown) {
 						const msg = error instanceof Error ? error.message : String(error);
 						console.warn("archive-manager: move session failed", error);
-						if (typeof window !== "undefined" && typeof window.alert === "function") {
-							window.alert(msg);
-						}
+						showToast(msg, "danger");
 					} finally {
 						setMoving(false);
 					}
@@ -3500,6 +3553,12 @@ export function startArchiveClient(require: HostRequire) {
 							(0, react_jsx_runtime.jsxs)("div", {
 								className: "dsham_moveSubmenu",
 								role: "menu",
+								onPointerDown: (e) => {
+									e.stopPropagation();
+								},
+								onMouseDown: (e) => {
+									e.stopPropagation();
+								},
 								onMouseEnter: handleMouseEnter,
 								onMouseLeave: handleMouseLeave,
 								style: {
@@ -3524,10 +3583,15 @@ export function startArchiveClient(require: HostRequire) {
 												role: "menuitem",
 												className: "dsham_moveSubmenuBtn",
 												disabled: moving,
+												onPointerDown: (e) => {
+													e.preventDefault();
+													e.stopPropagation();
+													void handleSelectWorkspace(ws.workspaceId, wsTitle);
+												},
 												onClick: (e) => {
 													e.preventDefault();
 													e.stopPropagation();
-													void handleSelectWorkspace(ws.workspaceId);
+													void handleSelectWorkspace(ws.workspaceId, wsTitle);
 												},
 												children: (0, react_jsx_runtime.jsx)("span", {
 													style: { overflow: "hidden", textOverflow: "ellipsis", flex: 1 },
@@ -4305,6 +4369,7 @@ export function startArchiveClient(require: HostRequire) {
 			let disposeMoveMenu: (() => void) | undefined;
 			let disposeDialog: (() => void) | undefined;
 			let disposeArchiveDialog: (() => void) | undefined;
+			let disposeToast: (() => void) | undefined;
 			/** 支持的宿主都声明了会话菜单插槽。插槽还没出现时只等待，不再盖掉官方侧栏。 */
 			const reconcileSidebar = () => {
 				const next = hostSidebarDeclaresSessionMenu() ? "menu" : "waiting";
@@ -4344,6 +4409,12 @@ export function startArchiveClient(require: HostRequire) {
 						locale: NS,
 						inject: () => ({ t: ctx.locale.bind(NS) })
 					}, ArchiveWorkspaceOverlay));
+				disposeToast ??= ctx.slots.inject("shell.overlay", () => ctx.slots.register({
+						name: "shell.overlay",
+						id: "archive-manager.toast",
+						locale: NS,
+						inject: () => ({})
+					}, GlobalToastOverlay));
 			};
 			reconcileSidebar();
 			ctx.effect(() => setupWorkspaceMenuInjector(ctx.locale.bind(NS)), "archive-manager: workspace menu injector");
@@ -4360,6 +4431,7 @@ export function startArchiveClient(require: HostRequire) {
 				disposeMoveMenu?.();
 				disposeDialog?.();
 				disposeArchiveDialog?.();
+				disposeToast?.();
 			}, "archive-manager: sidebar mode");
 
 			const buildArchivedSectionProps = () => ({

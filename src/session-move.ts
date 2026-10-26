@@ -154,7 +154,7 @@ export async function moveSessionToWorkspace(
 	if (!registry || typeof registry.list !== "function") {
 		throw new Error("工作区注册表服务不可用");
 	}
-	const targetWorkspace = registry.list().find((w) => w.id === cleanTargetWsId);
+	const targetWorkspace = registry.list().find((w) => w.id === cleanTargetWsId || (w as { workspaceId?: string }).workspaceId === cleanTargetWsId || w.path === cleanTargetWsId);
 	if (!targetWorkspace) {
 		throw new Error(`目标工作区不存在: ${cleanTargetWsId}`);
 	}
