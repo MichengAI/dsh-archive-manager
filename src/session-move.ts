@@ -179,7 +179,7 @@ export async function moveSessionToWorkspace(
 	if (!targetWorkspace) {
 		throw new Error(`目标工作区不存在: ${cleanTargetWsId}`);
 	}
-	const targetPath = targetWorkspace.path;
+	const targetPath = targetWorkspace.path ?? (targetWorkspace as unknown as { record?: { path?: string } }).record?.path;
 
 	// 1. 活跃状态检查与静默停靠（Quiesce）
 	const liveSession = ctx.sessions?.get?.(cleanSessionId) as {
@@ -338,7 +338,8 @@ export async function moveSessionToWorkspace(
 		? join(dirname(resolve(persistenceRoot)), "dsham-move-backup")
 		: join(dirname(sourceSessionDir), ".dsham-move-backup");
 	await mkdir(backupRoot, { recursive: true });
-	const backupDir = join(backupRoot, `${cleanSessionId}-${process.pid}-${Date.now()}`);
+	const safeSessionName = encodeURIComponent(cleanSessionId).replace(/%/g, "~");
+	const backupDir = join(backupRoot, `${safeSessionName}-${process.pid}-${Date.now()}`);
 
 	const isZstd = sourceLogPath.endsWith(".zstd");
 	const sourceBytes = await readFile(sourceLogPath);
@@ -357,10 +358,12 @@ export async function moveSessionToWorkspace(
 	const detachedWorkspaces: WorkspaceEntityLike[] = [];
 	let targetAttached = false;
 	let stageFile: string | null = null;
+	let sourceDirMoved = false;
 
 	try {
 		// a. 移开源目录
 		await rename(sourceSessionDir, backupDir);
+		sourceDirMoved = true;
 
 		// b. 创建目标目录并原子落盘
 		await mkdir(targetSessionDir, { recursive: true });
@@ -441,11 +444,13 @@ export async function moveSessionToWorkspace(
 		// 回滚链路
 		if (stageFile) await rm(stageFile, { force: true }).catch(() => {});
 		await rm(targetSessionDir, { recursive: true, force: true }).catch(() => {});
-		try {
-			await mkdir(dirname(sourceSessionDir), { recursive: true });
-			await rename(backupDir, sourceSessionDir);
-		} catch (restoreErr) {
-			throw new AggregateError([error, restoreErr], `移动失败且原工件回滚异常，备份暂存于: ${backupDir}`);
+		if (sourceDirMoved) {
+			try {
+				await mkdir(dirname(sourceSessionDir), { recursive: true });
+				await rename(backupDir, sourceSessionDir);
+			} catch (restoreErr) {
+				throw new AggregateError([error, restoreErr], `移动失败且原工件回滚异常，备份暂存于: ${backupDir}`);
+			}
 		}
 		if (targetAttached) {
 			await targetWorkspace.detachSession(cleanSessionId).catch(() => {});

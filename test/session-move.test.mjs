@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, rm, writeFile, readFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import zlib from "node:zlib";
 import { moveSessionToWorkspace } from "../src/session-move.js";
 
@@ -254,6 +254,85 @@ test("会话跨工作区物理迁移：目标冲突拒绝且中途失败自动�
 		// 原文件应完好无损
 		const stillSource = await readFile(sourceLog);
 		assert.ok(stillSource.length > 0);
+	} finally {
+		await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+	}
+});
+
+test("moveSessionToWorkspace moves IM session containing colons and special characters on Windows filesystem", async () => {
+	const tempDir = join(tmpdir(), `dsham-test-im-${Date.now()}`);
+	const sessionsRoot = join(tempDir, "sessions");
+	const sourceProject = join(tempDir, "workspace-a");
+	const targetProject = join(tempDir, "workspace-b");
+
+	const imSessionId = "im:weixin_34a2f05efca4:dm:1792039378725:o9cq802KqrxiODVTN9zoEjur3Ayw@im.wechat";
+	const encodedFolder = encodeURIComponent(imSessionId).replace(/%/g, "~");
+	const sourceLog = join(sessionsRoot, "--proj-a--", encodedFolder, "session.v2.jsonl.zstd");
+	const targetLog = join(sessionsRoot, "--proj-b--", encodedFolder, "session.v2.jsonl.zstd");
+
+	await mkdir(dirname(sourceLog), { recursive: true });
+	const line0 = JSON.stringify({ type: "session", version: 2, id: imSessionId, createdAt: Date.now(), cwd: sourceProject });
+	const line1 = JSON.stringify({ type: "user_message", text: "hello from wechat" });
+	const rawPayload = Buffer.from(`${line0}\n${line1}\n`, "utf8");
+	const compressed = zlib.zstdCompressSync(rawPayload);
+	await writeFile(sourceLog, compressed);
+
+	try {
+		const wsA = {
+			id: "ws-a",
+			title: "Workspace A",
+			path: sourceProject,
+			record: { path: sourceProject, sessionIds: [imSessionId] },
+			async detachSession(id) { wsA.record.sessionIds = wsA.record.sessionIds.filter(x => x !== id); },
+			async attachSession(id) { wsA.record.sessionIds.push(id); },
+		};
+		const wsB = {
+			id: "ws-b",
+			title: "Workspace B",
+			path: targetProject,
+			record: { path: targetProject, sessionIds: [] },
+			async detachSession(id) { wsB.record.sessionIds = wsB.record.sessionIds.filter(x => x !== id); },
+			async attachSession(id) { wsB.record.sessionIds.push(id); },
+		};
+
+		const ctx = {
+			workspaceRegistry: {
+				workspaces: [wsA, wsB],
+				list() { return this.workspaces; },
+				sessionPaths: new Map([[imSessionId, sourceProject]]),
+				headers: new Map([[imSessionId, { id: imSessionId, cwd: sourceProject }]]),
+				invalidSessionPaths: new Set(),
+				async readSessionHeader(id) { return this.headers.get(id); },
+			},
+			sessionPersistence: {
+				root: sessionsRoot,
+				async stat(id) { return { header: { id, cwd: sourceProject } }; },
+				locate(h) {
+					const projKey = h.cwd === targetProject ? "--proj-b--" : "--proj-a--";
+					return { kind: "jsonl", path: join(sessionsRoot, projKey, encodedFolder, "session.v2.jsonl.zstd") };
+				},
+			},
+			sessions: { get: () => undefined },
+		};
+
+		const res = await moveSessionToWorkspace(ctx, imSessionId, "ws-b");
+		assert.strictEqual(res.ok, true);
+		assert.strictEqual(res.moved, true);
+		assert.strictEqual(res.toWorkspaceId, "ws-b");
+
+		// Target log should exist and have cwd rewritten to targetProject
+		const targetBytes = await readFile(targetLog);
+		const targetDecomp = zlib.zstdDecompressSync(targetBytes);
+		const f0 = JSON.parse(targetDecomp.toString("utf8").split("\n")[0]);
+		assert.strictEqual(f0.id, imSessionId);
+		assert.strictEqual(f0.cwd, targetProject);
+
+		// Source log should be moved away
+		await assert.rejects(() => readFile(sourceLog));
+
+		// Workspaces updated
+		assert.deepStrictEqual(wsA.record.sessionIds, []);
+		assert.deepStrictEqual(wsB.record.sessionIds, [imSessionId]);
 	} finally {
 		await rm(tempDir, { recursive: true, force: true }).catch(() => {});
 	}
