@@ -254,8 +254,7 @@ test("setupSidebarRowContextMenu 在整行右键时阻止默认右键菜单并�
 		assert.equal(wsMenuBtn.clicked, 1, "点击新建按钮时不得触发操作菜单");
 
 		// 5. 未分组工作区行（只有新建按钮，无菜单）：右键不得触发任何点击，不得 preventDefault
-		const sidebarRoot = new MockElement("div", { class: "sidebarRoot" });
-		const ungroupedRow = new MockElement("div", { "data-row-key": "workspace:__ungrouped__" });
+		const ungroupedRow = new MockElement("div", { "data-row-key": "workspace:" });
 		const ungroupedActions = new MockElement("div", { class: "rowActions" });
 		ungroupedRow.appendChild(ungroupedActions);
 		const createOnlyBtn = new MockElement("button", { "aria-label": "在未分组中新建会话" });
@@ -271,8 +270,10 @@ test("setupSidebarRowContextMenu 在整行右键时阻止默认右键菜单并�
 
 		// 6. 空白会话行（没有 rowActions，行内只有星标）：右键不得触发星标，不得 preventDefault
 		const blankSessionRow = new MockElement("div", { "data-row-key": "session:blank-temp-id" });
+		const starSlot = new MockElement("span", { class: "dsham_starSlot" });
 		const starBtn = new MockElement("button", { class: "dsham_rowStar", "aria-label": "Favorite" });
-		blankSessionRow.appendChild(starBtn);
+		starSlot.appendChild(starBtn);
+		blankSessionRow.appendChild(starSlot);
 		let blankPrevented = false;
 		handler({
 			target: blankSessionRow,

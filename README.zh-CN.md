@@ -207,6 +207,10 @@ dsh --profile web --dump-config
 
 可以。保留 [Codex UI](https://github.com/MichengAI/dsh-codex-ui) 的侧栏样式和交互，归档管理仍在「设置 → 归档会话」中。
 
+### 与其他归档插件共存说明
+
+本插件设置页入口注册 ID 为 `archive-manager`。若当前环境同时安装了其他归档管理插件（例如 `@linxin666/dsh-session-archive`），设置侧边栏中会出现两个各自独立的「已归档会话」入口，两者互不干扰、各自独立管理，这属于正常预期表现。
+
 遇到其他问题，请提交 [Issue](https://github.com/MichengAI/dsh-archive-manager/issues)，附上 DSH 与插件版本、复现步骤和错误信息。
 
 ## 从源码安装

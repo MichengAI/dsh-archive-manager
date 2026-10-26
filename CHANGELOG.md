@@ -4,6 +4,25 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 1.1.17 - 2026-10-27
+
+- Full-row right-click context menu support in sidebar:
+  - Supports triggering workspace and session actions menus by right-clicking anywhere on the corresponding row.
+  - Tightens button detection to gracefully pass through the system context menu for ungrouped workspace rows and blank unpersisted sessions, preventing accidental clicks on create or favorite buttons.
+- Star favorite icon alignment and zero-jitter optimization:
+  - Aligns favorite star icon to standard 16×16px size and overlays host leading slot.
+  - Uses absolute positioning over the leading slot to eliminate horizontal title jitter in sidebar rows.
+  - Fades out underlying leading status dots only on hover or when favorited.
+- Archive settings page visual unification and compactness:
+  - Adopts unified drawer cards for workspace groups, aligning visual style with Skills Manager.
+  - Compacts session row height to 40px for increased information density.
+  - Reverts checkbox styling to host primitive specification using `accent-color`, seamlessly adapting to dark mode and eliminating solid white block glitches.
+- Modal dialog anti-bleedthrough and accessibility enhancements:
+  - Mounts preview and confirmation dialogs to document root via `portalToBody`, resolving container-type clipping and text bleedthrough.
+  - Adds localized accessible labels across zh/en/ru for modal close buttons (`common.close`).
+- Settings section ID standardization and coexistence compatibility (#91):
+  - Updates settings section ID to `archive-manager` with runtime fail-soft `try/catch` protection, resolving registration collisions with third-party archive plugins.
+
 ## 1.1.16 - 2026-10-26
 
 - Fix cross-platform path validation for opening folder in system explorer under Linux/POSIX environments, supporting both Windows and POSIX absolute path schemes.

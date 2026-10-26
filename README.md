@@ -203,6 +203,10 @@ Archiving puts a conversation away so you can restore it later. **Permanent dele
 
 Yes. [Codex UI](https://github.com/MichengAI/dsh-codex-ui) keeps its sidebar appearance and interactions. Archive management remains available in **Settings → Archived sessions**.
 
+### Coexisting with other archive plugins
+
+This plugin registers its Settings entry under the section ID `archive-manager`. If other session archive plugins (such as `@linxin666/dsh-session-archive`) are installed at the same time, two distinct "Archived sessions" entries will appear in the settings sidebar. Both operate independently as expected.
+
 For other problems, open an [issue](https://github.com/MichengAI/dsh-archive-manager/issues) with your DSH and plugin versions, reproduction steps, and error details.
 
 ## Install from source

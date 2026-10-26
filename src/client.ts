@@ -1500,7 +1500,6 @@ export function startArchiveClient(require: HostRequire) {
                     width: 900,
                     className: "dsham_modalWide",
                     portalToBody: true,
-                    closeLabel: t("cancel"),
                     t,
                     open: preview.target !== null,
                     onClose: preview.close,
@@ -1783,7 +1782,7 @@ export function startArchiveClient(require: HostRequire) {
 				const label = (btn.getAttribute("aria-label") ?? btn.getAttribute("title") ?? "").toLowerCase();
 				if (/new|create|新建|add|\+|созда/.test(label)) return false;
 				if (/action|操作|действи|more|更多|选项|options|menu/.test(label)) return true;
-				if (btn.querySelector("svg circle, [data-row-actions-trigger]")) return true;
+				if (btn.querySelector("[data-row-actions-trigger]")) return true;
 				return false;
 			});
 			if (actionBtn) return actionBtn;
@@ -1792,7 +1791,8 @@ export function startArchiveClient(require: HostRequire) {
 				if (isStarButton(btn)) return false;
 				const label = (btn.getAttribute("aria-label") ?? btn.getAttribute("title") ?? "").toLowerCase();
 				if (/new|create|新建|add|\+|созда/.test(label)) return false;
-				return Boolean(btn.querySelector("svg"));
+				const cls = (btn.getAttribute("class") ?? "").toLowerCase();
+				return cls.includes("action") || cls.includes("menu");
 			});
 			return nonAddBtn ?? null;
 		}
