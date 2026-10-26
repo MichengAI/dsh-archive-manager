@@ -23,6 +23,7 @@ const ARCHIVE_ENDPOINTS = [
 	"diagnoseOrphanSubagents",
 	"diagnoseSessionCaches",
 	"favoriteSessions",
+	"moveSessionToWorkspace",
 	"previewArchivedSession",
 	"rebuildSessionCaches",
 	"searchArchivedContent",

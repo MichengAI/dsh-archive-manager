@@ -16,6 +16,7 @@ export type Registry = { [K in keyof RegistryCalls]: (...args: Parameters<Regist
   archivedSessionMetadata(): Promise<RemoteResult<Awaited<ReturnType<ArchiveProps["archivedSessionMetadata"]>>>>;
   diagnoseOrphanSubagents(): Promise<RemoteResult<{ count: number; items: { sessionId: string; parentSessionId: string; createdAt: number; sizeBytes: number }[]; totalSizeBytes: number }>>;
   cleanOrphanSubagents(target?: { sessionIds?: string[] }): Promise<RemoteResult<{ cleanedSessionIds: string[]; skippedSessionIds: string[]; failures: { sessionId: string; message: string }[] }>>;
+  moveSessionToWorkspace(input: { sessionId: string; targetWorkspaceId: string }): Promise<RemoteResult<{ ok: boolean; moved: boolean; toWorkspaceId?: string }>>;
 };
 export interface Workspaces {
   list: Observable<WorkspaceSnapshot>;

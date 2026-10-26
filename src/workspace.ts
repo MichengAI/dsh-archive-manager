@@ -18,6 +18,8 @@ import { bindTypertRemote, Remote } from "@deepseek-ai/dsh-typert-protocol";
 import { sessionDir } from "@deepseek-ai/dsh-spill-local";
 import { defineDomain } from "@deepseek-ai/dsh-storage-domain";
 import { favoriteInputSchema, favoriteStateSchema, favoriteInvocations } from "./archive-organizer.js";
+import { moveSessionToWorkspace } from "./session-move.js";
+import type { SessionMoveResult, SessionMoveContext } from "./session-move.js";
 
 const favoriteDomainSpec = defineDomain({
 	name: "archive_manager_favorites", version: 1, tables: {},
@@ -163,6 +165,7 @@ const ARCHIVE_REMOTE_METHODS = [
 	"diagnoseSessionCaches",
 	"rebuildSessionCaches",
 	"cleanOrphanSubagents",
+	"moveSessionToWorkspace",
 ] as const;
 function markRemoteMethod(instance: object, method: string) {
 	// 模拟 TS 装饰器管线 `@Remote(method)`：`Remote` 返回标准方法装饰器，
@@ -307,6 +310,22 @@ const orphanCleanResultSchema = {
 		return val;
 	},
 };
+const sessionMoveInputSchema = {
+	parse(value: unknown) {
+		const val = record(value);
+		if (!val || typeof val.sessionId !== "string" || !val.sessionId || typeof val.targetWorkspaceId !== "string" || !val.targetWorkspaceId) {
+			throw new TypeError("sessionId and targetWorkspaceId must be non-empty strings");
+		}
+		return { sessionId: val.sessionId, targetWorkspaceId: val.targetWorkspaceId };
+	},
+};
+const sessionMoveResultSchema = {
+	parse(value: unknown) {
+		const val = record(value);
+		if (!val || val.ok !== true) throw new TypeError("session move result must be ok: true");
+		return val;
+	},
+};
 /**
  * Host 严格描述符。网关优先读 typert.local，避免 SRC 扫描缓存
  * 或协议包双份导致 /api/workspaceRegistry/deleteSession 在生产环境 404。
@@ -432,6 +451,27 @@ const ARCHIVE_MANAGER_INVOCATIONS = [
 			},
 		],
 		result: strictCodec("@michengai/dsh-archive-manager/types#CleanOrphanResult", orphanCleanResultSchema),
+		sourceLocation: {
+			file: "@michengai/dsh-archive-manager/lib/workspace.js",
+			line: 1,
+			column: 1,
+		},
+	},
+	{
+		id: "@michengai/dsh-archive-manager#workspaceRegistry/moveSessionToWorkspace",
+		service: "workspaceRegistry",
+		namespace: "workspaceRegistry",
+		method: "moveSessionToWorkspace",
+		invocation: { kind: "direct" },
+		parameters: [
+			{
+				name: "input",
+				wire: "input",
+				source: "json",
+				codec: strictCodec("@michengai/dsh-archive-manager/types#SessionMoveInput", sessionMoveInputSchema),
+			},
+		],
+		result: strictCodec("@michengai/dsh-archive-manager/types#SessionMoveResult", sessionMoveResultSchema),
 		sourceLocation: {
 			file: "@michengai/dsh-archive-manager/lib/workspace.js",
 			line: 1,
@@ -1194,6 +1234,25 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Re
 			}
 
 			return { cleanedSessionIds, skippedSessionIds, failures };
+		});
+	}
+	/**
+	 * 安全跨工作区会话移动：支持未分组归并及带备份的跨目录物理迁移。
+	 */
+	async moveSessionToWorkspace(input: unknown): Promise<SessionMoveResult> {
+		const { sessionId, targetWorkspaceId } = sessionMoveInputSchema.parse(input);
+		return this.enqueueOperation(async () => {
+			return moveSessionToWorkspace(
+				{
+					workspaceRegistry: this as unknown as SessionMoveContext["workspaceRegistry"],
+					sessionPersistence: this.ctx.get("sessionPersistence") as unknown as SessionMoveContext["sessionPersistence"],
+					sessionProjectionCache: this.ctx.get("sessionProjectionCache") as unknown as SessionMoveContext["sessionProjectionCache"],
+					sessions: this.ctx.get("sessions") as unknown as SessionMoveContext["sessions"],
+					logger: this.ctx.logger,
+				},
+				sessionId,
+				targetWorkspaceId
+			);
 		});
 	}
 };

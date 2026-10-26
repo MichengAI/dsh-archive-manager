@@ -184,6 +184,22 @@ export function startArchiveClient(require: HostRequire) {
 				return value;
 			}
 		};
+		const sessionMoveInputSchema = {
+			parse(value: unknown) {
+				const val = record(value);
+				if (!val || typeof val.sessionId !== "string" || !val.sessionId || typeof val.targetWorkspaceId !== "string" || !val.targetWorkspaceId) {
+					throw new TypeError("sessionId and targetWorkspaceId must be non-empty strings");
+				}
+				return { sessionId: val.sessionId, targetWorkspaceId: val.targetWorkspaceId };
+			}
+		};
+		const sessionMoveResultSchema = {
+			parse(value: unknown) {
+				const val = record(value);
+				if (!val || val.ok !== true) throw new TypeError("session move result must be ok: true");
+				return val;
+			}
+		};
 		/** alpha.1 读 schema.parse；alpha.2 只接受 create()。 */
 		function strictCodec(typeSymbol: string, schema: Schema<unknown>) {
 			return { mode: "strict", typeSymbol, create: () => schema, schema };
@@ -303,6 +319,21 @@ export function startArchiveClient(require: HostRequire) {
 							return val;
 						}
 					}),
+					sourceLocation: { file: "@michengai/dsh-archive-manager/lib/workspace.js", line: 1, column: 1 }
+				},
+				{
+					id: "@michengai/dsh-archive-manager#workspaceRegistry/moveSessionToWorkspace",
+					service: "workspaceRegistry",
+					namespace: "workspaceRegistry",
+					method: "moveSessionToWorkspace",
+					invocation: { kind: "direct" },
+					parameters: [{
+						name: "input",
+						wire: "input",
+						source: "json",
+						codec: strictCodec("@michengai/dsh-archive-manager/types#SessionMoveInput", sessionMoveInputSchema)
+					}],
+					result: strictCodec("@michengai/dsh-archive-manager/types#SessionMoveResult", sessionMoveResultSchema),
 					sourceLocation: { file: "@michengai/dsh-archive-manager/lib/workspace.js", line: 1, column: 1 }
 				},
 			]
@@ -2677,6 +2708,18 @@ export function startArchiveClient(require: HostRequire) {
 			"menu.fork": "分叉会话",
 			"menu.archiveSession": "归档会话",
 			"menu.archiveWorkspace": "归档全部会话",
+			"menu.copyWorkspacePath": "复制目录",
+			"menu.openInExplorer": "在资源管理器中打开",
+			"menu.moveSession": "移动到工作区…",
+			"moveSession.title": "移动会话到工作区",
+			"moveSession.desc": "将“{name}”移动到目标工作区，后续对话将在目标工作区环境中执行。",
+			"moveSession.warning": "提示：移动后该会话的工作目录将变更为目标项目目录。",
+			"moveSession.currentWorkspace": "当前工作区：{name}",
+			"moveSession.selectLabel": "选择目标工作区",
+			"moveSession.noOtherWorkspaces": "暂无可移动的其他工作区",
+			"moveSession.confirm": "移动",
+			"moveSession.pending": "正在移动会话…",
+			"moveSession.success": "会话已成功移动到“{name}”",
 			"archiveWorkspace.title": "归档 {n} 个会话？",
 			"archiveWorkspace.desc": "这会将“{name}”中的会话归档。之后可以在“设置 → 归档会话”中找到它们。",
 			"archiveWorkspace.confirm": "全部归档",
@@ -2846,6 +2889,18 @@ export function startArchiveClient(require: HostRequire) {
 			"menu.fork": "Fork session",
 			"menu.archiveSession": "Archive session",
 			"menu.archiveWorkspace": "Archive all conversations",
+			"menu.copyWorkspacePath": "Copy folder path",
+			"menu.openInExplorer": "Reveal in Explorer",
+			"menu.moveSession": "Move to workspace…",
+			"moveSession.title": "Move session to workspace",
+			"moveSession.desc": "Move “{name}” to target workspace. Subsequent turns will execute within the destination context.",
+			"moveSession.warning": "Note: The session working directory will change to the destination project path.",
+			"moveSession.currentWorkspace": "Current workspace: {name}",
+			"moveSession.selectLabel": "Select destination workspace",
+			"moveSession.noOtherWorkspaces": "No other workspaces available",
+			"moveSession.confirm": "Move",
+			"moveSession.pending": "Moving session…",
+			"moveSession.success": "Session successfully moved to “{name}”",
 			"archiveWorkspace.title": "Archive {n} conversations?",
 			"archiveWorkspace.desc": "This archives all conversations in “{name}”. You can find them later in Archived sessions.",
 			"archiveWorkspace.confirm": "Archive all",
@@ -3014,6 +3069,18 @@ export function startArchiveClient(require: HostRequire) {
 			"menu.fork": "Создать ветку сессии",
 			"menu.archiveSession": "Заархивировать сессию",
 			"menu.archiveWorkspace": "Архивировать все сессии",
+			"menu.copyWorkspacePath": "Копировать путь к папке",
+			"menu.openInExplorer": "Показать в проводнике",
+			"menu.moveSession": "Переместить в проект…",
+			"moveSession.title": "Перемещение сессии",
+			"moveSession.desc": "Переместить «{name}» в целевое рабочее пространство. Дальнейшие реплики будут выполняться в контексте целевого проекта.",
+			"moveSession.warning": "Примечание: рабочий каталог сессии будет изменен на путь целевого проекта.",
+			"moveSession.currentWorkspace": "Текущий проект: {name}",
+			"moveSession.selectLabel": "Выберите проект",
+			"moveSession.noOtherWorkspaces": "Нет других доступных проектов",
+			"moveSession.confirm": "Переместить",
+			"moveSession.pending": "Перемещение сессии…",
+			"moveSession.success": "Сессия успешно перемещена в «{name}»",
 			"archiveWorkspace.title": "Архивировать {n} сессий?",
 			"archiveWorkspace.desc": "Это заархивирует сессии в «{name}». Их можно найти позже в разделе «Архив».",
 			"archiveWorkspace.confirm": "Архивировать все",
@@ -3240,6 +3307,14 @@ export function startArchiveClient(require: HostRequire) {
 				if (!result.ok) throw new Error(result.error.message);
 				await refreshSessionList();
 			};
+			const moveSession = async (sessionId: string, targetWorkspaceId: string) => {
+				const registry = ctx.get("remote.workspaceRegistry");
+				if (registry === void 0) throw new Error("archive-manager remote service is unavailable");
+				const result = await registry.moveSessionToWorkspace({ sessionId, targetWorkspaceId });
+				if (!result.ok) throw new Error(result.error?.message || "move failed");
+				await refreshSessionList();
+				return result.value;
+			};
 			const archiveSessions = async (sessionIds: string[]) => archiveSessionsViaOfficial(ctx.workspaces, sessionIds, refreshSessionList);
 			const unarchiveSessions = async (target: BatchTarget) => {
 				const snapshot = ctx.workspaces.list?.getSnapshot?.() ?? { archivedSessionIds: [], items: [] };
@@ -3306,6 +3381,35 @@ export function startArchiveClient(require: HostRequire) {
 				const label = t(favorited ? "organizer.unfavorite" : "organizer.favorite");
 				if (typeof Item === "function") return (0, react_jsx_runtime.jsx)(Item, { icon, onSelect, children: label });
 				return (0, react_jsx_runtime.jsx)("button", { type: "button", role: "menuitem", onClick: onSelect, children: label });
+			}
+			let moveTarget: { sessionId: string; title: string; currentWorkspaceId?: string } | null = null;
+			const moveListeners = new Set<() => void>();
+			const publishMoveTarget = (next: { sessionId: string; title: string; currentWorkspaceId?: string } | null) => {
+				moveTarget = next;
+				for (const listener of moveListeners) listener();
+			};
+			function useMoveRequest() {
+				return react.useSyncExternalStore(
+					(listener: () => void) => {
+						moveListeners.add(listener);
+						return () => { moveListeners.delete(listener); };
+					},
+					() => moveTarget,
+					() => moveTarget
+				);
+			}
+			function MoveSessionMenuItem({ sessionId, displayTitle: title, useMenuOpenState, t }: { sessionId: string; displayTitle: string; useMenuOpenState: () => readonly [boolean, (open: boolean) => void]; t: Translate }) {
+				const [, setMenuOpen] = useMenuOpenState();
+				const Item = _deepseek_ai_dsh_client_ui_primitives.MenuItemButton;
+				const icon = (0, react_jsx_runtime.jsx)("svg", { viewBox: "0 0 16 16", width: 14, height: 14, fill: "none", stroke: "currentColor", strokeWidth: 1.3, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true, children: [(0, react_jsx_runtime.jsx)("path", { d: "M2 3.5C2 2.67157 2.67157 2 3.5 2H6.5L8 4H12.5C13.3284 4 14 4.67157 14 5.5V12.5C14 13.3284 13.3284 14 12.5 14H3.5C2.67157 14 2 13.3284 2 12.5V3.5Z" }), (0, react_jsx_runtime.jsx)("path", { d: "M8 7.5L10.5 10L8 12.5" }), (0, react_jsx_runtime.jsx)("path", { d: "M5.5 10H10.5" })] });
+				const onSelect = () => {
+					setMenuOpen(false);
+					const workspaces = ctx.workspaces.list?.getSnapshot?.()?.items ?? [];
+					const currentWs = workspaces.find((w) => Array.isArray(w.sessionIds) && w.sessionIds.includes(sessionId));
+					publishMoveTarget({ sessionId, title, currentWorkspaceId: currentWs?.workspaceId });
+				};
+				if (typeof Item === "function") return (0, react_jsx_runtime.jsx)(Item, { icon, onSelect, children: t("menu.moveSession") });
+				return (0, react_jsx_runtime.jsx)("button", { type: "button", role: "menuitem", onClick: onSelect, children: t("menu.moveSession") });
 			}
 			function focusSessionRow(sessionId: string) {
 				try {
@@ -3582,6 +3686,184 @@ export function startArchiveClient(require: HostRequire) {
 					() => archiveWsTarget,
 					() => archiveWsTarget
 				);
+			}
+			function MoveSessionOverlay({ t }: { t: Translate }) {
+				const request = useMoveRequest();
+				const [selectedWorkspaceId, setSelectedWorkspaceId] = (0, react.useState)("");
+				const [moving, setMoving] = (0, react.useState)(false);
+				const [error, setError] = (0, react.useState)<string | null>(null);
+				const [cardPos, setCardPos] = (0, react.useState)<{ top: number; left: number } | null>(null);
+				const cardRef = (0, react.useRef)<HTMLDivElement>(null);
+				const cancelBtnRef = (0, react.useRef)<HTMLButtonElement>(null);
+				const confirmBtnRef = (0, react.useRef)<HTMLButtonElement>(null);
+
+				const workspaces = (0, react.useSyncExternalStore)(
+					(listener: () => void) => typeof ctx.workspaces.list?.subscribe === "function" ? ctx.workspaces.list.subscribe(listener) : () => {},
+					() => ctx.workspaces.list?.getSnapshot?.()?.items ?? []
+				);
+				const candidates = (0, react.useMemo)(() => {
+					return workspaces.filter((w) => w.workspaceId !== request?.currentWorkspaceId);
+				}, [workspaces, request?.currentWorkspaceId]);
+
+				(0, react.useEffect)(() => {
+					if (candidates.length > 0 && (!selectedWorkspaceId || !candidates.some((c) => c.workspaceId === selectedWorkspaceId))) {
+						setSelectedWorkspaceId(candidates[0].workspaceId);
+					}
+				}, [candidates, selectedWorkspaceId]);
+
+				(0, react.useLayoutEffect)(() => {
+					if (request === null || typeof document === "undefined") {
+						setCardPos(null);
+						setError(null);
+						return;
+					}
+					let cachedRow: HTMLElement | null = null;
+					const getTargetRow = () => {
+						if (cachedRow && cachedRow.isConnected) return cachedRow;
+						try {
+							cachedRow = document.querySelector<HTMLElement>(`[data-row-key="session:${CSS.escape(request.sessionId)}"]`);
+						} catch {
+							cachedRow = null;
+						}
+						return cachedRow;
+					};
+					const updatePosition = () => {
+						const card = cardRef.current;
+						const cardWidth = card?.offsetWidth || 320;
+						const cardHeight = card?.offsetHeight || 220;
+						const margin = 8;
+						const targetRow = getTargetRow();
+						if (!targetRow) {
+							const w = window.innerWidth;
+							const h = window.innerHeight;
+							const fallbackTop = Math.max(16, (h - cardHeight) / 2);
+							const fallbackLeft = Math.max(16, (w - cardWidth) / 2);
+							setCardPos({ top: fallbackTop, left: fallbackLeft });
+							return;
+						}
+						const rect = targetRow.getBoundingClientRect();
+						let top = rect.top - 4;
+						if (top + cardHeight > window.innerHeight - 16) top = window.innerHeight - 16 - cardHeight;
+						if (top < 16) top = 16;
+						let left = rect.right + margin;
+						if (left + cardWidth > window.innerWidth - 16) left = rect.left - margin - cardWidth;
+						if (left < 16) left = Math.max(16, (window.innerWidth - cardWidth) / 2);
+						setCardPos({ top, left });
+					};
+					updatePosition();
+					window.addEventListener("resize", updatePosition);
+					return () => window.removeEventListener("resize", updatePosition);
+				}, [request]);
+
+				(0, react.useEffect)(() => {
+					if (request === null) return;
+					cancelBtnRef.current?.focus();
+				}, [request]);
+
+				if (!request) return null;
+
+				const close = () => {
+					if (moving) return;
+					setError(null);
+					publishMoveTarget(null);
+				};
+
+				const confirm = async () => {
+					if (moving || !selectedWorkspaceId) return;
+					setMoving(true);
+					setError(null);
+					try {
+						await moveSession(request.sessionId, selectedWorkspaceId);
+						publishMoveTarget(null);
+					} catch (err) {
+						setError(err instanceof Error ? err.message : String(err));
+					} finally {
+						setMoving(false);
+					}
+				};
+
+				return (0, react_jsx_runtime.jsxs)("div", {
+					className: "dsham_sidebarCardRoot",
+					children: [
+						(0, react_jsx_runtime.jsx)("div", {
+							className: "dsham_sidebarCardBackdrop",
+							onClick: close,
+						}),
+						(0, react_jsx_runtime.jsxs)("div", {
+							ref: cardRef,
+							role: "dialog",
+							"aria-modal": true,
+							"aria-label": t("moveSession.title"),
+							tabIndex: -1,
+							className: "dsham_sidebarCard",
+							style: cardPos ? { top: cardPos.top, left: cardPos.left, width: 320, visibility: "visible" } : { visibility: "hidden", top: 0, left: 0 },
+							children: [
+								(0, react_jsx_runtime.jsx)("h3", {
+									className: "dsham_sidebarCardTitle",
+									children: t("moveSession.title"),
+								}),
+								(0, react_jsx_runtime.jsx)("p", {
+									className: "dsham_sidebarCardDesc",
+									children: t("moveSession.desc", { name: request.title }),
+								}),
+								(0, react_jsx_runtime.jsx)("p", {
+									className: "dsham_sidebarCardDesc",
+									style: { fontSize: "12px", opacity: 0.8 },
+									children: t("moveSession.warning"),
+								}),
+								candidates.length === 0 ? (
+									(0, react_jsx_runtime.jsx)("p", {
+										className: "dsham_sidebarCardDesc",
+										children: t("moveSession.noOtherWorkspaces"),
+									})
+								) : (
+									(0, react_jsx_runtime.jsx)("div", {
+										style: { margin: "10px 0" },
+										children: (0, react_jsx_runtime.jsx)("select", {
+											className: "dsham_menuSelectBtn",
+											style: { width: "100%", height: "32px", boxSizing: "border-box" },
+											value: selectedWorkspaceId,
+											disabled: moving,
+											onChange: (e) => setSelectedWorkspaceId(e.target.value),
+											children: candidates.map((cand) => (
+												(0, react_jsx_runtime.jsx)("option", {
+													value: cand.workspaceId,
+													children: cand.title || cand.workspaceId,
+												}, cand.workspaceId)
+											)),
+										}),
+									})
+								),
+								error !== null && (0, react_jsx_runtime.jsx)("div", {
+									className: "dsham_sidebarCardError",
+									role: "alert",
+									children: error,
+								}),
+								(0, react_jsx_runtime.jsxs)("div", {
+									className: "dsham_sidebarCardFooter",
+									children: [
+										(0, react_jsx_runtime.jsx)("button", {
+											ref: cancelBtnRef,
+											type: "button",
+											className: "dsham_sidebarCardBtn dsham_sidebarCardBtnCancel",
+											disabled: moving,
+											onClick: close,
+											children: t("cancel"),
+										}),
+										(0, react_jsx_runtime.jsx)("button", {
+											ref: confirmBtnRef,
+											type: "button",
+											className: "dsham_sidebarCardBtn dsham_sidebarCardBtnConfirm",
+											disabled: moving || candidates.length === 0 || !selectedWorkspaceId,
+											onClick: confirm,
+											children: moving ? t("moveSession.pending") : t("moveSession.confirm"),
+										}),
+									],
+								}),
+							],
+						}),
+					],
+				});
 			}
 			function focusWorkspaceRow(workspaceId: string) {
 				try {
@@ -3897,6 +4179,10 @@ export function startArchiveClient(require: HostRequire) {
 						const currentWs = lastClickedWorkspace;
 						if (!currentWs) continue;
 
+						const wsItems = ctx.workspaces.list?.getSnapshot?.()?.items ?? [];
+						const wsItem = wsItems.find((w) => w.workspaceId === currentWs.workspaceId);
+						const wsPath = wsItem?.path ?? wsItem?.cwd;
+
 						const candidateIds = workspaceCandidateIds(currentWs.workspaceId);
 						const count = candidateIds.length;
 
@@ -3945,6 +4231,76 @@ export function startArchiveClient(require: HostRequire) {
 							});
 						});
 
+						if (wsPath) {
+							const copyWrap = document.createElement("div");
+							copyWrap.className = deleteWrap.className;
+							const copyBtn = document.createElement("button");
+							copyBtn.type = "button";
+							copyBtn.setAttribute("role", "menuitem");
+							copyBtn.dataset.dshamCopyWorkspacePath = "true";
+							copyBtn.className = archiveBtn.className;
+							const copyIcon = document.createElement("span");
+							copyIcon.setAttribute("aria-hidden", "true");
+							if (iconRef?.className) copyIcon.className = iconRef.className;
+							copyIcon.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5V2.5C10.5 1.94772 10.0523 1.5 9.5 1.5H3.5C2.94772 1.5 2.5 1.94772 2.5 2.5V8.5C2.5 9.05228 2.94772 9.5 3.5 9.5H4.5"/></svg>`;
+							const copyText = document.createElement("span");
+							if (labelRef?.className) copyText.className = labelRef.className;
+							copyText.textContent = t("menu.copyWorkspacePath");
+							copyBtn.append(copyIcon, copyText);
+							copyWrap.append(copyBtn);
+							copyBtn.addEventListener("click", (e) => {
+								e.preventDefault();
+								e.stopPropagation();
+								document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+								void copySessionText(wsPath).catch(() => {});
+							});
+
+							const explorerWrap = document.createElement("div");
+							explorerWrap.className = deleteWrap.className;
+							const explorerBtn = document.createElement("button");
+							explorerBtn.type = "button";
+							explorerBtn.setAttribute("role", "menuitem");
+							explorerBtn.dataset.dshamOpenExplorer = "true";
+							explorerBtn.className = archiveBtn.className;
+							const expIcon = document.createElement("span");
+							expIcon.setAttribute("aria-hidden", "true");
+							if (iconRef?.className) expIcon.className = iconRef.className;
+							expIcon.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 3.5C1.5 2.94772 1.94772 2.5 2.5 2.5H6.5L8 4.5H13.5C14.0523 4.5 14.5 4.94772 14.5 5.5V12.5C14.5 13.0523 14.0523 13.5 13.5 13.5H2.5C1.94772 13.5 1.5 13.0523 1.5 12.5V3.5Z"/><path d="M10 8.5L12 10.5L10 12.5"/><path d="M6.5 10.5H12"/></svg>`;
+							const expText = document.createElement("span");
+							if (labelRef?.className) expText.className = labelRef.className;
+							expText.textContent = t("menu.openInExplorer");
+							explorerBtn.append(expIcon, expText);
+							explorerWrap.append(explorerBtn);
+							explorerBtn.addEventListener("click", (e) => {
+								e.preventDefault();
+								e.stopPropagation();
+								document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+								void (async () => {
+									try {
+										const res = await fetch(resolveApiUrl("/open-in-app/open"), {
+											method: "POST",
+											headers: { "content-type": "application/json" },
+											body: JSON.stringify({ app: "explorer", path: wsPath })
+										}).catch(() => null);
+										if (res && res.ok) return;
+									} catch {}
+									try {
+										await callSettingsApi("/open-in-explorer", {
+											method: "POST",
+											body: JSON.stringify({ path: wsPath, workspaceId: currentWs.workspaceId })
+										});
+									} catch (err) {
+										console.warn("archive-manager: open in explorer failed", err);
+									}
+								})();
+							});
+
+							deleteWrap.parentNode?.insertBefore(copyWrap, deleteWrap);
+							deleteWrap.parentNode?.insertBefore(explorerWrap, deleteWrap);
+							injectedItems.set(copyBtn, { workspaceId: currentWs.workspaceId });
+							injectedItems.set(explorerBtn, { workspaceId: currentWs.workspaceId });
+						}
+
 						deleteWrap.parentNode?.insertBefore(archiveWrap, deleteWrap);
 						injectedItems.set(archiveBtn, { workspaceId: currentWs.workspaceId });
 					}
@@ -3978,7 +4334,7 @@ export function startArchiveClient(require: HostRequire) {
 					unsubscribeSessions?.();
 					unsubscribeWorkspaces?.();
 					injectedItems.clear();
-					for (const item of document.querySelectorAll<HTMLElement>('[data-dsham-archive-workspace="true"]')) item.parentElement?.remove();
+					for (const item of document.querySelectorAll<HTMLElement>('[data-dsham-archive-workspace="true"], [data-dsham-copy-workspace-path="true"], [data-dsham-open-explorer="true"]')) item.parentElement?.remove();
 				};
 			}
 			function hostSidebarDeclaresSessionMenu() {
@@ -3988,8 +4344,10 @@ export function startArchiveClient(require: HostRequire) {
 			let sidebarMode: "menu" | "waiting" | undefined;
 			let disposeMenu: (() => void) | undefined;
 			let disposeFavoriteMenu: (() => void) | undefined;
+			let disposeMoveMenu: (() => void) | undefined;
 			let disposeDialog: (() => void) | undefined;
 			let disposeArchiveDialog: (() => void) | undefined;
+			let disposeMoveDialog: (() => void) | undefined;
 			/** 支持的宿主都声明了会话菜单插槽。插槽还没出现时只等待，不再盖掉官方侧栏。 */
 			const reconcileSidebar = () => {
 				const next = hostSidebarDeclaresSessionMenu() ? "menu" : "waiting";
@@ -4010,7 +4368,14 @@ export function startArchiveClient(require: HostRequire) {
 						locale: NS,
 						inject: () => ({ favoriteRow: favoriteRowStore })
 					}, FavoriteMenuItem));
-			disposeDialog ??= ctx.slots.inject("shell.overlay", () => ctx.slots.register({
+				disposeMoveMenu ??= ctx.slots.inject(sessionMenuSlot, () => ctx.slots.register({
+						name: sessionMenuSlot,
+						id: "archive-manager.move-session",
+						order: 380,
+						locale: NS,
+						inject: () => ({})
+					}, MoveSessionMenuItem));
+				disposeDialog ??= ctx.slots.inject("shell.overlay", () => ctx.slots.register({
 						name: "shell.overlay",
 						id: "archive-manager.delete-session",
 						locale: NS,
@@ -4022,6 +4387,12 @@ export function startArchiveClient(require: HostRequire) {
 						locale: NS,
 						inject: () => ({ t: ctx.locale.bind(NS) })
 					}, ArchiveWorkspaceOverlay));
+				disposeMoveDialog ??= ctx.slots.inject("shell.overlay", () => ctx.slots.register({
+						name: "shell.overlay",
+						id: "archive-manager.move-session",
+						locale: NS,
+						inject: () => ({ t: ctx.locale.bind(NS) })
+					}, MoveSessionOverlay));
 			};
 			reconcileSidebar();
 			ctx.effect(() => setupWorkspaceMenuInjector(ctx.locale.bind(NS)), "archive-manager: workspace menu injector");
@@ -4035,8 +4406,10 @@ export function startArchiveClient(require: HostRequire) {
 				unsubscribeSidebar?.();
 				disposeMenu?.();
 				disposeFavoriteMenu?.();
+				disposeMoveMenu?.();
 				disposeDialog?.();
 				disposeArchiveDialog?.();
+				disposeMoveDialog?.();
 			}, "archive-manager: sidebar mode");
 
 			const buildArchivedSectionProps = () => ({
@@ -4053,7 +4426,7 @@ export function startArchiveClient(require: HostRequire) {
 				t: ctx.locale.bind(NS)
 			});
 
-			const callSettingsApi = async (path: "/sidebar-entry" | "/online-update", options?: RequestInit) => {
+			const callSettingsApi = async (path: "/sidebar-entry" | "/online-update" | "/open-in-explorer", options?: RequestInit) => {
 				const targetUrl = resolveApiUrl(`/api/michengai/dsh-archive-manager${path}`);
 				const reqHeaders = Object.assign({
 					"content-type": "application/json",

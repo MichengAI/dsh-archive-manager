@@ -11,6 +11,8 @@ import type { Context } from "@deepseek-ai/cordis";
 import { getOnlineUpdate, getSidebarEntry, setOnlineUpdate, setSidebarEntry } from "./plugin-settings.js";
 import { isTrustedUpdateRequest, rawService, registerPluginUpdater, releaseUpdateRoute } from "./plugin-updater.js";
 import { apply as installHost, inject as hostInject } from "./host-install.js";
+import { authorizeExplorerPath } from "./explorer-path-policy.js";
+import { revealPathInSystem } from "./native-explorer.js";
 
 export interface PluginConfig {
 	updater?: boolean;
@@ -21,6 +23,7 @@ const inject = ["webServer", ...hostInject];
 
 const SIDEBAR_ENTRY_ENDPOINT = "/api/michengai/dsh-archive-manager/sidebar-entry";
 const ONLINE_UPDATE_ENDPOINT = "/api/michengai/dsh-archive-manager/online-update";
+const OPEN_IN_EXPLORER_ENDPOINT = "/api/michengai/dsh-archive-manager/open-in-explorer";
 
 function sendJson(response: ServerResponse, statusCode: number, value: unknown) {
 	response.writeHead(statusCode, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
@@ -54,6 +57,7 @@ function registerSettingsRoutes(ctx: Context, hostUpdateDisabled: boolean): () =
 	const server = rawService(ctx.webServer as object);
 	releaseUpdateRoute(server, SIDEBAR_ENTRY_ENDPOINT);
 	releaseUpdateRoute(server, ONLINE_UPDATE_ENDPOINT);
+	releaseUpdateRoute(server, OPEN_IN_EXPLORER_ENDPOINT);
 
 	const disposeSidebar = ctx.webServer.register({
 		kind: "exact",
@@ -115,9 +119,42 @@ function registerSettingsRoutes(ctx: Context, hostUpdateDisabled: boolean): () =
 		},
 	});
 
+	const disposeOpenExplorer = ctx.webServer.register({
+		kind: "exact",
+		path: OPEN_IN_EXPLORER_ENDPOINT,
+		handler: async (request: IncomingMessage, response: ServerResponse) => {
+			if (request.method !== "POST") {
+				response.writeHead(405, { allow: "POST" });
+				response.end();
+				return;
+			}
+			if (!isTrustedUpdateRequest(request)) {
+				sendJson(response, 403, { ok: false, error: "已拒绝非本机同源请求。" });
+				return;
+			}
+			const body = await readJsonBody(request);
+			const path = typeof body?.path === "string" ? body.path : "";
+			const registry = ctx.get("workspaceRegistry") as { list?: () => { path: string }[] } | undefined;
+			const registeredPaths: string[] = typeof registry?.list === "function" ? registry.list().map((w) => w.path) : [];
+			const authorizedPath = authorizeExplorerPath(path, registeredPaths);
+			if (authorizedPath === undefined) {
+				sendJson(response, 403, { ok: false, error: "仅允许打开已注册的工作区目录。" });
+				return;
+			}
+			try {
+				const result = await revealPathInSystem(authorizedPath);
+				sendJson(response, 200, { ok: true, opened: true, via: result.via });
+			} catch (error) {
+				ctx.logger?.warn?.(`open in explorer failed: ${String(error)}`);
+				sendJson(response, 500, { ok: false, error: "打开系统资源管理器失败。" });
+			}
+		},
+	});
+
 	return () => {
 		try { disposeSidebar(); } catch {}
 		try { disposeUpdate(); } catch {}
+		try { disposeOpenExplorer(); } catch {}
 	};
 }
 
@@ -160,4 +197,4 @@ async function apply(ctx: Context, config?: PluginConfig) {
 	};
 }
 //#endregion
-export { apply, inject };
+export { apply, inject, registerSettingsRoutes, OPEN_IN_EXPLORER_ENDPOINT };

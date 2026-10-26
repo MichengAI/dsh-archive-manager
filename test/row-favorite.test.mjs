@@ -120,6 +120,14 @@ test("宿主声明会话菜单时，注册「收藏/取消收藏」菜单行（�
 	assert.ok(menuItem, "缺少收藏菜单行");
 	assert.equal(menuItem.order, 350);
 	assert.equal(typeof menuItem.inject, "function");
+
+	const moveMenuItem = registrations.find((item) => item.name === "sidebar.workspaces.session.menu.item" && item.id === "archive-manager.move-session");
+	assert.ok(moveMenuItem, "缺少移动到工作区菜单行");
+	assert.equal(moveMenuItem.order, 380);
+
+	const moveOverlay = registrations.find((item) => item.name === "shell.overlay" && item.id === "archive-manager.move-session");
+	assert.ok(moveOverlay, "缺少移动会话弹窗注册");
+
 	await dispose();
 	await applyDispose();
 });
