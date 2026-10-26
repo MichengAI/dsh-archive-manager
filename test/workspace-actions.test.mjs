@@ -10,7 +10,18 @@ test("工作区在资源管理器中打开：路径白名单安全校验", () =>
 		"D:\\Repository\\project-a",
 		"D:\\Repository\\project-b",
 		"C:\\Users\	est\\work",
+		"/home/user/workspace-linux",
 	];
+
+	// Linux / POSIX 路径测试
+	assert.equal(
+		authorizeExplorerPath("/home/user/workspace-linux", registeredPaths),
+		"/home/user/workspace-linux"
+	);
+	assert.equal(
+		authorizeExplorerPath("/home/user/workspace-linux/", registeredPaths),
+		"/home/user/workspace-linux"
+	);
 
 	// 命中已注册工作区路径（含尾斜杠归一化与大小写不敏感匹配）
 	assert.equal(

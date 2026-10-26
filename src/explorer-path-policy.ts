@@ -1,8 +1,18 @@
-import { isAbsolute, normalize, resolve } from "node:path";
+import path from "node:path";
 
-function normalizeComparable(path: string): string {
-	const normalized = normalize(resolve(path)).replace(/[\\/]+$/, "");
-	return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+function isWindowsPath(p: string): boolean {
+	return /^[a-zA-Z]:[\\/]/.test(p) || /^\\\\/.test(p) || process.platform === "win32";
+}
+
+function isPathAbsolute(p: string): boolean {
+	return path.win32.isAbsolute(p) || path.posix.isAbsolute(p);
+}
+
+function normalizeComparable(target: string): string {
+	const win = isWindowsPath(target);
+	const p = win ? path.win32 : path.posix;
+	const normalized = p.normalize(target).replace(/[\\/]+$/, "");
+	return win ? normalized.toLowerCase() : normalized;
 }
 
 /**
@@ -12,7 +22,7 @@ function normalizeComparable(path: string): string {
 export function authorizeExplorerPath(targetPath: unknown, registeredPaths: readonly string[]): string | undefined {
 	if (typeof targetPath !== "string" || targetPath.trim() === "") return undefined;
 	const trimmed = targetPath.trim();
-	if (!isAbsolute(trimmed)) return undefined;
+	if (!isPathAbsolute(trimmed)) return undefined;
 
 	const targetComparable = normalizeComparable(trimmed);
 	for (const candidate of registeredPaths) {
