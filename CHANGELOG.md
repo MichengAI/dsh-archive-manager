@@ -4,10 +4,13 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
-## Unreleased
+## 1.1.14 - 2026-10-26
 
-- Add a sidebar session star: a star sits left of each session title in its own container right after the host's leading slot — always visible once favourited, hover-only otherwise — and reads/writes the plugin's existing favourite set; the session "…" menu gains a matching Favourite / Unfavourite row for keyboard use.
-- Add a "Favourites only" filter: View options → Filter sessions gains a switch that narrows the sidebar to favourited sessions (empty workspaces and "Expand the remaining N" collapse too, and folded groups are expanded before filtering); the state lives in `localStorage` and no session or archive data is touched.
+- Add a sidebar session star (#89 by @DSLM): a star sits left of each session title in its own container right after the host's leading slot — always visible once favourited, hover-only otherwise — and reads/writes the plugin's existing favourite set; the session "…" menu gains a matching Favourite / Unfavourite row for keyboard use.
+- Add a "Favourites only" filter (#89 by @DSLM): View options → Filter sessions gains a switch that narrows the sidebar to favourited sessions (empty workspaces and "Expand the remaining N" collapse too, and folded groups are expanded before filtering); the state lives in `localStorage` and no session or archive data is touched.
+- Fix ungrouped session visibility under filter: support host empty-string group key so favourited ungrouped sessions inside folded overflow sections remain discoverable and auto-expand properly.
+- Improve concurrent favourite state reliability: apply delta rollbacks per session id on failure and preserve in-flight pending locks during background adoptions, preventing race-condition UI resets.
+- Align menu item ARIA attributes: adopt `role="menuitemcheckbox"` and `aria-checked` on filter switches to match WAI-ARIA standards.
 
 ## 1.1.13 - 2026-10-26
 
