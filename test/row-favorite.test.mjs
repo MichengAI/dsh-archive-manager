@@ -247,3 +247,13 @@ test("P2: 并发收藏请求交错且其中一个失败时，失败回滚不得�
 	assert.equal(finalSnap.ids.has("s1"), true, "原始项 s1 必须保留");
 	assert.equal(finalSnap.pending.size, 0, "所有请求结束后 pending 集合必须清空");
 });
+
+test("侧栏收藏星标与菜单图标标准尺寸对齐为 16×16 并复用前导插槽", async () => {
+	const { readFileSync } = await import("node:fs");
+	const src = readFileSync(fileURLToPath(new URL("../src/client.ts", import.meta.url)), "utf8");
+	const starFn = src.slice(src.indexOf("function starSvg"), src.indexOf("const ROW_FAVORITE_CSS"));
+	assert.match(starFn, /<svg width="16" height="16" viewBox="0 0 16 16"/, "starSvg 必须输出标准 16×16 尺寸 SVG");
+	assert.doesNotMatch(starFn, /width="14" height="14"/, "starSvg 不应再出现缩小的 14×14 星标尺寸");
+	assert.match(src, /\.dsham_rowStar svg\{[^}]*width:16px;height:16px/, "CSS 中星标 SVG 必须设为 16px×16px");
+	assert.match(src, /\.dsham_starSlot\{[^}]*position:absolute/, "星标容器必须采用绝对定位覆盖前导插槽");
+});

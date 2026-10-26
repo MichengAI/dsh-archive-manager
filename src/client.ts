@@ -382,15 +382,16 @@ export function startArchiveClient(require: HostRequire) {
 		 */
 		function starSvg(filled: boolean): string {
 			return filled
-				? '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="' + STAR_PATH + '"/></svg>'
-				: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="' + STAR_PATH + '"/></svg>';
+				? '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="' + STAR_PATH + '"/></svg>'
+				: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="' + STAR_PATH + '"/></svg>';
 		}
-		const ROW_FAVORITE_CSS = ".dsham_starSlot{display:none;align-items:center;justify-content:center;box-sizing:border-box;width:16px;min-width:16px;height:20px;flex:none;margin:0 3px 0 0;order:-1}"
-			+ "[data-row-key^='session:']>span:first-child{order:-2}"
-			+ "[data-row-key^='session:']:hover .dsham_starSlot,.dsham_starSlot[data-favorited='true']{display:inline-flex}"
+		const ROW_FAVORITE_CSS = "[data-row-key^='session:']{position:relative}"
+			+ ".dsham_starSlot{display:none;position:absolute;left:calc(8px + var(--dsh-workspace-indent,0px));inset-inline-start:calc(8px + var(--dsh-workspace-indent,0px));top:50%;transform:translateY(-50%);align-items:center;justify-content:center;box-sizing:border-box;width:16px;height:20px;z-index:1;pointer-events:none}"
+			+ "[data-row-key^='session:']:hover .dsham_starSlot,.dsham_starSlot[data-favorited='true']{display:inline-flex;pointer-events:auto}"
+			+ "[data-row-key^='session:']:hover>span:first-child,[data-row-key^='session:'][data-dsham-favorited='true']>span:first-child{opacity:0}"
 			+ ".dsham_rowStar{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:16px;height:16px;padding:0;border:0;background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer;flex:none;border-radius:var(--dsw-radius-xs,4px)}"
 			+ ".dsham_starSlot[data-favorited='true'] .dsham_rowStar{color:#e8b931}"
-			+ ".dsham_rowStar svg{display:block;width:14px;height:14px;flex:none}";
+			+ ".dsham_rowStar svg{display:block;width:16px;height:16px;flex:none}";
 		ensurePluginStyle("dsh-archive-manager/RowFavorite.css", ROW_FAVORITE_CSS);
 		/**
 		 * 主界面「只看收藏」筛选：官方视图选项菜单是一份普通数组、没有插槽，
@@ -499,6 +500,7 @@ export function startArchiveClient(require: HostRequire) {
 					let holder = Array.from(row.children).find((child): child is HTMLElement => child.classList.contains(ROW_STAR_SLOT_CLASS)) ?? null;
 					if (!snapshot.ready) {
 						holder?.remove();
+						row.removeAttribute("data-dsham-favorited");
 						continue;
 					}
 					if (holder !== null && (holder.parentElement !== row || holder.nextElementSibling !== null)) {
@@ -523,6 +525,8 @@ export function startArchiveClient(require: HostRequire) {
 						holder.appendChild(star);
 					}
 					const favorited = snapshot.ids.has(sessionId);
+					if (favorited) row.setAttribute("data-dsham-favorited", "true");
+					else row.removeAttribute("data-dsham-favorited");
 					if (holder.dataset.favorited === String(favorited)) continue;
 					const label = translate()(favorited ? "organizer.unfavorite" : "organizer.favorite");
 					holder.dataset.favorited = String(favorited);
@@ -680,6 +684,7 @@ export function startArchiveClient(require: HostRequire) {
 					for (const row of Array.from(document.querySelectorAll<HTMLElement>("[" + FAVORITES_HIDDEN_ATTR + "]"))) row.removeAttribute(FAVORITES_HIDDEN_ATTR);
 					for (const button of Array.from(document.querySelectorAll<HTMLElement>("[" + FAVORITES_ONLY_MARKER + "]"))) button.parentElement?.remove();
 					for (const star of Array.from(document.querySelectorAll<HTMLElement>("." + ROW_STAR_SLOT_CLASS))) star.remove();
+					for (const row of Array.from(document.querySelectorAll<HTMLElement>("[data-dsham-favorited]"))) row.removeAttribute("data-dsham-favorited");
 					if (retryTimer !== null) { clearTimeout(retryTimer); retryTimer = null; }
 				},
 			};
@@ -3446,7 +3451,7 @@ export function startArchiveClient(require: HostRequire) {
 					void favoriteRow.toggle(sessionId);
 				};
 				const Item = _deepseek_ai_dsh_client_ui_primitives.MenuItemButton;
-				const icon = (0, react_jsx_runtime.jsx)("svg", { viewBox: "0 0 16 16", width: 14, height: 14, fill: favorited ? "currentColor" : "none", stroke: "currentColor", strokeWidth: 1.4, strokeLinejoin: "round", "aria-hidden": true, children: (0, react_jsx_runtime.jsx)("path", { d: STAR_PATH }) });
+				const icon = (0, react_jsx_runtime.jsx)("svg", { viewBox: "0 0 16 16", width: 16, height: 16, fill: favorited ? "currentColor" : "none", stroke: "currentColor", strokeWidth: 1.4, strokeLinejoin: "round", "aria-hidden": true, children: (0, react_jsx_runtime.jsx)("path", { d: STAR_PATH }) });
 				const label = t(favorited ? "organizer.unfavorite" : "organizer.favorite");
 				if (typeof Item === "function") return (0, react_jsx_runtime.jsx)(Item, { icon, onSelect, children: label });
 				return (0, react_jsx_runtime.jsx)("button", { type: "button", role: "menuitem", onClick: onSelect, children: label });

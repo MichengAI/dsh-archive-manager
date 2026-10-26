@@ -5,11 +5,13 @@ import { fileURLToPath } from 'node:url';
 
 const clientSource = readFileSync(fileURLToPath(new URL('../src/client.ts', import.meta.url)), 'utf8');
 
-test('Issue 90: CSS order 规则必须将星标设为 order:-1 并将前导格设为 order:-2', () => {
-  // 必须包含星标自身的 order:-1
-  assert.match(clientSource, /\.dsham_starSlot\{[^}]*order:-1/, '星标容器 .dsham_starSlot 必须声明 order:-1');
-  // 必须包含前导格的 order:-2
-  assert.match(clientSource, /\[data-row-key\^=['"]session:['"]\]>span:first-child\{[^}]*order:-2/, '前导格必须声明 order:-2 以保证其视觉顺序始终在星标之前');
+test('Issue 90: 星标复用前导插槽位置使用绝对定位覆盖，保证标题零偏移且前导格不增加 flex order 偏移', () => {
+  // 必须包含星标自身的绝对定位声明
+  assert.match(clientSource, /\.dsham_starSlot\{[^}]*position:absolute/, '星标容器 .dsham_starSlot 必须声明 position:absolute 覆盖在前导槽位置');
+  // 会话行必须声明 position:relative 作为定位基准
+  assert.match(clientSource, /\[data-row-key\^=['"]session:['"]\]\{[^}]*position:relative/, '会话行必须声明 position:relative');
+  // 必须包含前导格透明度切换，鼠标悬停时隐藏底层内容，移开后恢复
+  assert.match(clientSource, /\[data-row-key\^=['"]session:['"]\]:hover>span:first-child/, '前导格在悬停时必须临时隐去底层内容');
 });
 
 test('Issue 90: 星标 DOM 必须追加到行尾 (row.appendChild)，绝不能插入在前导格后 (cell.after)', () => {
