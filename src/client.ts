@@ -1720,6 +1720,71 @@ export function startArchiveClient(require: HostRequire) {
 			const titleEl = row.querySelector<HTMLElement>(".title") ?? row.querySelector<HTMLElement>("[class*='title']");
 			return { workspaceId, title: titleEl?.textContent?.trim() || workspaceId };
 		}
+		/**
+		 * 从侧栏工作区行或会话行中定位其操作菜单（"..."）触发按钮。
+		 * 优先按 rowActions 下的 actions 语义匹配，避免误取新建会话、折叠或收藏等非菜单按钮。
+		 */
+		function findRowMenuButton(row: HTMLElement): HTMLButtonElement | null {
+			const actionsContainer = row.querySelector('[class*="rowActions"]') ?? row;
+			const buttons = Array.from(actionsContainer.querySelectorAll<HTMLButtonElement>("button"));
+			if (buttons.length === 0) return null;
+
+			const actionBtn = buttons.find((btn) => {
+				const label = (btn.getAttribute("aria-label") ?? btn.getAttribute("title") ?? "").toLowerCase();
+				return /action|操作|действи|more|更多/.test(label);
+			});
+			if (actionBtn) return actionBtn;
+
+			const nonAddBtn = buttons.find((btn) => {
+				const label = (btn.getAttribute("aria-label") ?? btn.getAttribute("title") ?? "").toLowerCase();
+				return !/new|create|新建|add|\+|созда/.test(label);
+			});
+			if (nonAddBtn) return nonAddBtn;
+
+			return buttons[0] ?? null;
+		}
+		/** 判断一个被点击的按钮是否为行操作菜单触发按钮。 */
+		function isRowMenuButton(button: HTMLButtonElement, row: HTMLElement): boolean {
+			const menuBtn = findRowMenuButton(row);
+			if (menuBtn === button) return true;
+			const label = (button.getAttribute("aria-label") ?? button.getAttribute("title") ?? "").toLowerCase();
+			return /action|操作|действи|more|更多/.test(label);
+		}
+		/**
+		 * 监听侧栏工作区行与会话行的整行右键点击，阻止系统默认右键菜单并唤起对应的 "..." 操作菜单。
+		 * 若右键在输入框（重命名中）或特定功能按钮（如新建、星标），则放行或避让。
+		 */
+		function setupSidebarRowContextMenu(): () => void {
+			if (typeof document === "undefined" || typeof document.addEventListener !== "function") return () => {};
+
+			const onContextMenu = (event: MouseEvent) => {
+				const target = event.target as Element | null;
+				if (!target) return;
+
+				if (target.closest("input, textarea, [contenteditable='true']")) return;
+
+				const row = target.closest<HTMLElement>('[data-row-key^="workspace:"], [data-row-key^="session:"]');
+				if (!row) return;
+
+				const clickedButton = target.closest<HTMLButtonElement>("button");
+				if (clickedButton && !isRowMenuButton(clickedButton, row)) {
+					return;
+				}
+
+				const menuBtn = findRowMenuButton(row);
+				if (!menuBtn) return;
+
+				event.preventDefault();
+				event.stopPropagation();
+
+				menuBtn.click();
+			};
+
+			document.addEventListener("contextmenu", onContextMenu, true);
+			return () => {
+				document.removeEventListener("contextmenu", onContextMenu, true);
+			};
+		}
 		/** 识别工作区操作菜单里的“删除工作区”项；文案缺失时用 danger 类名兜底。 */
 		function isWorkspaceDeleteMenuItem(item: { textContent: string | null; className: string }, allowDangerFallback = true): boolean {
 			const text = (item.textContent ?? "").toLowerCase();
@@ -4418,6 +4483,7 @@ export function startArchiveClient(require: HostRequire) {
 			};
 			reconcileSidebar();
 			ctx.effect(() => setupWorkspaceMenuInjector(ctx.locale.bind(NS)), "archive-manager: workspace menu injector");
+			ctx.effect(() => setupSidebarRowContextMenu(), "archive-manager: sidebar row contextmenu trigger");
 			installSettingsNavIcon(ctx);
 			const unsubscribeSidebar = typeof ctx.on === "function" ? ctx.on("slots/changed", (key: string) => {
 				if (key !== "sidebar.workspaces") return;
@@ -4528,6 +4594,9 @@ export function startArchiveClient(require: HostRequire) {
 			isWorkspaceTaskCandidate,
 			isWorkspaceDeleteMenuItem,
 			workspaceMenuTriggerFrom,
+			findRowMenuButton,
+			isRowMenuButton,
+			setupSidebarRowContextMenu,
 			applySettingsNavIcon,
 			restoreSettingsNavIcon,
 			installSettingsNavIcon,
