@@ -1,0 +1,19 @@
+<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="dsh_svg_arch_g" x1="6" y1="8" x2="30" y2="28" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#10B981"/>
+      <stop offset="1" stop-color="#059669"/>
+    </linearGradient>
+  </defs>
+  <!-- Card Extracted from Box -->
+  <rect x="11" y="6" width="14" height="10" rx="2" fill="#E6FFFA" stroke="#10B981" stroke-width="1.8"/>
+  <line x1="14" y1="10" x2="22" y2="10" stroke="#10B981" stroke-width="1.8" stroke-linecap="round"/>
+  <!-- Archive Drawer Body -->
+  <rect x="6" y="13" width="24" height="17" rx="3.5" fill="url(#dsh_svg_arch_g)"/>
+  <!-- Drawer Face Panel -->
+  <rect x="8.5" y="15.5" width="19" height="12" rx="2" fill="#047857" fill-opacity="0.3"/>
+  <!-- Drawer Pull Handle -->
+  <rect x="14" y="19" width="8" height="3" rx="1.5" fill="#FFFFFF"/>
+  <!-- Extraction Arrow -->
+  <path d="M18 4L15 7M18 4L21 7" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
