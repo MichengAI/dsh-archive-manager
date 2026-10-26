@@ -130,9 +130,7 @@ test("工作区分组采用技能管理同款一体化卡片，列表超紧凑40
   assert.match(client, /\.dsham_settingsRow\{[^}]*padding:4px 10px/);
   assert.match(client, /\.dsham_settingsTitleLink\{[^}]*line-height:16px/);
 
-  // 3. 复选框消除系统原生生硬灰色方框，使用带圆角和 SVG 勾勾的定制控件
-  assert.match(client, /\.dsham_checkbox\{[^}]*appearance:none/);
-  assert.match(client, /\.dsham_checkbox\{[^}]*border-radius:var\(--dsw-radius-xs/);
-  assert.match(client, /\.dsham_checkbox:checked\{[^}]*background-image:/);
-  assert.match(client, /\.dsham_checkbox:indeterminate\{[^}]*background-image:/);
+  // 3. 复选框对齐宿主原语 Checkbox 规范，使用原生 accent-color 与焦点外框，禁止手绘破坏暗黑模式
+  assert.match(client, /\.dsham_checkbox\{[^}]*accent-color:var\(--dsw-alias-brand-primary\)/);
+  assert.doesNotMatch(client, /\.dsham_checkbox\{[^}]*appearance:none/);
 });
