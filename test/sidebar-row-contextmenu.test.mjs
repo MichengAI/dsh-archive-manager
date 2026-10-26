@@ -253,7 +253,36 @@ test("setupSidebarRowContextMenu 在整行右键时阻止默认右键菜单并�
 		assert.equal(newBtnPrevented, false, "点击新建等功能按钮时不得拦截右键");
 		assert.equal(wsMenuBtn.clicked, 1, "点击新建按钮时不得触发操作菜单");
 
-		// 5. 卸载清理验证
+		// 5. 未分组工作区行（只有新建按钮，无菜单）：右键不得触发任何点击，不得 preventDefault
+		const sidebarRoot = new MockElement("div", { class: "sidebarRoot" });
+		const ungroupedRow = new MockElement("div", { "data-row-key": "workspace:__ungrouped__" });
+		const ungroupedActions = new MockElement("div", { class: "rowActions" });
+		ungroupedRow.appendChild(ungroupedActions);
+		const createOnlyBtn = new MockElement("button", { "aria-label": "在未分组中新建会话" });
+		ungroupedActions.appendChild(createOnlyBtn);
+		let ungroupedPrevented = false;
+		handler({
+			target: ungroupedRow,
+			preventDefault() { ungroupedPrevented = true; },
+			stopPropagation() {}
+		});
+		assert.equal(ungroupedPrevented, false, "未分组行无菜单时右键不得被 preventDefault");
+		assert.equal(createOnlyBtn.clicked, 0, "未分组行右键绝不得误触新建按钮");
+
+		// 6. 空白会话行（没有 rowActions，行内只有星标）：右键不得触发星标，不得 preventDefault
+		const blankSessionRow = new MockElement("div", { "data-row-key": "session:blank-temp-id" });
+		const starBtn = new MockElement("button", { class: "dsham_rowStar", "aria-label": "Favorite" });
+		blankSessionRow.appendChild(starBtn);
+		let blankPrevented = false;
+		handler({
+			target: blankSessionRow,
+			preventDefault() { blankPrevented = true; },
+			stopPropagation() {}
+		});
+		assert.equal(blankPrevented, false, "空白会话行无菜单时右键不得被 preventDefault");
+		assert.equal(starBtn.clicked, 0, "空白会话行右键绝不得误触星标按钮");
+
+		// 7. 卸载清理验证
 		dispose();
 		const afterHandlers = listeners.get("contextmenu") ?? [];
 		assert.equal(afterHandlers.length, 0, "dispose 必须注销事件监听器");

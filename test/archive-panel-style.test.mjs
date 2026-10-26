@@ -97,7 +97,7 @@ test("预览弹窗直挂 body 并配置防穿透实色底、遮罩模糊与标�
   // 1. 宽版预览弹窗显式 portalToBody 脱离 .dsham_settings 的 container-type 包含块
   assert.match(client, /className:\s*\"dsham_modalWide\"/);
   assert.match(client, /portalToBody:\s*true/);
-  assert.match(client, /closeLabel:\s*t\(\"cancel\"\)/);
+  assert.match(client, /resolvedCloseLabel/);
 
   // 2. 遮罩层与卡片具备防穿透实色与高斯模糊
   assert.match(client, /\.dsham_modalMask\{[^}]*backdrop-filter:[^}]*blur/);

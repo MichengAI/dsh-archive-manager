@@ -8,8 +8,8 @@ const clientPath = fileURLToPath(new URL("../src/client.ts", import.meta.url));
 test("归档入口注册在设置的连接器之后，并移除旧的视图选项入口", async () => {
   const client = await readFile(clientPath, "utf8");
 
-  assert.match(client, /name: "settings\.section",[\s\S]*id: "archived-sessions",[\s\S]*order: 45/);
-  assert.match(client, /id: "archived-sessions",[\s\S]*icon: "archive"/);
+  assert.match(client, /name: "settings\.section",[\s\S]*id: "archive-manager",[\s\S]*order: 45/);
+  assert.match(client, /id: "archive-manager",[\s\S]*icon: "archive"/);
   assert.match(client, /ArchivedSessionsSection/);
   assert.doesNotMatch(client, /id: "show-archived"/);
   assert.doesNotMatch(client, /viewOptions\.showArchived/);
@@ -73,7 +73,7 @@ test("归档设置页原型支持筛选内全选、跨项目选择与确认批�
 	assert.match(client, /archives\.deleteSelectedTitle/);
 	assert.match(client, /function pruneArchivedSelection/);
 	assert.match(client, /function toggleArchivedSelection/);
-	assert.match(client, /}, ArchivedSessionsSection\)\);/);
+	assert.match(client, /}, ArchivedSessionsSection\);/);
 });
 
 test("恢复和删除后刷新会话投影，使侧栏与宿主状态重新一致", async () => {
@@ -231,3 +231,12 @@ test("确认框按 Escape 只关闭最上层，不关掉设置页", async () => 
   assert.match(client, /event\.stopImmediatePropagation/);
   assert.match(client, /if \(event\.key !== "Escape"\) return;/);
 });
+
+test("Issue #91: settings.section 使用专用 id archive-manager 并具备 try/catch fail-soft 运行时防护", async () => {
+  const client = await readFile(clientPath, "utf8");
+
+  assert.match(client, /name:\s*"settings\.section",[\s\S]*?id:\s*"archive-manager"/);
+  assert.match(client, /ctx\.slots\.inject\("settings\.section",\s*\(\)\s*=>\s*\{[\s\S]*?try\s*\{[\s\S]*?ctx\.slots\.register\([\s\S]*?catch\s*(?:\([^)]*\))?\s*\{/);
+  assert.doesNotMatch(client, /name:\s*"settings\.section",[\s\S]*?id:\s*"archived-sessions"/);
+});
+

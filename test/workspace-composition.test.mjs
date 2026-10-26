@@ -316,10 +316,10 @@ for (const codexFirst of [false, true]) test(`Codex 侧栏保留组件与交互�
 		const winner = slots.entries("sidebar.workspaces")[0];
 		assert.equal(winner.component, CodexSidebar, "归档插件不能抢占 Codex 工作区列表");
 		assert.equal(winner.inject, inject);
-		winner.inject().openSession("existing-session");
-		assert.deepEqual(opened, ["existing-session"]);
-		assert.ok(slots.entries("settings.section").some((entry) => entry.options.id === "archived-sessions"));
-		disposeCodex();
+				winner.inject().openSession("existing-session");
+				assert.deepEqual(opened, ["existing-session"]);
+				assert.ok(slots.entries("settings.section").some((entry) => entry.options.id === "archive-manager"));
+				disposeCodex();
 		disposeCodex = undefined;
 		assert.equal(slots.entries("sidebar.workspaces")[0].component.name, "WorkspaceBrowser");
 		disposeCodex = mountCodex();

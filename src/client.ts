@@ -30,7 +30,7 @@ export function startArchiveClient(require: HostRequire) {
 		let react = require("react");
 		let react_dom = require("react-dom");
 		let _deepseek_ai_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
-		function SettingsModal({ open, onClose, title, description, footer, children, className, width, portalToBody = false, closeLabel }: { open: boolean; onClose(): void; title: ReactNode; description?: ReactNode; footer?: ReactNode; children?: ReactNode; className?: string; width?: number; portalToBody?: boolean; closeLabel?: string }) {
+		function SettingsModal({ open, onClose, title, description, footer, children, className, width, portalToBody = false, closeLabel, t }: { open: boolean; onClose(): void; title: ReactNode; description?: ReactNode; footer?: ReactNode; children?: ReactNode; className?: string; width?: number; portalToBody?: boolean; closeLabel?: string; t?: Translate }) {
 			const anchor = react.useRef<HTMLSpanElement>(null);
 			// 设置壳会把 body 下的外部分支标成 inert。宿主 Modal 固定挂到 body，
 			// 所以这里自己门户到所属归档页；没有归档页时才回退 body。宽版预览浮层使用 portalToBody 直挂 body 脱离局部包含块。
@@ -52,6 +52,7 @@ export function startArchiveClient(require: HostRequire) {
 				window.addEventListener("keydown", onKey, true);
 				return () => window.removeEventListener("keydown", onKey, true);
 			}, [open, onClose]);
+			const resolvedCloseLabel = closeLabel || (typeof t === "function" ? t("common.close") : "") || "关闭";
 			const dialog = (0, react_jsx_runtime.jsxs)("div", { className: "dsham_modalRoot", role: "presentation", children: [
 				(0, react_jsx_runtime.jsx)("div", { className: "dsham_modalMask", onClick: onClose }),
 				(0, react_jsx_runtime.jsxs)("div", { role: "dialog", "aria-modal": true, "aria-label": typeof title === "string" ? title : undefined, className: clsx("dsham_modalDialog", className), style: { width: width ?? 560 }, children: [
@@ -61,8 +62,8 @@ export function startArchiveClient(require: HostRequire) {
 							type: "button",
 							className: "dsham_modalClose",
 							onClick: onClose,
-							"aria-label": closeLabel || "Close",
-							title: closeLabel || "Close",
+							"aria-label": resolvedCloseLabel,
+							title: resolvedCloseLabel,
 							children: (0, react_jsx_runtime.jsx)("svg", {
 								viewBox: "0 0 16 16",
 								width: 14,
@@ -1500,12 +1501,15 @@ export function startArchiveClient(require: HostRequire) {
                     className: "dsham_modalWide",
                     portalToBody: true,
                     closeLabel: t("cancel"),
+                    t,
                     open: preview.target !== null,
                     onClose: preview.close,
                     title: preview.target ? displayTitle(preview.target.session, t) : t("discovery.preview"),
                     footer: modalFooterButton({ variant: "primary", disabled: busy, onClick: () => { if (preview.target) { const session = preview.target.session; preview.close(); return viewConversation(session); } }, children: t("discovery.openFull") }),
                     children: react.createElement(PreviewContent, { preview, t, MarkdownText: _deepseek_ai_dsh_client_ui_primitives.MarkdownText })
                 }), archiveTarget === null && error !== null && (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsError", role: "alert", children: error }), notice !== null && (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsStatus", role: "status", children: notice }), (0, react_jsx_runtime.jsx)(SettingsModal, {
+					t,
+					portalToBody: true,
 					open: archiveTarget !== null,
 					onClose: closeArchive,
 					title: t("archives.archiveTitle", { n: archiveTarget?.length ?? 0 }), description: archiveGroup === null ? t("archives.archiveSelectedDesc") : t(archiveGroup.key === ARCHIVE_UNGROUPED_KEY ? "archives.archiveUngroupedDesc" : "archives.archiveProjectDesc", { name: archiveGroup.title, n: archiveTarget?.length ?? 0 }),
@@ -1519,6 +1523,8 @@ export function startArchiveClient(require: HostRequire) {
 						error !== null && (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsError", role: "alert", children: error })
 					] })
 					}), (0, react_jsx_runtime.jsx)(SettingsModal, {
+					t,
+					portalToBody: true,
 					open: stopArchive !== null,
 					onClose: () => { if (!busy) { setStopArchive(null); setError(null); } },
 					title: t("archiveActive.title"),
@@ -1541,6 +1547,8 @@ export function startArchiveClient(require: HostRequire) {
 					] }),
 					children: error !== null && (0, react_jsx_runtime.jsx)("div", { className: "dsham_settingsError", role: "alert", children: error })
 				}), (0, react_jsx_runtime.jsx)(SettingsModal, {
+					t,
+					portalToBody: true,
 					open: deleteTarget !== null,
 					onClose: closeDelete,
 					title: deleteDialogTitle,
@@ -1756,23 +1764,37 @@ export function startArchiveClient(require: HostRequire) {
 		 * 优先按 rowActions 下的 actions 语义匹配，避免误取新建会话、折叠或收藏等非菜单按钮。
 		 */
 		function findRowMenuButton(row: HTMLElement): HTMLButtonElement | null {
-			const actionsContainer = row.querySelector('[class*="rowActions"]') ?? row;
+			const actionsContainer = row.querySelector<HTMLElement>('[class*="rowActions"]');
+			if (!actionsContainer) return null;
+
 			const buttons = Array.from(actionsContainer.querySelectorAll<HTMLButtonElement>("button"));
 			if (buttons.length === 0) return null;
 
+			const isStarButton = (btn: HTMLButtonElement): boolean => {
+				const className = btn.getAttribute("class") ?? "";
+				if (className.includes("dsham_rowStar")) return true;
+				if (typeof btn.closest === "function" && Boolean(btn.closest(".dsham_starSlot"))) return true;
+				return false;
+			};
+
 			const actionBtn = buttons.find((btn) => {
+				if (isStarButton(btn)) return false;
+				if (btn.getAttribute("aria-haspopup") === "menu") return true;
 				const label = (btn.getAttribute("aria-label") ?? btn.getAttribute("title") ?? "").toLowerCase();
-				return /action|操作|действи|more|更多/.test(label);
+				if (/new|create|新建|add|\+|созда/.test(label)) return false;
+				if (/action|操作|действи|more|更多|选项|options|menu/.test(label)) return true;
+				if (btn.querySelector("svg circle, [data-row-actions-trigger]")) return true;
+				return false;
 			});
 			if (actionBtn) return actionBtn;
 
 			const nonAddBtn = buttons.find((btn) => {
+				if (isStarButton(btn)) return false;
 				const label = (btn.getAttribute("aria-label") ?? btn.getAttribute("title") ?? "").toLowerCase();
-				return !/new|create|新建|add|\+|созда/.test(label);
+				if (/new|create|新建|add|\+|созда/.test(label)) return false;
+				return Boolean(btn.querySelector("svg"));
 			});
-			if (nonAddBtn) return nonAddBtn;
-
-			return buttons[0] ?? null;
+			return nonAddBtn ?? null;
 		}
 		/** 判断一个被点击的按钮是否为行操作菜单触发按钮。 */
 		function isRowMenuButton(button: HTMLButtonElement, row: HTMLElement): boolean {
@@ -2669,6 +2691,7 @@ export function startArchiveClient(require: HostRequire) {
 		const zh = {
 			...organizerZh, ...discoveryZh,
             "locale.language": "zh", "service.unavailable": "服务尚未就绪，请重试",
+			"common.close": "关闭",
 			"sidebar.entry.title": "侧边栏入口",
 			"sidebar.entry.desc": "在左侧主导航栏显示归档管理器。设置里的入口不变。",
 			"sidebar.entry.toggle": "切换侧边栏入口",
@@ -2850,6 +2873,7 @@ export function startArchiveClient(require: HostRequire) {
 		const en = {
 			...organizerEn, ...discoveryEn,
             "locale.language": "en", "service.unavailable": "The service is not ready. Please retry.",
+			"common.close": "Close",
 			"sidebar.entry.title": "Sidebar entry",
 			"sidebar.entry.desc": "Show Archived Sessions in the left sidebar. The Settings entry stays either way.",
 			"sidebar.entry.toggle": "Toggle sidebar entry",
@@ -3030,6 +3054,7 @@ export function startArchiveClient(require: HostRequire) {
 		const ru = {
 			...organizerRu, ...discoveryRu,
             "locale.language": "ru", "service.unavailable": "Сервис ещё не готов. Повторите.",
+			"common.close": "Закрыть",
 			"sidebar.entry.title": "Пункт боковой панели",
 			"sidebar.entry.desc": "Показывать архив сессий на левой панели. Пункт в настройках сохраняется.",
 			"sidebar.entry.toggle": "Переключить пункт боковой панели",
@@ -4582,15 +4607,22 @@ export function startArchiveClient(require: HostRequire) {
 				isEnabled: () => sidebarController.isOnlineUpdateEnabled(),
 			}), "dsh-archive-manager: plugin update ui");
 
-			ctx.slots.inject("settings.section", () => ctx.slots.register({
-				name: "settings.section",
-				id: "archived-sessions",
-				order: 45,
-				label: () => ctx.locale.bind(NS)("archived.badge"),
-				icon: "archive",
-				locale: NS,
-				inject: buildArchivedSectionProps
-			}, ArchivedSessionsSection));
+			ctx.slots.inject("settings.section", () => {
+				try {
+					return ctx.slots.register({
+						name: "settings.section",
+						id: "archive-manager",
+						order: 45,
+						label: () => ctx.locale.bind(NS)("archived.badge"),
+						icon: "archive",
+						locale: NS,
+						inject: buildArchivedSectionProps
+					}, ArchivedSessionsSection);
+				} catch (reason) {
+					console.warn("archive-manager: register settings.section failed:", reason);
+					return () => {};
+				}
+			});
 		}
 		//#endregion
 		/** Pure derivation surface for dsh-archive-manager self-tests (no-op for the runtime). */
