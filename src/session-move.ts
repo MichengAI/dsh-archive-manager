@@ -254,16 +254,29 @@ export async function moveSessionToWorkspace(
 
 	// 4. 路径比对：若 cwd 相同，仅需调整工作区记账，无需改动物理文件
 	if (currentNormalizedCwd && targetNormalizedCwd && currentNormalizedCwd === targetNormalizedCwd) {
+		const targetNorm = normalizePath(targetWorkspace.path);
 		for (const ws of registry.list()) {
-			if (ws.id !== targetWorkspace.id && Array.isArray(ws.sessionIds) && ws.sessionIds.includes(cleanSessionId)) {
+			const wsNorm = normalizePath(ws.path);
+			const isOther = (ws.id && targetWorkspace.id) ? ws.id !== targetWorkspace.id : wsNorm !== targetNorm;
+			if (isOther && Array.isArray(ws.sessionIds) && ws.sessionIds.includes(cleanSessionId)) {
 				await ws.detachSession(cleanSessionId);
 			}
 		}
 		await targetWorkspace.attachSession(cleanSessionId);
 		registry.sessionPaths?.set(cleanSessionId, targetPath);
+
 		if (ctx.sessionProjectionCache && typeof ctx.sessionProjectionCache.coldSnapshot === "function") {
-			await ctx.sessionProjectionCache.coldSnapshot(cleanSessionId).catch(() => {});
+			try {
+				if (ctx.sessionProjectionCache.coldSnapshot.length === 1) {
+					await ctx.sessionProjectionCache.coldSnapshot(cleanSessionId);
+				} else {
+					await (ctx.sessionProjectionCache.coldSnapshot as unknown as (m: unknown, c: number, ev: unknown[]) => Promise<unknown>)(header, 0, []);
+				}
+			} catch (err) {
+				ctx.logger?.warn?.(`archive-manager: post-move coldSnapshot failed: ${String(err)}`);
+			}
 		}
+
 		return {
 			ok: true,
 			moved: true,
@@ -358,8 +371,11 @@ export async function moveSessionToWorkspace(
 		}
 
 		// e. 宿主记账同步
+		const targetNorm = normalizePath(targetWorkspace.path);
 		for (const ws of registry.list()) {
-			if (ws.id !== targetWorkspace.id && Array.isArray(ws.sessionIds) && ws.sessionIds.includes(cleanSessionId)) {
+			const wsNorm = normalizePath(ws.path);
+			const isOther = (ws.id && targetWorkspace.id) ? ws.id !== targetWorkspace.id : wsNorm !== targetNorm;
+			if (isOther && Array.isArray(ws.sessionIds) && ws.sessionIds.includes(cleanSessionId)) {
 				await ws.detachSession(cleanSessionId);
 				detachedWorkspaces.push(ws);
 			}
@@ -368,9 +384,15 @@ export async function moveSessionToWorkspace(
 		targetAttached = true;
 
 		if (ctx.sessionProjectionCache && typeof ctx.sessionProjectionCache.coldSnapshot === "function") {
-			await ctx.sessionProjectionCache.coldSnapshot(cleanSessionId).catch((err) => {
+			try {
+				if (ctx.sessionProjectionCache.coldSnapshot.length === 1) {
+					await ctx.sessionProjectionCache.coldSnapshot(cleanSessionId);
+				} else {
+					await (ctx.sessionProjectionCache.coldSnapshot as unknown as (m: unknown, c: number, ev: unknown[]) => Promise<unknown>)(targetHeader, 0, []);
+				}
+			} catch (err) {
 				ctx.logger?.warn?.(`archive-manager: post-move coldSnapshot failed: ${String(err)}`);
-			});
+			}
 		}
 	} catch (error) {
 		// 回滚内存映射
