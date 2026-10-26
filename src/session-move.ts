@@ -372,26 +372,6 @@ export async function moveSessionToWorkspace(
 				ctx.logger?.warn?.(`archive-manager: post-move coldSnapshot failed: ${String(err)}`);
 			});
 		}
-
-		// f. 若原会话曾处于 live 状态，在目标工作区重新将其装载
-		if (liveSession !== undefined && typeof ctx.sessions?.enter === "function") {
-			try {
-				const preparation = typeof ctx.sessionPersistence?.prepare === "function"
-					? await ctx.sessionPersistence.prepare(cleanSessionId)
-					: undefined;
-				const restoredSession = preparation?.session ?? ctx.sessions.prepare?.(cleanSessionId, {
-					seedSource: "persistence",
-					meta: { ...header, cwd: targetPath },
-					inheritedEventCount: 0,
-				});
-				if (restoredSession) {
-					ctx.sessions.enter(restoredSession);
-					ctx.sessions.announce?.(restoredSession);
-				}
-			} catch (reEnterErr) {
-				ctx.logger?.warn?.(`archive-manager: re-entering moved session ${cleanSessionId} failed: ${String(reEnterErr)}`);
-			}
-		}
 	} catch (error) {
 		// 回滚内存映射
 		if (header) {
