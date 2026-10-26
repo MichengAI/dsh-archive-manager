@@ -28,6 +28,7 @@ export function startArchiveClient(require: HostRequire) {
 		let _deepseek_ai_dsh_client_store = require("@deepseek-ai/dsh-client-store");
 		let react_jsx_runtime = require("react/jsx-runtime");
 		let react = require("react");
+		let react_dom = require("react-dom");
 		let _deepseek_ai_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
 		function SettingsModal({ open, onClose, title, description, footer, children, className, width }: { open: boolean; onClose(): void; title: ReactNode; description?: ReactNode; footer?: ReactNode; children?: ReactNode; className?: string; width?: number }) {
 			const anchor = react.useRef<HTMLSpanElement>(null);
@@ -363,6 +364,9 @@ export function startArchiveClient(require: HostRequire) {
 		/** 侧边栏行内就地确认卡片样式：完全对齐官方原生 MenuSurface 材质与无箭头悬浮设计 */
 		const SIDEBAR_POPOVER_CSS = ".dsham_sidebarCardRoot{position:fixed;inset:0;z-index:1200;pointer-events:none}.dsham_sidebarCardBackdrop{position:fixed;inset:0;pointer-events:auto;background:transparent}.dsham_sidebarCard{position:fixed;pointer-events:auto;box-sizing:border-box;width:290px;max-height:calc(100vh - 32px);overflow-y:auto;padding:16px 18px 14px;border-radius:var(--dsw-radius-lg,14px);background:var(--dsw-menu-surface-fill);backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));-webkit-backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));border:none;box-shadow:var(--dsw-elevation-prominent);color:var(--dsw-alias-label-primary);display:flex;flex-direction:column;gap:8px}.dsham_sidebarCardTitle{margin:0;font-size:14px;font-weight:600;line-height:20px;color:var(--dsw-alias-label-primary)}.dsham_sidebarCardDesc{margin:0;font-size:13px;line-height:18px;color:var(--dsw-alias-label-secondary)}.dsham_sidebarCardError{margin-top:2px;font-size:12px;line-height:16px;color:var(--dsw-alias-state-error-primary,#ef7272);white-space:pre-line}.dsham_sidebarCardFooter{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:10px}.dsham_sidebarCardBtn{border:none;background:transparent;padding:5px 12px;border-radius:var(--dsw-radius-sm,6px);font:inherit;font-size:13px;font-weight:500;line-height:18px;cursor:pointer;transition:background-color .15s ease,opacity .15s ease}.dsham_sidebarCardBtnCancel{color:var(--dsw-alias-label-primary)}.dsham_sidebarCardBtnCancel:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}.dsham_sidebarCardBtnDanger{color:var(--dsw-alias-state-error-primary,#ef7272)}.dsham_sidebarCardBtnDanger:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover-danger,#f25a5a26)}.dsham_sidebarCardBtn:disabled{opacity:.4;cursor:default}";
 		ensurePluginStyle("dsh-archive-manager/SidebarPopover.css", SIDEBAR_POPOVER_CSS);
+		/** 移动会话二级悬浮菜单样式 */
+		const MOVE_SUBMENU_CSS = ".dsham_moveSessionWrap{position:relative}.dsham_moveSubmenu{position:fixed;z-index:99999;min-width:160px;max-width:260px;max-height:340px;overflow-y:auto;background:var(--dsw-menu-surface-fill,var(--dsw-alias-surface-overlay,#1e1e22));backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));-webkit-backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));border:1px solid var(--dsw-alias-border-l1,rgba(255,255,255,0.12));border-radius:var(--dsw-radius-md,8px);box-shadow:var(--dsw-elevation-prominent,0 6px 20px rgba(0,0,0,0.45));padding:4px;display:flex;flex-direction:column;gap:2px}.dsham_moveSubmenuBtn{display:flex;align-items:center;width:100%;padding:6px 10px;border:none;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-primary,#ededed);font:inherit;font-size:13px;line-height:20px;text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background-color .12s ease}.dsham_moveSubmenuBtn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,0.08))}.dsham_moveSubmenuBtn:focus-visible:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,0.08));outline:none}";
+		ensurePluginStyle("dsh-archive-manager/MoveSubmenu.css", MOVE_SUBMENU_CSS);
 		/**
 		 * 收藏星住在一个**独立容器**里，容器紧跟在宿主的前导格（`_slot`，状态点/定时标记）之后：
 		 * 前导格永远是 16px，所以容器的起点恒定，不管格子里是空的还是转圈图标，星的位置都不变。
@@ -2709,8 +2713,8 @@ export function startArchiveClient(require: HostRequire) {
 			"menu.archiveSession": "归档会话",
 			"menu.archiveWorkspace": "归档全部会话",
 			"menu.copyWorkspacePath": "复制目录",
-			"menu.openInExplorer": "在资源管理器中打开",
-			"menu.moveSession": "移动到工作区…",
+			"menu.openInExplorer": "打开工作区目录",
+			"menu.moveSession": "移动到工作区",
 			"moveSession.title": "移动会话到工作区",
 			"moveSession.desc": "将“{name}”移动到目标工作区，后续对话将在目标工作区环境中执行。",
 			"moveSession.warning": "提示：移动后该会话的工作目录将变更为目标项目目录。",
@@ -2890,8 +2894,8 @@ export function startArchiveClient(require: HostRequire) {
 			"menu.archiveSession": "Archive session",
 			"menu.archiveWorkspace": "Archive all conversations",
 			"menu.copyWorkspacePath": "Copy folder path",
-			"menu.openInExplorer": "Reveal in Explorer",
-			"menu.moveSession": "Move to workspace…",
+			"menu.openInExplorer": "Open workspace folder",
+			"menu.moveSession": "Move to workspace",
 			"moveSession.title": "Move session to workspace",
 			"moveSession.desc": "Move “{name}” to target workspace. Subsequent turns will execute within the destination context.",
 			"moveSession.warning": "Note: The session working directory will change to the destination project path.",
@@ -3070,8 +3074,8 @@ export function startArchiveClient(require: HostRequire) {
 			"menu.archiveSession": "Заархивировать сессию",
 			"menu.archiveWorkspace": "Архивировать все сессии",
 			"menu.copyWorkspacePath": "Копировать путь к папке",
-			"menu.openInExplorer": "Показать в проводнике",
-			"menu.moveSession": "Переместить в проект…",
+			"menu.openInExplorer": "Открыть папку рабочей области",
+			"menu.moveSession": "Переместить в проект",
 			"moveSession.title": "Перемещение сессии",
 			"moveSession.desc": "Переместить «{name}» в целевое рабочее пространство. Дальнейшие реплики будут выполняться в контексте целевого проекта.",
 			"moveSession.warning": "Примечание: рабочий каталог сессии будет изменен на путь целевого проекта.",
@@ -3382,34 +3386,149 @@ export function startArchiveClient(require: HostRequire) {
 				if (typeof Item === "function") return (0, react_jsx_runtime.jsx)(Item, { icon, onSelect, children: label });
 				return (0, react_jsx_runtime.jsx)("button", { type: "button", role: "menuitem", onClick: onSelect, children: label });
 			}
-			let moveTarget: { sessionId: string; title: string; currentWorkspaceId?: string } | null = null;
-			const moveListeners = new Set<() => void>();
-			const publishMoveTarget = (next: { sessionId: string; title: string; currentWorkspaceId?: string } | null) => {
-				moveTarget = next;
-				for (const listener of moveListeners) listener();
-			};
-			function useMoveRequest() {
-				return react.useSyncExternalStore(
-					(listener: () => void) => {
-						moveListeners.add(listener);
-						return () => { moveListeners.delete(listener); };
-					},
-					() => moveTarget,
-					() => moveTarget
-				);
-			}
 			function MoveSessionMenuItem({ sessionId, displayTitle: title, useMenuOpenState, t }: { sessionId: string; displayTitle: string; useMenuOpenState: () => readonly [boolean, (open: boolean) => void]; t: Translate }) {
 				const [, setMenuOpen] = useMenuOpenState();
+				const [subOpen, setSubOpen] = react.useState(false);
+				const [subPos, setSubPos] = react.useState<{ top: number; left: number } | null>(null);
+				const [moving, setMoving] = react.useState(false);
+				const rowRef = react.useRef<HTMLDivElement>(null);
+				const leaveTimerRef = react.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+				const workspaces = ctx.workspaces.list?.getSnapshot?.()?.items ?? [];
 				const Item = _deepseek_ai_dsh_client_ui_primitives.MenuItemButton;
-				const icon = (0, react_jsx_runtime.jsx)("svg", { viewBox: "0 0 16 16", width: 14, height: 14, fill: "none", stroke: "currentColor", strokeWidth: 1.3, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true, children: [(0, react_jsx_runtime.jsx)("path", { d: "M2 3.5C2 2.67157 2.67157 2 3.5 2H6.5L8 4H12.5C13.3284 4 14 4.67157 14 5.5V12.5C14 13.3284 13.3284 14 12.5 14H3.5C2.67157 14 2 13.3284 2 12.5V3.5Z" }), (0, react_jsx_runtime.jsx)("path", { d: "M8 7.5L10.5 10L8 12.5" }), (0, react_jsx_runtime.jsx)("path", { d: "M5.5 10H10.5" })] });
-				const onSelect = () => {
-					setMenuOpen(false);
-					const workspaces = ctx.workspaces.list?.getSnapshot?.()?.items ?? [];
-					const currentWs = workspaces.find((w) => Array.isArray(w.sessionIds) && w.sessionIds.includes(sessionId));
-					publishMoveTarget({ sessionId, title, currentWorkspaceId: currentWs?.workspaceId });
+
+				const handleMouseEnter = () => {
+					if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
+					if (rowRef.current) {
+						const rect = rowRef.current.getBoundingClientRect();
+						let top = rect.top - 4;
+						let left = rect.right + 2;
+						if (typeof window !== "undefined") {
+							if (left + 220 > window.innerWidth) {
+								left = Math.max(10, rect.left - 222);
+							}
+							if (top + 320 > window.innerHeight) {
+								top = Math.max(10, window.innerHeight - 330);
+							}
+						}
+						setSubPos({ top, left });
+					}
+					setSubOpen(true);
 				};
-				if (typeof Item === "function") return (0, react_jsx_runtime.jsx)(Item, { icon, onSelect, children: t("menu.moveSession") });
-				return (0, react_jsx_runtime.jsx)("button", { type: "button", role: "menuitem", onClick: onSelect, children: t("menu.moveSession") });
+
+				const handleMouseLeave = () => {
+					leaveTimerRef.current = setTimeout(() => {
+						setSubOpen(false);
+					}, 180);
+				};
+
+				const handleSelectWorkspace = async (targetWsId: string) => {
+					if (moving) return;
+					setSubOpen(false);
+					setMenuOpen(false);
+					setMoving(true);
+					try {
+						await moveSession(sessionId, targetWsId);
+					} catch (error: unknown) {
+						const msg = error instanceof Error ? error.message : String(error);
+						console.warn("archive-manager: move session failed", error);
+						if (typeof window !== "undefined" && typeof window.alert === "function") {
+							window.alert(msg);
+						}
+					} finally {
+						setMoving(false);
+					}
+				};
+
+				const icon = (0, react_jsx_runtime.jsx)("svg", { viewBox: "0 0 16 16", width: 14, height: 14, fill: "none", stroke: "currentColor", strokeWidth: 1.3, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true, children: [(0, react_jsx_runtime.jsx)("path", { d: "M2 3.5C2 2.67157 2.67157 2 3.5 2H6.5L8 4H12.5C13.3284 4 14 4.67157 14 5.5V12.5C14 13.3284 13.3284 14 12.5 14H3.5C2.67157 14 2 13.3284 2 12.5V3.5Z" }), (0, react_jsx_runtime.jsx)("path", { d: "M8 7.5L10.5 10L8 12.5" }), (0, react_jsx_runtime.jsx)("path", { d: "M5.5 10H10.5" })] });
+
+				const chevron = (0, react_jsx_runtime.jsx)("svg", {
+					viewBox: "0 0 16 16",
+					width: 12,
+					height: 12,
+					fill: "none",
+					stroke: "currentColor",
+					strokeWidth: 1.5,
+					strokeLinecap: "round",
+					strokeLinejoin: "round",
+					"aria-hidden": true,
+					style: { marginLeft: "auto", opacity: 0.65 },
+					children: (0, react_jsx_runtime.jsx)("path", { d: "M6 3.5L10.5 8L6 12.5" })
+				});
+
+				const rowContent = (0, react_jsx_runtime.jsxs)("div", {
+					style: { display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", gap: 8 },
+					children: [
+						(0, react_jsx_runtime.jsx)("span", { children: t("menu.moveSession") }),
+						chevron
+					]
+				});
+
+				const itemButton = typeof Item === "function"
+					? (0, react_jsx_runtime.jsx)(Item, {
+						icon,
+						onSelect: () => handleMouseEnter(),
+						children: rowContent
+					})
+					: (0, react_jsx_runtime.jsxs)("button", {
+						type: "button",
+						role: "menuitem",
+						onClick: () => handleMouseEnter(),
+						style: { display: "flex", alignItems: "center", gap: 6, width: "100%", padding: "6px 8px", background: "transparent", border: "none", cursor: "pointer", color: "inherit", textAlign: "left" },
+						children: [icon, rowContent]
+					});
+
+				return (0, react_jsx_runtime.jsxs)("div", {
+					ref: rowRef,
+					className: "dsham_moveSessionWrap",
+					onMouseEnter: handleMouseEnter,
+					onMouseLeave: handleMouseLeave,
+					children: [
+						itemButton,
+						subOpen && subPos && typeof document !== "undefined" && typeof react_dom?.createPortal === "function" && (0, react_dom.createPortal)(
+							(0, react_jsx_runtime.jsxs)("div", {
+								className: "dsham_moveSubmenu",
+								role: "menu",
+								onMouseEnter: handleMouseEnter,
+								onMouseLeave: handleMouseLeave,
+								style: {
+									top: subPos.top,
+									left: subPos.left
+								},
+								children: [
+									(0, react_jsx_runtime.jsx)("div", {
+										style: { position: "absolute", top: 0, bottom: 0, left: -6, width: 8 },
+										"aria-hidden": true
+									}),
+									workspaces.length === 0
+										? (0, react_jsx_runtime.jsx)("div", {
+											style: { padding: "8px 10px", fontSize: "12px", color: "var(--dsw-alias-label-tertiary, #888)" },
+											children: t("moveSession.noOtherWorkspaces")
+										})
+										: workspaces.map((ws) => {
+											const wsTitle = ws.title || ws.path || ws.workspaceId;
+											return (0, react_jsx_runtime.jsx)("button", {
+												type: "button",
+												role: "menuitem",
+												className: "dsham_moveSubmenuBtn",
+												disabled: moving,
+												onClick: (e) => {
+													e.preventDefault();
+													e.stopPropagation();
+													void handleSelectWorkspace(ws.workspaceId);
+												},
+												children: (0, react_jsx_runtime.jsx)("span", {
+													style: { overflow: "hidden", textOverflow: "ellipsis", flex: 1 },
+													children: wsTitle
+												})
+											}, ws.workspaceId);
+										})
+								]
+							}),
+							document.body
+						)
+					]
+				});
 			}
 			function focusSessionRow(sessionId: string) {
 				try {
@@ -3686,184 +3805,6 @@ export function startArchiveClient(require: HostRequire) {
 					() => archiveWsTarget,
 					() => archiveWsTarget
 				);
-			}
-			function MoveSessionOverlay({ t }: { t: Translate }) {
-				const request = useMoveRequest();
-				const [selectedWorkspaceId, setSelectedWorkspaceId] = (0, react.useState)("");
-				const [moving, setMoving] = (0, react.useState)(false);
-				const [error, setError] = (0, react.useState)<string | null>(null);
-				const [cardPos, setCardPos] = (0, react.useState)<{ top: number; left: number } | null>(null);
-				const cardRef = (0, react.useRef)<HTMLDivElement>(null);
-				const cancelBtnRef = (0, react.useRef)<HTMLButtonElement>(null);
-				const confirmBtnRef = (0, react.useRef)<HTMLButtonElement>(null);
-
-				const workspaces = (0, react.useSyncExternalStore)(
-					(listener: () => void) => typeof ctx.workspaces.list?.subscribe === "function" ? ctx.workspaces.list.subscribe(listener) : () => {},
-					() => ctx.workspaces.list?.getSnapshot?.()?.items ?? []
-				);
-				const candidates = (0, react.useMemo)(() => {
-					return workspaces.filter((w) => w.workspaceId !== request?.currentWorkspaceId);
-				}, [workspaces, request?.currentWorkspaceId]);
-
-				(0, react.useEffect)(() => {
-					if (candidates.length > 0 && (!selectedWorkspaceId || !candidates.some((c) => c.workspaceId === selectedWorkspaceId))) {
-						setSelectedWorkspaceId(candidates[0].workspaceId);
-					}
-				}, [candidates, selectedWorkspaceId]);
-
-				(0, react.useLayoutEffect)(() => {
-					if (request === null || typeof document === "undefined") {
-						setCardPos(null);
-						setError(null);
-						return;
-					}
-					let cachedRow: HTMLElement | null = null;
-					const getTargetRow = () => {
-						if (cachedRow && cachedRow.isConnected) return cachedRow;
-						try {
-							cachedRow = document.querySelector<HTMLElement>(`[data-row-key="session:${CSS.escape(request.sessionId)}"]`);
-						} catch {
-							cachedRow = null;
-						}
-						return cachedRow;
-					};
-					const updatePosition = () => {
-						const card = cardRef.current;
-						const cardWidth = card?.offsetWidth || 320;
-						const cardHeight = card?.offsetHeight || 220;
-						const margin = 8;
-						const targetRow = getTargetRow();
-						if (!targetRow) {
-							const w = window.innerWidth;
-							const h = window.innerHeight;
-							const fallbackTop = Math.max(16, (h - cardHeight) / 2);
-							const fallbackLeft = Math.max(16, (w - cardWidth) / 2);
-							setCardPos({ top: fallbackTop, left: fallbackLeft });
-							return;
-						}
-						const rect = targetRow.getBoundingClientRect();
-						let top = rect.top - 4;
-						if (top + cardHeight > window.innerHeight - 16) top = window.innerHeight - 16 - cardHeight;
-						if (top < 16) top = 16;
-						let left = rect.right + margin;
-						if (left + cardWidth > window.innerWidth - 16) left = rect.left - margin - cardWidth;
-						if (left < 16) left = Math.max(16, (window.innerWidth - cardWidth) / 2);
-						setCardPos({ top, left });
-					};
-					updatePosition();
-					window.addEventListener("resize", updatePosition);
-					return () => window.removeEventListener("resize", updatePosition);
-				}, [request]);
-
-				(0, react.useEffect)(() => {
-					if (request === null) return;
-					cancelBtnRef.current?.focus();
-				}, [request]);
-
-				if (!request) return null;
-
-				const close = () => {
-					if (moving) return;
-					setError(null);
-					publishMoveTarget(null);
-				};
-
-				const confirm = async () => {
-					if (moving || !selectedWorkspaceId) return;
-					setMoving(true);
-					setError(null);
-					try {
-						await moveSession(request.sessionId, selectedWorkspaceId);
-						publishMoveTarget(null);
-					} catch (err) {
-						setError(err instanceof Error ? err.message : String(err));
-					} finally {
-						setMoving(false);
-					}
-				};
-
-				return (0, react_jsx_runtime.jsxs)("div", {
-					className: "dsham_sidebarCardRoot",
-					children: [
-						(0, react_jsx_runtime.jsx)("div", {
-							className: "dsham_sidebarCardBackdrop",
-							onClick: close,
-						}),
-						(0, react_jsx_runtime.jsxs)("div", {
-							ref: cardRef,
-							role: "dialog",
-							"aria-modal": true,
-							"aria-label": t("moveSession.title"),
-							tabIndex: -1,
-							className: "dsham_sidebarCard",
-							style: cardPos ? { top: cardPos.top, left: cardPos.left, width: 320, visibility: "visible" } : { visibility: "hidden", top: 0, left: 0 },
-							children: [
-								(0, react_jsx_runtime.jsx)("h3", {
-									className: "dsham_sidebarCardTitle",
-									children: t("moveSession.title"),
-								}),
-								(0, react_jsx_runtime.jsx)("p", {
-									className: "dsham_sidebarCardDesc",
-									children: t("moveSession.desc", { name: request.title }),
-								}),
-								(0, react_jsx_runtime.jsx)("p", {
-									className: "dsham_sidebarCardDesc",
-									style: { fontSize: "12px", opacity: 0.8 },
-									children: t("moveSession.warning"),
-								}),
-								candidates.length === 0 ? (
-									(0, react_jsx_runtime.jsx)("p", {
-										className: "dsham_sidebarCardDesc",
-										children: t("moveSession.noOtherWorkspaces"),
-									})
-								) : (
-									(0, react_jsx_runtime.jsx)("div", {
-										style: { margin: "10px 0" },
-										children: (0, react_jsx_runtime.jsx)("select", {
-											className: "dsham_menuSelectBtn",
-											style: { width: "100%", height: "32px", boxSizing: "border-box" },
-											value: selectedWorkspaceId,
-											disabled: moving,
-											onChange: (e) => setSelectedWorkspaceId(e.target.value),
-											children: candidates.map((cand) => (
-												(0, react_jsx_runtime.jsx)("option", {
-													value: cand.workspaceId,
-													children: cand.title || cand.workspaceId,
-												}, cand.workspaceId)
-											)),
-										}),
-									})
-								),
-								error !== null && (0, react_jsx_runtime.jsx)("div", {
-									className: "dsham_sidebarCardError",
-									role: "alert",
-									children: error,
-								}),
-								(0, react_jsx_runtime.jsxs)("div", {
-									className: "dsham_sidebarCardFooter",
-									children: [
-										(0, react_jsx_runtime.jsx)("button", {
-											ref: cancelBtnRef,
-											type: "button",
-											className: "dsham_sidebarCardBtn dsham_sidebarCardBtnCancel",
-											disabled: moving,
-											onClick: close,
-											children: t("cancel"),
-										}),
-										(0, react_jsx_runtime.jsx)("button", {
-											ref: confirmBtnRef,
-											type: "button",
-											className: "dsham_sidebarCardBtn dsham_sidebarCardBtnConfirm",
-											disabled: moving || candidates.length === 0 || !selectedWorkspaceId,
-											onClick: confirm,
-											children: moving ? t("moveSession.pending") : t("moveSession.confirm"),
-										}),
-									],
-								}),
-							],
-						}),
-					],
-				});
 			}
 			function focusWorkspaceRow(workspaceId: string) {
 				try {
@@ -4189,12 +4130,13 @@ export function startArchiveClient(require: HostRequire) {
 						const archiveWrap = document.createElement("div");
 						archiveWrap.className = deleteWrap.className;
 
+						const cleanItemClassName = normalItem.className.split(/\s+/).filter((name) => !/(?:^|[_-])danger(?:$|[_-])/i.test(name)).join(" ");
 						const archiveBtn = document.createElement("button");
 						archiveBtn.type = "button";
 						archiveBtn.setAttribute("role", "menuitem");
 						archiveBtn.dataset.dshamArchiveWorkspace = "true";
 						// 复用普通项的类名；即使兜底项是 danger，也剔除 danger 类，避免归档项显示为危险红。
-						archiveBtn.className = normalItem.className.split(/\s+/).filter((name) => !/(?:^|[_-])danger(?:$|[_-])/i.test(name)).join(" ");
+						archiveBtn.className = cleanItemClassName;
 
 						const iconRef = normalItem.querySelector("span");
 						const labelRef = normalItem.querySelectorAll("span")[1];
@@ -4238,7 +4180,10 @@ export function startArchiveClient(require: HostRequire) {
 							copyBtn.type = "button";
 							copyBtn.setAttribute("role", "menuitem");
 							copyBtn.dataset.dshamCopyWorkspacePath = "true";
-							copyBtn.className = archiveBtn.className;
+							copyBtn.className = cleanItemClassName;
+							copyBtn.disabled = false;
+							copyBtn.style.opacity = "";
+							copyBtn.style.cursor = "";
 							const copyIcon = document.createElement("span");
 							copyIcon.setAttribute("aria-hidden", "true");
 							if (iconRef?.className) copyIcon.className = iconRef.className;
@@ -4261,7 +4206,10 @@ export function startArchiveClient(require: HostRequire) {
 							explorerBtn.type = "button";
 							explorerBtn.setAttribute("role", "menuitem");
 							explorerBtn.dataset.dshamOpenExplorer = "true";
-							explorerBtn.className = archiveBtn.className;
+							explorerBtn.className = cleanItemClassName;
+							explorerBtn.disabled = false;
+							explorerBtn.style.opacity = "";
+							explorerBtn.style.cursor = "";
 							const expIcon = document.createElement("span");
 							expIcon.setAttribute("aria-hidden", "true");
 							if (iconRef?.className) expIcon.className = iconRef.className;
@@ -4297,8 +4245,6 @@ export function startArchiveClient(require: HostRequire) {
 
 							deleteWrap.parentNode?.insertBefore(copyWrap, deleteWrap);
 							deleteWrap.parentNode?.insertBefore(explorerWrap, deleteWrap);
-							injectedItems.set(copyBtn, { workspaceId: currentWs.workspaceId });
-							injectedItems.set(explorerBtn, { workspaceId: currentWs.workspaceId });
 						}
 
 						deleteWrap.parentNode?.insertBefore(archiveWrap, deleteWrap);
@@ -4347,7 +4293,6 @@ export function startArchiveClient(require: HostRequire) {
 			let disposeMoveMenu: (() => void) | undefined;
 			let disposeDialog: (() => void) | undefined;
 			let disposeArchiveDialog: (() => void) | undefined;
-			let disposeMoveDialog: (() => void) | undefined;
 			/** 支持的宿主都声明了会话菜单插槽。插槽还没出现时只等待，不再盖掉官方侧栏。 */
 			const reconcileSidebar = () => {
 				const next = hostSidebarDeclaresSessionMenu() ? "menu" : "waiting";
@@ -4387,12 +4332,6 @@ export function startArchiveClient(require: HostRequire) {
 						locale: NS,
 						inject: () => ({ t: ctx.locale.bind(NS) })
 					}, ArchiveWorkspaceOverlay));
-				disposeMoveDialog ??= ctx.slots.inject("shell.overlay", () => ctx.slots.register({
-						name: "shell.overlay",
-						id: "archive-manager.move-session",
-						locale: NS,
-						inject: () => ({ t: ctx.locale.bind(NS) })
-					}, MoveSessionOverlay));
 			};
 			reconcileSidebar();
 			ctx.effect(() => setupWorkspaceMenuInjector(ctx.locale.bind(NS)), "archive-manager: workspace menu injector");
@@ -4409,7 +4348,6 @@ export function startArchiveClient(require: HostRequire) {
 				disposeMoveMenu?.();
 				disposeDialog?.();
 				disposeArchiveDialog?.();
-				disposeMoveDialog?.();
 			}, "archive-manager: sidebar mode");
 
 			const buildArchivedSectionProps = () => ({
