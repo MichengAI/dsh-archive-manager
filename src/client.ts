@@ -406,10 +406,21 @@ export function startArchiveClient(require: HostRequire) {
 				? '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="' + STAR_PATH + '"/></svg>'
 				: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><path d="' + STAR_PATH + '"/></svg>';
 		}
+		/**
+		 * 检测会话前导插槽内是否包含非空闲的活跃状态指示器（如运行中 spinner 或审批警告点）。
+		 * 宿主在 primaryStatus.state !== "idle" 时会在前导格渲染带 [data-state] 属性的 StateDot。
+		 */
+		function resolveRowHasStatus(cell: Element | null): boolean {
+			return Boolean(cell?.querySelector("[data-state]"));
+		}
 		const ROW_FAVORITE_CSS = "[data-row-key^='session:']{position:relative}"
 			+ ".dsham_starSlot{display:none;position:absolute;left:calc(8px + var(--dsh-workspace-indent,0px));inset-inline-start:calc(8px + var(--dsh-workspace-indent,0px));top:50%;transform:translateY(-50%);align-items:center;justify-content:center;box-sizing:border-box;width:16px;height:20px;z-index:1;pointer-events:none}"
 			+ "[data-row-key^='session:']:hover .dsham_starSlot,.dsham_starSlot[data-favorited='true']{display:inline-flex;pointer-events:auto}"
-			+ "[data-row-key^='session:']:hover>span:first-child,[data-row-key^='session:'][data-dsham-favorited='true']>span:first-child{opacity:0}"
+			+ "[data-row-key^='session:']:hover>span:first-child:not(:has([data-state])),[data-row-key^='session:'][data-dsham-favorited='true']:not([data-dsham-has-status='true'])>span:first-child:not(:has([data-state])){opacity:0}"
+			+ "[data-row-key^='session:'][data-dsham-has-status='true']>span:first-child,[data-row-key^='session:']>span:first-child:has([data-state]){opacity:1}"
+			+ "[data-row-key^='session:'][data-dsham-has-status='true'] .dsham_starSlot,[data-row-key^='session:']:has(>span:first-child [data-state]) .dsham_starSlot{width:10px;height:10px;top:auto;bottom:3px;left:calc(15px + var(--dsh-workspace-indent,0px));inset-inline-start:calc(15px + var(--dsh-workspace-indent,0px));transform:none}"
+			+ "[data-row-key^='session:'][data-dsham-has-status='true'] .dsham_rowStar,[data-row-key^='session:']:has(>span:first-child [data-state]) .dsham_rowStar{width:10px;height:10px}"
+			+ "[data-row-key^='session:'][data-dsham-has-status='true'] .dsham_rowStar svg,[data-row-key^='session:']:has(>span:first-child [data-state]) .dsham_rowStar svg{width:10px;height:10px;filter:drop-shadow(0 0 1px rgba(0,0,0,0.85))}"
 			+ ".dsham_rowStar{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:16px;height:16px;padding:0;border:0;background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer;flex:none;border-radius:var(--dsw-radius-xs,4px)}"
 			+ ".dsham_starSlot[data-favorited='true'] .dsham_rowStar{color:#e8b931}"
 			+ ".dsham_rowStar svg{display:block;width:16px;height:16px;flex:none}";
@@ -517,11 +528,15 @@ export function startArchiveClient(require: HostRequire) {
 					if (!key.startsWith("session:")) continue;
 					const sessionId = key.slice("session:".length);
 					const cell = Array.from(row.children).find((child) => child.tagName === "SPAN" && Array.from(child.classList).some((name) => name === "slot" || name.endsWith("_slot"))) ?? null;
-					if (cell === null) continue;
+					if (cell === null) {
+						row.removeAttribute("data-dsham-has-status");
+						continue;
+					}
 					let holder = Array.from(row.children).find((child): child is HTMLElement => child.classList.contains(ROW_STAR_SLOT_CLASS)) ?? null;
 					if (!snapshot.ready) {
 						holder?.remove();
 						row.removeAttribute("data-dsham-favorited");
+						row.removeAttribute("data-dsham-has-status");
 						continue;
 					}
 					if (holder !== null && (holder.parentElement !== row || holder.nextElementSibling !== null)) {
@@ -533,6 +548,9 @@ export function startArchiveClient(require: HostRequire) {
 						row.appendChild(holder);
 					}
 					holder.dataset.sessionId = sessionId;
+					const hasStatus = resolveRowHasStatus(cell);
+					if (hasStatus) row.setAttribute("data-dsham-has-status", "true");
+					else row.removeAttribute("data-dsham-has-status");
 					let star = holder.querySelector<HTMLButtonElement>("." + ROW_STAR_CLASS);
 					if (star === null) {
 						star = document.createElement("button");
@@ -706,6 +724,7 @@ export function startArchiveClient(require: HostRequire) {
 					for (const button of Array.from(document.querySelectorAll<HTMLElement>("[" + FAVORITES_ONLY_MARKER + "]"))) button.parentElement?.remove();
 					for (const star of Array.from(document.querySelectorAll<HTMLElement>("." + ROW_STAR_SLOT_CLASS))) star.remove();
 					for (const row of Array.from(document.querySelectorAll<HTMLElement>("[data-dsham-favorited]"))) row.removeAttribute("data-dsham-favorited");
+					for (const row of Array.from(document.querySelectorAll<HTMLElement>("[data-dsham-has-status]"))) row.removeAttribute("data-dsham-has-status");
 					if (retryTimer !== null) { clearTimeout(retryTimer); retryTimer = null; }
 				},
 			};
@@ -2120,7 +2139,13 @@ export function startArchiveClient(require: HostRequire) {
 			const wanted = String(label ?? "").trim();
 			return wanted.length > 0 && String(rowText ?? "").trim() === wanted;
 		}
-		/** 判断变更批次是否触及指定选择器（含其后代），避免流式输出时每帧全量扫描。 */
+		interface TouchCandidate {
+			nodeType?: number;
+			matches?(selector: string): boolean;
+			querySelector?(selector: string): unknown;
+			closest?(selector: string): unknown;
+		}
+		/** 判断变更批次是否触及指定选择器（含其后代与祖先容器），避免流式输出时每帧全量扫描。 */
 		function mutationTouches(records: readonly MutationRecord[], selector: string): boolean {
 			for (const record of records) {
 				if (record.type === "characterData") {
@@ -2128,10 +2153,28 @@ export function startArchiveClient(require: HostRequire) {
 					if (parent !== null && parent.closest(selector) !== null) return true;
 					continue;
 				}
-				for (const node of record.addedNodes) {
-					if (node.nodeType !== 1) continue;
-					const element = node as Element;
-					if (element.matches(selector) || element.querySelector(selector) !== null || element.closest(selector) !== null) return true;
+				const target = record.target as unknown as TouchCandidate | null;
+				if (target && target.nodeType === 1) {
+					if (typeof target.matches === "function" && target.matches(selector)) return true;
+					if (typeof target.closest === "function" && target.closest(selector) !== null) return true;
+				}
+				if (record.addedNodes) {
+					for (const node of record.addedNodes) {
+						if (node.nodeType !== 1) continue;
+						const element = node as unknown as TouchCandidate;
+						if (typeof element.matches === "function" && element.matches(selector)) return true;
+						if (typeof element.querySelector === "function" && element.querySelector(selector) !== null) return true;
+						if (typeof element.closest === "function" && element.closest(selector) !== null) return true;
+					}
+				}
+				if (record.removedNodes) {
+					for (const node of record.removedNodes) {
+						if (node.nodeType !== 1) continue;
+						const element = node as unknown as TouchCandidate;
+						if (typeof element.matches === "function" && element.matches(selector)) return true;
+						if (typeof element.querySelector === "function" && element.querySelector(selector) !== null) return true;
+						if (typeof element.closest === "function" && element.closest(selector) !== null) return true;
+					}
 				}
 			}
 			return false;
@@ -4650,6 +4693,7 @@ export function startArchiveClient(require: HostRequire) {
 			restoreSettingsNavIcon,
 			installSettingsNavIcon,
 			mutationTouches,
+			resolveRowHasStatus,
 			activeSessionActivity,
 			activeSessionRefusal,
 			activeArchiveFromMessage,

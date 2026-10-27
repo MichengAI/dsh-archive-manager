@@ -4,6 +4,13 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 1.1.18 - 2026-10-27
+
+- Fix conflict where sidebar favorite star covers native session status dots (#92):
+  - Ensures host primary status dots (e.g. running spinner and waiting approval dots) remain fully visible during active states and are no longer faded out on hover.
+  - When a starred session is active, the star badge adapts into a 10px icon in the bottom-right corner with a subtle drop shadow, allowing both status progress and favorite state to coexist cleanly.
+  - Automatically restores the star to its standard 16×16px centered position as soon as the session returns to idle.
+
 ## 1.1.17 - 2026-10-27
 
 - Full-row right-click context menu support in sidebar:
