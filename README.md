@@ -19,7 +19,7 @@
 
 > DSH Archive Manager is a community-maintained DeepSeek Harness (DSH) plugin, not an official DeepSeek AI product.
 
-This document describes **1.1.10**. See [Changelog](CHANGELOG.md) for published releases.
+This document describes **1.1.17**. See [Changelog](CHANGELOG.md) for published releases.
 
 ## Overview
 
@@ -27,11 +27,18 @@ Put inactive conversations away and find them again when needed, keeping everyda
 
 - **Dual views & primary sidebar entry**: Toggleable persistent icon on the host's primary sidebar opens a **960px centered workspace view** for both Archived and Unarchived sessions, eliminating narrow dialog scrolling constraints.
 - **Full lifecycle session management**: Archive individual chats, all chats in a workspace, cross-project batches, and restore or open sessions seamlessly.
+- **Full-row sidebar right-click actions**: Right-click directly anywhere on sidebar workspace or session rows to trigger dedicated actions menus; passes through native system context menus on ungrouped or blank rows without accidental clicks.
+- **Zero-jitter star alignment (#90)**: Standardizes favorite stars to 16×16px size and overlays the host leading slot via absolute positioning, eliminating horizontal title jitter and custom skin conflicts (such as orca-link).
+- **Workspace quick action menu**: Provides fast "Copy folder path", "Open folder" (directly opens in Windows Explorer or macOS Finder), and one-click "Archive sessions" in the sidebar workspace menu.
+- **Move session across workspaces**: Move conversations across project workspaces via a cascading hover submenu with process quiescence, atomic rewriting, instant projection pre-warming, and NTFS colon-safety for IM sessions.
+- **Unified accordion cards & 40px ultra-compact rows**: Unifies workspace groups with Skills Manager-style integrated drawer cards (38px header); compacts session row height to 40px for doubled information density.
+- **Host-native dark mode checkboxes**: Reverts checkbox styling strictly to host primitive Checkbox specifications using native `accent-color`, perfectly blending with dark backgrounds and brand blue checked states.
+- **Anti-bleedthrough modals & localized accessibility**: Mounts wide preview dialogs directly to body (`portalToBody`) with solid backing and frosted blur to prevent text bleedthrough; adds comprehensive trilingual close button accessibility labels (`common.close`).
+- **Standardized section ID & coexistence compatibility (#91)**: Section ID updated to `archive-manager` with runtime fail-soft `try/catch` protection, ensuring smooth coexistence with third-party archive plugins.
 - **Clean single-line adaptive toolbar**: Uses the host's native `Input` primitive with an official search icon and glowing green focus border, flexibly expanding to fill remaining width; arranged as search input, view filter/sort menu, project filter, and date range in a clean single line with strict box-model boundaries.
 - **Unified full-text search & Codex composite menu**: Search automatically covers both conversation titles and body history (including user and assistant messages) by default; consolidates session filtering (all / favorites only) and sorting into a two-section Codex-style menu with native checkmarks.
 - **Lightweight DateRange capsule & calendar popover**: Completely replaces the native date input to eliminate dark-mode inversion and focus loss (#74); displays the selected range in a single line with a dedicated clear button; supports quick presets, localized English/Chinese/Russian typography, and full WAI-ARIA keyboard navigation (arrows, Home/End, PageUp/Down with month-end clamping) with real-time range stretch preview.
 - **Automated idle session cleanup**: Specify an idle threshold in days to discover inactive chats, automatically protecting running tasks, interactive prompts, and starred items, with instant undo support.
-- **Native workspace menu integration**: Securely injects an **Archive session** action into the sidebar workspace `...` menu, anchoring an in-place frosted glass confirmation modal following the "what you see is what you archive" principle.
 - **Permanent deletion**: Thoroughly purge unwanted transcripts, cache rows, and indexes with per-item retry reporting.
 - **Orphan subagent detection & cleanup**: Automatically detect residue subagents whose parent sessions were externally deleted, displaying disk usage and enabling safe one-click reclamation.
 - **Controlled online updates & reverse proxy ready**: Features a toggleable online update switch, enterprise host-level configuration locking, and native baseURI dynamic endpoint resolution for prefix-stripping reverse proxies.
@@ -57,15 +64,31 @@ When parent sessions are deleted externally or via the host, orphaned subagents 
 
 ## Screenshots
 
-Search, favorite, preview, restore, and clean up in **Settings → Archived sessions → Archived**:
+### 1. Archive Settings Management (Accordion Cards & Dark Mode Checkboxes)
 
-![Archived: shared search filters, favorites, and restore](assets/screenshots/archived-sessions.webp)
+Search, favorite, preview, restore, and clean up in **Settings → Archived sessions → Archived** with integrated drawer cards, 40px ultra-compact rows, and native dark mode checkboxes:
 
-Switch to **Unarchived** for the same filters, idle cleanup previews, and project-wide archiving:
+![Archived: shared search filters, favorites, and compact rows](assets/screenshots/archived-sessions.webp)
 
-![Unarchived: idle cleanup and project archiving](assets/screenshots/unarchived-sessions.webp)
+Switch to **Unarchived** for smart idle cleanup suggestions, one-click archiving, and project-wide operations:
 
-*Screenshots show core functional panels, including archived session search and unarchived idle cleanup. Lossless WebP format.*
+![Unarchived: smart idle cleanup and project archiving](assets/screenshots/unarchived-sessions.webp)
+
+### 2. Centered Full-Screen Workspace Panel (Direct Sidebar Entry)
+
+With the sidebar entry enabled, open a full-featured 960px centered workspace panel directly from the main sidebar:
+
+![Main Workspace Panel: dedicated sidebar entry expanding 960px centered view](assets/screenshots/main-view-panel.webp)
+
+### 3. Native Sidebar Full-Row Right-Click & Cascading Menus
+
+Right-click directly on any workspace or session row in the primary sidebar to open context menus and cascading workspace migration submenus:
+
+| Workspace Actions (Copy/Open Folder) | Move Session Across Workspaces (Cascading Submenu) |
+| :---: | :---: |
+| ![Workspace Actions Menu](assets/screenshots/workspace-context-menu.webp) | ![Move Session Menu](assets/screenshots/session-move-menu.webp) |
+
+*Screenshots showcase the core management panels, centered workspace view, and native sidebar context menu enhancements in lossless WebP format.*
 
 ## Installation
 
