@@ -86,7 +86,7 @@ Right-click directly on any workspace or session row in the primary sidebar to o
 
 | Workspace Actions (Copy/Open Folder) | Move Session Across Workspaces (Cascading Submenu) |
 | :---: | :---: |
-| ![Workspace Actions Menu](assets/screenshots/workspace-context-menu.webp) | ![Move Session Menu](assets/screenshots/session-move-menu.webp) |
+| <img src="assets/screenshots/workspace-context-menu.webp" alt="Workspace Actions Menu" width="100%"> | <img src="assets/screenshots/session-move-menu.webp" alt="Move Session Menu" width="100%"> |
 
 *Screenshots showcase the core management panels, centered workspace view, and native sidebar context menu enhancements in lossless WebP format.*
 

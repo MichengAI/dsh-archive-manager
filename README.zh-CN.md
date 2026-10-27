@@ -90,7 +90,7 @@
 
 | 工作区快捷菜单（复制/打开目录） | 会话跨工作区移动（悬停级联） |
 | :---: | :---: |
-| ![工作区操作菜单](assets/screenshots/workspace-context-menu.webp) | ![会话移动菜单](assets/screenshots/session-move-menu.webp) |
+| <img src="assets/screenshots/workspace-context-menu.webp" alt="工作区操作菜单" width="100%"> | <img src="assets/screenshots/session-move-menu.webp" alt="会话移动菜单" width="100%"> |
 
 *截图展示核心功能面板、主工作区大视图与侧边栏原生右键增强，采用高保真无损 WebP 格式。*
 
