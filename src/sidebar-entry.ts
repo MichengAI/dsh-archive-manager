@@ -44,6 +44,9 @@ export function ArchiveBundleConfigCard(props: {
   onToggleOnlineUpdate?: (enabled: boolean) => void;
   onlineUpdateDisabled?: boolean;
   onlineUpdateLocked?: boolean;
+  sidebarFavoriteStarEnabled?: boolean;
+  onToggleSidebarFavoriteStar?: (enabled: boolean) => void;
+  sidebarFavoriteStarDisabled?: boolean;
 }) {
   ensureSidebarEntryStyle();
   const {
@@ -55,6 +58,9 @@ export function ArchiveBundleConfigCard(props: {
     onToggleOnlineUpdate,
     onlineUpdateDisabled,
     onlineUpdateLocked = false,
+    sidebarFavoriteStarEnabled = true,
+    onToggleSidebarFavoriteStar,
+    sidebarFavoriteStarDisabled,
   } = props;
 
   const rows = [
@@ -94,6 +100,23 @@ export function ArchiveBundleConfigCard(props: {
     );
   }
 
+  if (typeof onToggleSidebarFavoriteStar === "function") {
+    rows.push(
+      h("div", { key: "sidebar-favorite-star", className: "dsham_bundle_row" },
+        h("div", { className: "dsham_bundle_label_box" },
+          h("span", { className: "dsham_bundle_title" }, t("sidebar.favoriteStar.title")),
+          h("span", { className: "dsham_bundle_desc" }, t("sidebar.favoriteStar.desc"))
+        ),
+        h(PrimitiveSwitch, {
+          checked: sidebarFavoriteStarEnabled,
+          onChange: onToggleSidebarFavoriteStar,
+          label: t("sidebar.favoriteStar.toggle"),
+          disabled: sidebarFavoriteStarDisabled,
+        })
+      )
+    );
+  }
+
   return h(React.Fragment, null, rows);
 }
 
@@ -104,13 +127,17 @@ function ArchiveBundleConfigCardWrapper(props: {
   getOnlineUpdateEnabled?: () => boolean;
   setOnlineUpdate?: (next: boolean) => Promise<unknown>;
   getOnlineUpdateLocked?: () => boolean;
+  getSidebarFavoriteStarEnabled?: () => boolean;
+  setSidebarFavoriteStar?: (next: boolean) => Promise<unknown>;
   subscribe: (fn: () => void) => () => void;
 }) {
   const [enabled, setEnabled] = React.useState(props.getEnabled);
   const [onlineUpdateEnabled, setOnlineUpdateEnabled] = React.useState(props.getOnlineUpdateEnabled ? props.getOnlineUpdateEnabled : () => true);
   const [onlineUpdateLocked, setOnlineUpdateLocked] = React.useState(props.getOnlineUpdateLocked ? props.getOnlineUpdateLocked : () => false);
+  const [sidebarFavoriteStarEnabled, setSidebarFavoriteStarEnabled] = React.useState(props.getSidebarFavoriteStarEnabled ? props.getSidebarFavoriteStarEnabled : () => true);
   const [savingSidebar, setSavingSidebar] = React.useState(false);
   const [savingUpdate, setSavingUpdate] = React.useState(false);
+  const [savingFavoriteStar, setSavingFavoriteStar] = React.useState(false);
 
   React.useEffect(() => {
     const syncState = () => {
@@ -120,6 +147,9 @@ function ArchiveBundleConfigCardWrapper(props: {
       }
       if (props.getOnlineUpdateLocked) {
         setOnlineUpdateLocked(props.getOnlineUpdateLocked());
+      }
+      if (props.getSidebarFavoriteStarEnabled) {
+        setSidebarFavoriteStarEnabled(props.getSidebarFavoriteStarEnabled());
       }
     };
     syncState();
@@ -149,6 +179,18 @@ function ArchiveBundleConfigCardWrapper(props: {
     });
   } : undefined;
 
+  const onToggleSidebarFavoriteStar = props.setSidebarFavoriteStar ? (next: boolean) => {
+    setSavingFavoriteStar(true);
+    setSidebarFavoriteStarEnabled(next);
+    props.setSidebarFavoriteStar!(next).catch(() => {
+      if (props.getSidebarFavoriteStarEnabled) {
+        setSidebarFavoriteStarEnabled(props.getSidebarFavoriteStarEnabled());
+      }
+    }).finally(() => {
+      setSavingFavoriteStar(false);
+    });
+  } : undefined;
+
   return h(ArchiveBundleConfigCard, {
     t: props.t,
     enabled,
@@ -158,15 +200,19 @@ function ArchiveBundleConfigCardWrapper(props: {
     onlineUpdateDisabled: savingUpdate || onlineUpdateLocked,
     onlineUpdateLocked,
     onToggleOnlineUpdate,
+    sidebarFavoriteStarEnabled,
+    sidebarFavoriteStarDisabled: savingFavoriteStar,
+    onToggleSidebarFavoriteStar,
   });
 }
 
 export interface SetupSidebarEntryOptions {
-  callApi: (path: "/sidebar-entry" | "/online-update", options?: RequestInit) => Promise<{ enabled: boolean; locked?: boolean }>;
+  callApi: (path: "/sidebar-entry" | "/online-update" | "/sidebar-favorite-star", options?: RequestInit) => Promise<{ enabled: boolean; locked?: boolean }>;
   renderPanel: (ownerProps?: Record<string, unknown>) => React.ReactNode;
   injectProps?: () => Record<string, unknown>;
   ns: string;
   onOnlineUpdateChange?: (enabled: boolean) => void;
+  onSidebarFavoriteStarChange?: (enabled: boolean) => void;
 }
 
 export interface SidebarEntryController {
@@ -176,6 +222,8 @@ export interface SidebarEntryController {
   isOnlineUpdateEnabled(): boolean;
   isOnlineUpdateLocked(): boolean;
   setOnlineUpdate(enabled: boolean): Promise<boolean>;
+  isSidebarFavoriteStarEnabled(): boolean;
+  setSidebarFavoriteStar(enabled: boolean): Promise<boolean>;
   destroy(): void;
 }
 
@@ -192,6 +240,8 @@ export function setupSidebarEntry(
       isOnlineUpdateEnabled: () => true,
       isOnlineUpdateLocked: () => false,
       setOnlineUpdate: async () => false,
+      isSidebarFavoriteStarEnabled: () => true,
+      setSidebarFavoriteStar: async () => false,
       destroy: () => {},
     };
   }
@@ -332,6 +382,36 @@ export function setupSidebarEntry(
     }
   };
 
+  let sidebarFavoriteStarEnabled = true;
+  let favoriteStarEpoch = 0;
+
+  const setSidebarFavoriteStar = async (next: boolean): Promise<boolean> => {
+    if (destroyed) return sidebarFavoriteStarEnabled;
+    const currentEpoch = ++favoriteStarEpoch;
+    sidebarFavoriteStarEnabled = next;
+    notify();
+    if (typeof options.onSidebarFavoriteStarChange === "function") {
+      try { options.onSidebarFavoriteStarChange(next); } catch {}
+    }
+    try {
+      await callApi("/sidebar-favorite-star", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ enabled: next }),
+      });
+      return next;
+    } catch (err) {
+      if (currentEpoch === favoriteStarEpoch) {
+        sidebarFavoriteStarEnabled = !next;
+        notify();
+        if (typeof options.onSidebarFavoriteStarChange === "function") {
+          try { options.onSidebarFavoriteStarChange(!next); } catch {}
+        }
+      }
+      throw err;
+    }
+  };
+
   const loadEpoch = epoch;
   callApi("/sidebar-entry")
     .then((res) => {
@@ -352,6 +432,19 @@ export function setupSidebarEntry(
         notify();
         if (typeof options.onOnlineUpdateChange === "function") {
           try { options.onOnlineUpdateChange(onlineUpdateEnabled); } catch {}
+        }
+      }
+    })
+    .catch(() => {});
+
+  const loadFavoriteStarEpoch = favoriteStarEpoch;
+  callApi("/sidebar-favorite-star")
+    .then((res) => {
+      if (!destroyed && favoriteStarEpoch === loadFavoriteStarEpoch && res && typeof res.enabled === "boolean") {
+        sidebarFavoriteStarEnabled = res.enabled;
+        notify();
+        if (typeof options.onSidebarFavoriteStarChange === "function") {
+          try { options.onSidebarFavoriteStarChange(sidebarFavoriteStarEnabled); } catch {}
         }
       }
     })
@@ -402,6 +495,8 @@ export function setupSidebarEntry(
         getOnlineUpdateEnabled: () => onlineUpdateEnabled,
         setOnlineUpdate: setOnlineUpdate,
         getOnlineUpdateLocked: () => onlineUpdateLocked,
+        getSidebarFavoriteStarEnabled: () => sidebarFavoriteStarEnabled,
+        setSidebarFavoriteStar: setSidebarFavoriteStar,
         subscribe: (fn) => {
           listeners.add(fn);
           return () => { listeners.delete(fn); };
@@ -417,11 +512,14 @@ export function setupSidebarEntry(
     isOnlineUpdateEnabled: () => onlineUpdateEnabled,
     isOnlineUpdateLocked: () => onlineUpdateLocked,
     setOnlineUpdate,
+    isSidebarFavoriteStarEnabled: () => sidebarFavoriteStarEnabled,
+    setSidebarFavoriteStar,
     destroy: () => {
       if (destroyed) return;
       destroyed = true;
       epoch++;
       updateEpoch++;
+      favoriteStarEpoch++;
       layoutService = undefined;
       listeners.clear();
       unmountRow();

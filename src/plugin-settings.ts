@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 export interface ArchiveManagerSettings {
   sidebarEntry?: boolean;
   onlineUpdate?: boolean;
+  sidebarFavoriteStar?: boolean;
 }
 
 function resolveDshHome(): string {
@@ -63,21 +64,22 @@ async function replaceTextFile(file: string, next: string): Promise<void> {
 export async function readSettings(): Promise<ArchiveManagerSettings> {
   const path = managerSettingsPath();
   if (!existsSync(path)) {
-    return { sidebarEntry: false, onlineUpdate: true };
+    return { sidebarEntry: false, onlineUpdate: true, sidebarFavoriteStar: true };
   }
   try {
     const raw = await readFile(path, "utf8");
     const parsed = JSON.parse(raw) as unknown;
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return { sidebarEntry: false, onlineUpdate: true };
+      return { sidebarEntry: false, onlineUpdate: true, sidebarFavoriteStar: true };
     }
     const item = parsed as Record<string, unknown>;
     return {
       sidebarEntry: typeof item.sidebarEntry === "boolean" ? item.sidebarEntry : false,
       onlineUpdate: typeof item.onlineUpdate === "boolean" ? item.onlineUpdate : true,
+      sidebarFavoriteStar: typeof item.sidebarFavoriteStar === "boolean" ? item.sidebarFavoriteStar : true,
     };
   } catch {
-    return { sidebarEntry: false, onlineUpdate: true };
+    return { sidebarEntry: false, onlineUpdate: true, sidebarFavoriteStar: true };
   }
 }
 
@@ -116,6 +118,23 @@ export async function setOnlineUpdate(enabled: boolean): Promise<boolean> {
   return enqueueWrite(async () => {
     const current = await readSettings();
     current.onlineUpdate = enabled;
+    await writeSettings(current);
+    return enabled;
+  });
+}
+
+export async function getSidebarFavoriteStar(): Promise<boolean> {
+  const current = await readSettings();
+  return current.sidebarFavoriteStar !== false;
+}
+
+export async function setSidebarFavoriteStar(enabled: boolean): Promise<boolean> {
+  if (typeof enabled !== "boolean") {
+    throw new TypeError("sidebarFavoriteStar must be a boolean");
+  }
+  return enqueueWrite(async () => {
+    const current = await readSettings();
+    current.sidebarFavoriteStar = enabled;
     await writeSettings(current);
     return enabled;
   });

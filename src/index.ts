@@ -8,7 +8,7 @@ import type { Context } from "@deepseek-ai/cordis";
  * 不再另插一条可以单独停用的 host 行。浏览器端由 package.json 的
  * `dsh.client` 声明发现，对应同一个插件入口。
  */
-import { getOnlineUpdate, getSidebarEntry, setOnlineUpdate, setSidebarEntry } from "./plugin-settings.js";
+import { getOnlineUpdate, getSidebarEntry, getSidebarFavoriteStar, setOnlineUpdate, setSidebarEntry, setSidebarFavoriteStar } from "./plugin-settings.js";
 import { isTrustedUpdateRequest, rawService, registerPluginUpdater, releaseUpdateRoute } from "./plugin-updater.js";
 import { apply as installHost, inject as hostInject } from "./host-install.js";
 import { authorizeExplorerPath } from "./explorer-path-policy.js";
@@ -23,6 +23,7 @@ const inject = ["webServer", ...hostInject];
 
 const SIDEBAR_ENTRY_ENDPOINT = "/api/michengai/dsh-archive-manager/sidebar-entry";
 const ONLINE_UPDATE_ENDPOINT = "/api/michengai/dsh-archive-manager/online-update";
+const SIDEBAR_FAVORITE_STAR_ENDPOINT = "/api/michengai/dsh-archive-manager/sidebar-favorite-star";
 const OPEN_IN_EXPLORER_ENDPOINT = "/api/michengai/dsh-archive-manager/open-in-explorer";
 
 function sendJson(response: ServerResponse, statusCode: number, value: unknown) {
@@ -57,6 +58,7 @@ function registerSettingsRoutes(ctx: Context, hostUpdateDisabled: boolean): () =
 	const server = rawService(ctx.webServer as object);
 	releaseUpdateRoute(server, SIDEBAR_ENTRY_ENDPOINT);
 	releaseUpdateRoute(server, ONLINE_UPDATE_ENDPOINT);
+	releaseUpdateRoute(server, SIDEBAR_FAVORITE_STAR_ENDPOINT);
 	releaseUpdateRoute(server, OPEN_IN_EXPLORER_ENDPOINT);
 
 	const disposeSidebar = ctx.webServer.register({
@@ -79,6 +81,34 @@ function registerSettingsRoutes(ctx: Context, hostUpdateDisabled: boolean): () =
 					return;
 				}
 				const enabled = await setSidebarEntry(body.enabled);
+				sendJson(response, 200, { ok: true, enabled });
+				return;
+			}
+			response.writeHead(405, { allow: "GET, HEAD, POST" });
+			response.end();
+		},
+	});
+
+	const disposeFavoriteStar = ctx.webServer.register({
+		kind: "exact",
+		path: SIDEBAR_FAVORITE_STAR_ENDPOINT,
+		handler: async (request: IncomingMessage, response: ServerResponse) => {
+			if (request.method === "GET" || request.method === "HEAD") {
+				const enabled = await getSidebarFavoriteStar();
+				sendJson(response, 200, { ok: true, enabled });
+				return;
+			}
+			if (request.method === "POST") {
+				if (!isTrustedUpdateRequest(request)) {
+					sendJson(response, 403, { ok: false, error: "已拒绝非本机同源请求。" });
+					return;
+				}
+				const body = await readJsonBody(request);
+				if (!body || typeof body.enabled !== "boolean") {
+					sendJson(response, 400, { ok: false, error: "enabled 必须是布尔值" });
+					return;
+				}
+				const enabled = await setSidebarFavoriteStar(body.enabled);
 				sendJson(response, 200, { ok: true, enabled });
 				return;
 			}
@@ -153,6 +183,7 @@ function registerSettingsRoutes(ctx: Context, hostUpdateDisabled: boolean): () =
 
 	return () => {
 		try { disposeSidebar(); } catch {}
+		try { disposeFavoriteStar(); } catch {}
 		try { disposeUpdate(); } catch {}
 		try { disposeOpenExplorer(); } catch {}
 	};
@@ -197,4 +228,4 @@ async function apply(ctx: Context, config?: PluginConfig) {
 	};
 }
 //#endregion
-export { apply, inject, registerSettingsRoutes, OPEN_IN_EXPLORER_ENDPOINT };
+export { apply, inject, registerSettingsRoutes, OPEN_IN_EXPLORER_ENDPOINT, SIDEBAR_FAVORITE_STAR_ENDPOINT };

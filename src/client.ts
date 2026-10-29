@@ -373,6 +373,11 @@ export function startArchiveClient(require: HostRequire) {
 			tag.textContent = css;
 			document.head.appendChild(tag);
 		}
+		function removePluginStyle(name: string) {
+			if (typeof document === "undefined") return;
+			const tag = document.querySelector("style[data-plugin-css=" + JSON.stringify(name) + "]");
+			tag?.remove();
+		}
 		/** 危险操作确认按钮统一红色描边。宿主哈希类名随版本变，不再引用。 */
 		const DANGER_BUTTON_CSS = ".dsham_btnDanger:not(:disabled){color:var(--dsw-alias-state-error-primary,#ef7272);border-color:var(--dsw-alias-state-error-primary,#ef7272)}";
 		ensurePluginStyle("dsh-archive-manager/DangerButton.css", DANGER_BUTTON_CSS);
@@ -504,12 +509,34 @@ export function startArchiveClient(require: HostRequire) {
 		 * @param t - 本插件命名空间的文案。
 		 * @returns 开关状态、订阅与销毁句柄。
 		 */
-		function setupWorkspaceFavoritesOnly(ctx: ClientContext, favoriteRow: FavoriteRowStore, translate: () => Translate) {
-			const noop = { dispose: () => {} };
+		function setupWorkspaceFavoritesOnly(ctx: ClientContext, favoriteRow: FavoriteRowStore, translate: () => Translate, getStarEnabled?: () => boolean) {
+			const noop = { dispose: () => {}, setFavoriteStarEnabled: (_: boolean) => {}, isFavoriteStarEnabled: () => true };
 			if (typeof document === "undefined" || typeof document.addEventListener !== "function" || typeof MutationObserver === "undefined") return noop;
 			let enabled = readWorkspaceFavoritesOnly();
+			let starEnabled = typeof getStarEnabled === "function" ? getStarEnabled() : true;
 			let disposed = false;
 			let passQueued = false;
+			const updateStarStyle = () => {
+				if (starEnabled) {
+					ensurePluginStyle("dsh-archive-manager/RowFavorite.css", ROW_FAVORITE_CSS);
+				} else {
+					removePluginStyle("dsh-archive-manager/RowFavorite.css");
+				}
+			};
+			updateStarStyle();
+			const onStarToggle = (event: Event) => {
+				const custom = event as CustomEvent<{ enabled?: boolean }>;
+				if (typeof custom?.detail?.enabled === "boolean") {
+					starEnabled = custom.detail.enabled;
+				} else if (typeof getStarEnabled === "function") {
+					starEnabled = getStarEnabled();
+				}
+				updateStarStyle();
+				schedulePass();
+			};
+			if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+				window.addEventListener("dsham-favorite-star-toggle", onStarToggle);
+			}
 			/** 每次筛选最多点开多少组折叠：点一次宿主只展开 5 条，超大组需要多轮，这里兜住失控。 */
 			let expansionClicks = 0;
 			const MAX_EXPANSION_CLICKS = 200;
@@ -522,6 +549,15 @@ export function startArchiveClient(require: HostRequire) {
 			 * 已收藏或悬停本行时容器出现，星在里面常驻，尺寸始终一致。
 			 */
 			const ensureRowStars = (rows: readonly HTMLElement[]) => {
+				if (!starEnabled) {
+					for (const row of rows) {
+						const holder = Array.from(row.children).find((child): child is HTMLElement => child.classList.contains(ROW_STAR_SLOT_CLASS));
+						holder?.remove();
+						row.removeAttribute("data-dsham-favorited");
+						row.removeAttribute("data-dsham-has-status");
+					}
+					return;
+				}
 				const snapshot = favoriteRow.getSnapshot();
 				for (const row of rows) {
 					const key = row.getAttribute("data-row-key") ?? "";
@@ -718,6 +754,9 @@ export function startArchiveClient(require: HostRequire) {
 			return {
 				dispose() {
 					disposed = true;
+					if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
+						window.removeEventListener("dsham-favorite-star-toggle", onStarToggle);
+					}
 					observer.disconnect();
 					for (const unsubscribe of unsubscribers) unsubscribe();
 					for (const row of Array.from(document.querySelectorAll<HTMLElement>("[" + FAVORITES_HIDDEN_ATTR + "]"))) row.removeAttribute(FAVORITES_HIDDEN_ATTR);
@@ -727,6 +766,12 @@ export function startArchiveClient(require: HostRequire) {
 					for (const row of Array.from(document.querySelectorAll<HTMLElement>("[data-dsham-has-status]"))) row.removeAttribute("data-dsham-has-status");
 					if (retryTimer !== null) { clearTimeout(retryTimer); retryTimer = null; }
 				},
+				setFavoriteStarEnabled(next: boolean) {
+					starEnabled = next;
+					updateStarStyle();
+					schedulePass();
+				},
+				isFavoriteStarEnabled: () => starEnabled,
 			};
 		}
 		/** 收藏集合在客户端只保留一份：主界面星标、归档面板和批量操作读的是同一份状态。 */
@@ -2724,6 +2769,9 @@ export function startArchiveClient(require: HostRequire) {
 			"sidebar.entry.title": "侧边栏入口",
 			"sidebar.entry.desc": "在左侧主导航栏显示归档管理器。设置里的入口不变。",
 			"sidebar.entry.toggle": "切换侧边栏入口",
+			"sidebar.favoriteStar.title": "侧栏收藏星标",
+			"sidebar.favoriteStar.desc": "在会话列表行前显示收藏星标。关闭后不显示图标，仍可通过菜单收藏和筛选。",
+			"sidebar.favoriteStar.toggle": "切换侧栏收藏星标",
 			"update.entry.title": "在线更新",
 			"update.entry.desc": "允许检查并在线安装归档管理器的新版本。关闭后隐藏更新入口。",
 			"update.entry.toggle": "切换在线更新",
@@ -2906,6 +2954,9 @@ export function startArchiveClient(require: HostRequire) {
 			"sidebar.entry.title": "Sidebar entry",
 			"sidebar.entry.desc": "Show Archived Sessions in the left sidebar. The Settings entry stays either way.",
 			"sidebar.entry.toggle": "Toggle sidebar entry",
+			"sidebar.favoriteStar.title": "Sidebar favorite star",
+			"sidebar.favoriteStar.desc": "Show favorite star on session rows in the sidebar. When disabled, the star is hidden while menu actions and filters stay available.",
+			"sidebar.favoriteStar.toggle": "Toggle sidebar favorite star",
 			"update.entry.title": "Online updates",
 			"update.entry.desc": "Allow checking and installing new versions online. Hides the update entry when disabled.",
 			"update.entry.toggle": "Toggle online updates",
@@ -3087,6 +3138,9 @@ export function startArchiveClient(require: HostRequire) {
 			"sidebar.entry.title": "Пункт боковой панели",
 			"sidebar.entry.desc": "Показывать архив сессий на левой панели. Пункт в настройках сохраняется.",
 			"sidebar.entry.toggle": "Переключить пункт боковой панели",
+			"sidebar.favoriteStar.title": "Звезда избранного в боковой панели",
+			"sidebar.favoriteStar.desc": "Отображать звезду избранного у строк сессий в боковой панели. При отключении значок скрывается, а добавление через меню и фильтрация остаются доступными.",
+			"sidebar.favoriteStar.toggle": "Переключить звезду избранного в боковой панели",
 			"update.entry.title": "Онлайн-обновление",
 			"update.entry.desc": "Разрешить проверку и установку обновлений онлайн. Скрывает пункт обновления при отключении.",
 			"update.entry.toggle": "Переключить онлайн-обновление",
@@ -3436,8 +3490,9 @@ export function startArchiveClient(require: HostRequire) {
             /** 主界面星标与归档面板共用的收藏存储；读写仍然回到上面两个注册表方法。 */
             const favoriteRowStore = createFavoriteRowStore();
             favoriteRowStore.bind({ favoriteSessions, setSessionFavorite });
+            let sidebarController: ReturnType<typeof setupSidebarEntry> | undefined;
             /** 视图选项里的「只看收藏」开关：状态存本地，可见性每次重算。 */
-            const favoritesOnly = setupWorkspaceFavoritesOnly(ctx, favoriteRowStore, () => ctx.locale.bind(NS));
+            const favoritesOnly = setupWorkspaceFavoritesOnly(ctx, favoriteRowStore, () => ctx.locale.bind(NS), () => sidebarController?.isSidebarFavoriteStarEnabled() ?? true);
             ctx.effect(() => () => favoritesOnly.dispose(), "archive-manager: favorites only filter");
             const organizeBatch = createSessionOrganizer({
 				workspaces: ctx.workspaces.list, sessions: ctx.sessions.list,
@@ -4599,7 +4654,7 @@ export function startArchiveClient(require: HostRequire) {
 				t: ctx.locale.bind(NS)
 			});
 
-			const callSettingsApi = async (path: "/sidebar-entry" | "/online-update" | "/open-in-explorer", options?: RequestInit) => {
+			const callSettingsApi = async (path: "/sidebar-entry" | "/online-update" | "/sidebar-favorite-star" | "/open-in-explorer", options?: RequestInit) => {
 				const targetUrl = resolveApiUrl(`/api/michengai/dsh-archive-manager${path}`);
 				const reqHeaders = Object.assign({
 					"content-type": "application/json",
@@ -4613,7 +4668,7 @@ export function startArchiveClient(require: HostRequire) {
 				return data;
 			};
 
-			const sidebarController = setupSidebarEntry(ctx, {
+			sidebarController = setupSidebarEntry(ctx, {
 				callApi: callSettingsApi,
 				renderPanel: (ownerProps) => (0, react_jsx_runtime.jsx)(ArchivedSessionsSection, Object.assign({}, buildArchivedSectionProps(), ownerProps)),
 				injectProps: buildArchivedSectionProps,
@@ -4621,8 +4676,11 @@ export function startArchiveClient(require: HostRequire) {
 				onOnlineUpdateChange: () => {
 					if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("dsham-update-toggle"));
 				},
+				onSidebarFavoriteStarChange: (enabled: boolean) => {
+					if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("dsham-favorite-star-toggle", { detail: { enabled } }));
+				},
 			});
-			ctx.effect(() => () => sidebarController.destroy(), "archive-manager: sidebar entry");
+			ctx.effect(() => () => sidebarController?.destroy(), "archive-manager: sidebar entry");
 
 			ctx.effect(() => observePluginUpdate({
 				endpoint: "/api/michengai/dsh-archive-manager/update",
@@ -4710,6 +4768,7 @@ export function startArchiveClient(require: HostRequire) {
 			ARCHIVE_MANAGER_REMOTE,
 			currentSessionId,
 			setupSidebarEntry,
+			setupWorkspaceFavoritesOnly,
 		};
 		exports.apply = apply;
 		exports.inject = inject;
