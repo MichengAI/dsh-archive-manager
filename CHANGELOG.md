@@ -4,6 +4,13 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 1.1.19 - 2026-10-29
+
+- Add toggle to hide sidebar favorite star (#99):
+  - Provides a "Sidebar favorite star" switch on the plugin detail card (**Settings → Plugins → Archive Manager**), enabled by default.
+  - When disabled, completely hides the star icon on sidebar session rows, removes DOM containers, and unloads row override stylesheets. This restores the front slot to its native layout on hover, preventing conflicts with host status indicators and third-party skins like orca-link.
+  - Retains all favorite capabilities: session menu actions (Favorite / Unfavorite), the view menu's "Favorites only" filter, and archive panel favorites remain fully functional.
+
 ## 1.1.18 - 2026-10-27
 
 - Fix conflict where sidebar favorite star covers native session status dots (#92):
