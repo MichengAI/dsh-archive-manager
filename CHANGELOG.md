@@ -4,6 +4,12 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 1.1.21 - 2026-10-30
+
+- Fix failure deleting active sessions with corrupt transcripts or missing tool call IDs (#101):
+  - Resolves an issue where sessions failed mid-turn due to missing `toolCallId` or format errors (such as `SessionFormatError: format v4 tool/result requires toolCallId matching its tool source`) could not be deleted from the sidebar context menu because the host's flush barrier re-threw the corruption error.
+  - Caches live session headers prior to deletion and degrades flush barriers into fail-soft operations, ensuring write handles are detached and transcript directories/workspace memberships are cleanly purged even when transcripts are damaged.
+
 ## 1.1.20 - 2026-10-30
 
 - Remove dead legacy workspace browser code and unconsumed locales (#100):
