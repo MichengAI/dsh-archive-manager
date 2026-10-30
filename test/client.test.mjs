@@ -131,10 +131,6 @@ const noPendingInteractions = new Map();
 test("bundle materializes with apply/inject and the __test surface", () => {
 	assert.equal(typeof bundle.apply, "function");
 	assert.deepEqual(bundle.inject, ["slots", "sessions", "workspaces", "locale", "remote", "typert"]);
-	assert.equal(typeof t.sessionVisible, "function");
-	assert.equal(typeof t.deriveGroups, "function");
-	assert.equal(typeof t.deriveFlat, "function");
-	assert.equal(typeof t.deriveSearchResults, "function");
 	assert.equal(typeof t.displayTitle, "function");
 	assert.equal(typeof t.isUnknownSessionError, "function");
 	assert.equal(typeof t.isWorkspaceTaskCandidate, "function");
@@ -235,29 +231,6 @@ test("active archive refusals expose their activity kinds", () => {
 		rpcError: { code: "workspace/session-active", details: { activity: [{ kind: "subagent" }] } },
 	}), ["subagent"]);
 	assert.equal(t.activeSessionActivity(new Error("archive failed")), undefined);
-});
-
-test("legacy workspace view prefs migrate onto the archive-manager persist key", () => {
-	const storage = new Map([
-		["dsh.workspace.view.v5", JSON.stringify({ groupBy: "flat", orderBy: "title", groupExpansion: { w1: false } })],
-	]);
-	const migrated = t.migrateWorkspaceViewPersist({
-		getItem: (key) => storage.get(key) ?? null,
-		setItem: (key, value) => storage.set(key, value),
-	});
-	assert.equal(migrated, true);
-	assert.equal(
-		storage.get("dsh.archive-manager.workspace.view.v1"),
-		JSON.stringify({ groupBy: "flat", orderBy: "title", groupExpansion: { w1: false } }),
-	);
-	assert.equal(
-		t.migrateWorkspaceViewPersist({
-			getItem: (key) => storage.get(key) ?? null,
-			setItem: (key, value) => storage.set(key, value),
-		}),
-		false,
-		"already-migrated prefs must not be overwritten",
-	);
 });
 
 test("工作区归档与官方侧栏一致：保留 IM 与定时任务，排除子代理、空白和已归档会话", () => {
@@ -441,7 +414,6 @@ test("legacy forked row stylesheet is completely removed from source and build",
 test("bundle resolves the current client-store", () => {
 	assert.equal(alphaRequests.includes("@deepseek-ai/dsh-client-store"), true);
 	assert.equal(alphaRequests.includes("@deepseek-ai/dsh-client-runtime/client"), false);
-	assert.equal(typeof bundle.__test.createWorkspaceViewStore().create, "function");
 });
 
 test("manifest keeps one DSH peer range; store optional; ghost client-runtime peer removed", () => {
@@ -535,147 +507,10 @@ test("Typert remotes 同时带 create 和 schema", () => {
 	}
 });
 
-test("deriveGroups: 当前会话优先 retainedBy.mainView，没有再看 list.current", () => {
-	const view = { expandedGroups: ["w1", "w2"], showArchived: false };
-	const withCurrent = t.deriveGroups({ ...list, current: "s3" }, workspaces, [], noPendingInteractions, view);
-	assert.equal(withCurrent.find((g) => g.workspaceId === "w2").containsCurrent, false);
-	const staleCurrent = t.deriveGroups({
-		...list,
-		current: "s1",
-		byId: {
-			s1: summary("s1"),
-			s2: summary("s2"),
-			s3: summary("s3", { retainedBy: { mainView: 1 } })
-		}
-	}, workspaces, [], noPendingInteractions, view);
-	assert.equal(staleCurrent.find((g) => g.workspaceId === "w2").containsCurrent, true);
-	assert.equal(staleCurrent.find((g) => g.workspaceId === "w1").containsCurrent, false);
-	const withMainView = t.deriveGroups({
-		ids: list.ids,
-		byId: {
-			s1: summary("s1"),
-			s2: summary("s2"),
-			s3: summary("s3", { retainedBy: { mainView: 1 } })
-		}
-	}, workspaces, [], noPendingInteractions, view);
-	assert.equal(withMainView.find((g) => g.workspaceId === "w2").containsCurrent, true);
-	assert.equal(withMainView.find((g) => g.workspaceId === "w1").containsCurrent, false);
-});
-
-test("derive* 把 completionUnread 投影为完成态", () => {
-	const facts = { pending: new Map(), completed: new Set(["s1"]) };
-	const view = { expandedGroups: ["w1"], showArchived: false };
-	const groups = t.deriveGroups(list, workspaces, [], facts, view);
-	assert.equal(groups.find((g) => g.workspaceId === "w1").sessions.find((s) => s.id === "s1").completed, true);
-	const search = t.deriveSearchResults(list, workspaces, "Title", [], facts, { items: [], hasMore: false }, 50, false);
-	assert.equal(search.items.find((s) => s.id === "s1").completed, true);
-});
-
 test("displayTitle: SessionSummary 使用 displayTitle，包括未命名会话", () => {
 	assert.equal(t.displayTitle(summary("s1"), (key) => key), "Title-s1");
 	assert.equal(t.displayTitle(summary("s2", { displayTitle: "" }), (key) => key), "");
 	assert.equal(t.displayTitle({ id: "s3", blank: false }, (key) => key), "");
-});
-
-test("sessionVisible: archived hidden by default, visible with showArchived", () => {
-	const archived = new Set(["s2"]);
-	assert.equal(t.sessionVisible(summary("s1"), void 0, archived, false), true);
-	assert.equal(t.sessionVisible(summary("s2"), void 0, archived, false), false);
-	assert.equal(t.sessionVisible(summary("s2"), void 0, archived, true), true);
-	assert.equal(t.sessionVisible(summary("s2"), void 0, archived), false); // default undefined
-	assert.equal(t.sessionVisible(summary("s9", { origin: "subagent" }), void 0, archived, true), false);
-});
-
-test("deriveGroups: archived rows appear in their workspace group with the archived flag when shown", () => {
-	const archived = ["s2"];
-	const view = { expandedGroups: ["w1", "w2"], showArchived: false };
-	const hidden = t.deriveGroups(list, workspaces, archived, noPendingInteractions, view);
-	const w1 = hidden.find((g) => g.workspaceId === "w1");
-	assert.deepEqual(w1.sessions.map((s) => s.id), ["s1"]);
-	const shown = t.deriveGroups(list, workspaces, archived, noPendingInteractions, { ...view, showArchived: true });
-	const w1b = shown.find((g) => g.workspaceId === "w1");
-	assert.deepEqual(w1b.sessions.map((s) => s.id), ["s1", "s2"]);
-	assert.equal(w1b.sessions.find((s) => s.id === "s2").archived, true);
-	assert.equal(w1b.sessions.find((s) => s.id === "s1").archived, false);
-});
-
-test("deriveFlat: showArchived toggles archived rows with the flag", () => {
-	const archived = ["s2"];
-	assert.deepEqual(t.deriveFlat(list, archived, noPendingInteractions, false).map((r) => r.id).sort(), ["s1", "s3"]);
-	const rows = t.deriveFlat(list, archived, noPendingInteractions, true);
-	assert.deepEqual(rows.map((r) => r.id).sort(), ["s1", "s2", "s3"]);
-	assert.equal(rows.find((r) => r.id === "s2").archived, true);
-});
-
-test("derive* 从 ui-session 的 pendingInteractions Map 读取待处理交互", () => {
-	const pending = new Map([
-		["s1", { kind: "question" }],
-		["s2", { kind: "approval" }],
-		["s3", { kind: "unknown-kind" }]
-	]);
-	const view = { expandedGroups: ["w1", "w2"], showArchived: true };
-
-	const groups = t.deriveGroups(list, workspaces, [], pending, view);
-	assert.equal(groups.find((g) => g.workspaceId === "w1").sessions.find((s) => s.id === "s1").pendingInteraction, "question");
-
-	const flat = t.deriveFlat(list, [], pending, true);
-	assert.equal(flat.find((s) => s.id === "s2").pendingInteraction, "approval");
-	assert.equal(flat.find((s) => s.id === "s3").pendingInteraction, void 0);
-
-	const search = t.deriveSearchResults(list, workspaces, "Title", [], pending, { items: [], hasMore: false }, 50, true);
-	assert.equal(search.items.find((s) => s.id === "s1").pendingInteraction, "question");
-	assert.equal(search.items.find((s) => s.id === "s3").pendingInteraction, void 0);
-});
-
-test("deriveSearchResults: showArchived toggles archived matches with the flag", () => {
-	const archived = ["s2"];
-	const content = { items: [], hasMore: false };
-	const base = { list, workspaces, query: "Title", archivedSessionIds: archived, content, limit: 50 };
-	const hidden = t.deriveSearchResults(base.list, base.workspaces, base.query, base.archivedSessionIds, noPendingInteractions, base.content, base.limit, false);
-	assert.deepEqual(hidden.items.map((r) => r.id).sort(), ["s1", "s3"]);
-	const shown = t.deriveSearchResults(base.list, base.workspaces, base.query, base.archivedSessionIds, noPendingInteractions, base.content, base.limit, true);
-	assert.deepEqual(shown.items.map((r) => r.id).sort(), ["s1", "s2", "s3"]);
-	assert.equal(shown.items.find((r) => r.id === "s2").archived, true);
-});
-
-test("deriveSearchResults: 未分组会话按当前语言展示并可检索", () => {
-	const ungrouped = summary("ungrouped", { title: "独立会话", cwd: void 0 });
-	const listWithUngrouped = {
-		current: void 0,
-		ids: [ungrouped.id],
-		byId: { [ungrouped.id]: ungrouped }
-	};
-	const result = t.deriveSearchResults(
-		listWithUngrouped,
-		[],
-		"未分组",
-		[],
-		noPendingInteractions,
-		{ items: [], hasMore: false },
-		50,
-		false,
-		"未分组"
-	);
-
-	assert.deepEqual(result.items.map((item) => item.id), ["ungrouped"]);
-	assert.equal(result.items[0].workspace, "未分组");
-});
-
-test("view store: showArchived default false, persists toggles, same store family as groupBy/orderBy", () => {
-	const handle = t.createWorkspaceViewStore();
-	const store = handle.create(void 0);
-	assert.equal(store.getSnapshot().showArchived, false);
-	store.actions.setShowArchived(true);
-	assert.equal(store.getSnapshot().showArchived, true);
-	store.actions.setShowArchived("yes");
-	assert.equal(store.getSnapshot().showArchived, false); // coerced to boolean
-	store.actions.setShowArchived(false);
-	assert.equal(store.getSnapshot().showArchived, false);
-	// same persistence family as the existing view prefs
-	const spec = handle.spec;
-	assert.equal(spec.persist, "dsh.archive-manager.workspace.view.v1");
-	assert.equal(typeof spec.actions.setGroupBy, "function");
-	assert.equal(typeof spec.actions.setShowArchived, "function");
 });
 
 test("isUnknownSessionError recognizes the stable delete token", () => {
@@ -712,18 +547,6 @@ test("deriveArchivedGroups: 无归档会话的工作区不产出空分组", () =
 	];
 	const groups = t.deriveArchivedGroups({ s1: summary("s1") }, items, ["s1"], "未分组");
 	assert.deepEqual(groups.map((g) => g.key), ["w1"]);
-});
-
-test("indexSubagentDescendants stays local and counts uninterrupted lineage", () => {
-	const descendants = t.indexSubagentDescendants({
-		root: summary("root"),
-		child: summary("child", { origin: "subagent", parentId: "root" }),
-		grandchild: summary("grandchild", { origin: "subagent", parentId: "child", running: true }),
-		fork: summary("fork", { origin: "fork", parentId: "root", running: true })
-	});
-	assert.deepEqual(descendants.get("root"), { count: 2, runningCount: 1 });
-	assert.deepEqual(descendants.get("child"), { count: 1, runningCount: 1 });
-	assert.equal(descendants.has("fork"), false);
 });
 
 test("sortArchivedGroups: 按更新、创建或字母顺序排列项目与组内会话且不改写输入", () => {

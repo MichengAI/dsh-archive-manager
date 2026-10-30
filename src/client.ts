@@ -2,7 +2,7 @@ import type { ClientContext, Workspaces, Registry, RegistryCalls, DiscoveryMetho
 import type { ArchiveDeleteTarget } from "./client-types.js";
 import { record, errorMessage, errorCode } from "./contracts.js";
 import type { Schema } from "./contracts.js";
-import type { ClientSession, ClientList, ClientWorkspace, WorkspaceSnapshot, Observable, WorkspaceView, UiFacts, PendingHook, StatusHook, StatusMap, BatchTarget, DeletedBatch, ArchivedGroup, ArchiveProps, ArchiveBatchResult, ArchiveRetry, Translate, BatchProgress, OrganizeKind } from "./client-types.js";
+import type { ClientSession, ClientList, ClientWorkspace, WorkspaceSnapshot, Observable, UiFacts, PendingHook, StatusHook, StatusMap, BatchTarget, DeletedBatch, ArchivedGroup, ArchiveProps, ArchiveBatchResult, ArchiveRetry, Translate, BatchProgress, OrganizeKind } from "./client-types.js";
 import type { NavigationSource } from "./archive-experience.js";
 import type { RemoteResult } from "./client-compat.js";
 import type { ReactNode, RefObject, AriaAttributes, HTMLAttributes, DragEvent as ReactDragEvent } from "react";
@@ -878,109 +878,6 @@ export function startArchiveClient(require: HostRequire) {
 			};
 		}
 		//#endregion
-		//#region lib/types/client/subagent-lineage.js
-		/**
-		* Index uninterrupted subagent descendants under each ancestor.
-		* DSH 0.1.2 made this a UI-package-private projection, so the archive
-		* manager keeps the small pure helper locally instead of importing the
-		* removed client-runtime package.
-		* @param summaries - Session summaries keyed by id.
-		* @returns descendant totals keyed by possible parent id.
-		*/
-		function indexSubagentDescendants(summaries: Record<string, ClientSession>) {
-			const indexed = new Map<string, { count: number; runningCount: number }>();
-			for (const descendant of Object.values(summaries)) {
-				if (descendant.origin !== "subagent") continue;
-				const seen = /* @__PURE__ */ new Set<string>();
-				let current = descendant;
-				while (current?.origin === "subagent" && current.parentId !== void 0 && !seen.has(current.id)) {
-					seen.add(current.id);
-					const aggregate = indexed.get(current.parentId);
-					if (aggregate === void 0) indexed.set(current.parentId, {
-						count: 1,
-						runningCount: descendant.running ? 1 : 0
-					});
-					else {
-						aggregate.count += 1;
-						if (descendant.running) aggregate.runningCount += 1;
-					}
-					current = summaries[current.parentId];
-				}
-			}
-			return indexed;
-		}
-		//#endregion
-		//#region lib/types/client/stores.js
-		/**
-		* The workspace browser's viewing store: the session-list grouping mode,
-		* persisted across reloads. Module level exports the factory only (a
-		* module-level handle would pin the store identity across plugin reloads);
-		* register() receives the factory and the browser derives its PropsStore
-		* share from the return type.
-		*/
-		/** Browser-local order account for the hierarchy-free flat Session list. */
-		const FLAT_SESSION_ORDER_KEY = "__flat_session_order__";
-		/**
-		* Create the workspace browser viewing store handle.
-		* @returns the store handle (spec + type + identity + factory in one).
-		*/
-		const WORKSPACE_VIEW_PERSIST_KEY = "dsh.archive-manager.workspace.view.v1";
-		const LEGACY_WORKSPACE_VIEW_PERSIST_KEY = "dsh.workspace.view.v5";
-		/** 换键后把官方同构的分组/展开/排序偏好拷到新键；新键已有值时不覆盖。 */
-		function migrateWorkspaceViewPersist(storage?: Pick<Storage, "getItem" | "setItem">) {
-			const target = storage ?? globalThis.localStorage;
-			if (target == null || typeof target.getItem !== "function" || typeof target.setItem !== "function") return false;
-			try {
-				if (target.getItem(WORKSPACE_VIEW_PERSIST_KEY) != null) return false;
-				const legacy = target.getItem(LEGACY_WORKSPACE_VIEW_PERSIST_KEY);
-				if (legacy == null) return false;
-				target.setItem(WORKSPACE_VIEW_PERSIST_KEY, legacy);
-				return true;
-			} catch {
-				return false;
-			}
-		}
-		function createWorkspaceViewStore() {
-			migrateWorkspaceViewPersist();
-			return (0, _deepseek_ai_dsh_client_store.defineStore)({
-				init: (): WorkspaceView => ({
-					groupBy: "workspace",
-					orderBy: "updated",
-					showArchived: false,
-					groupExpansion: {},
-					sessionOrderByAccount: {},
-					sessionUpdatedAtByAccount: {}
-				}),
-				persist: WORKSPACE_VIEW_PERSIST_KEY,
-				actions: {
-					setGroupBy: (d, mode: string) => {
-						d.groupBy = mode;
-					},
-					setOrderBy: (d, mode: string) => {
-						d.orderBy = mode;
-					},
-					setShowArchived: (d, value: boolean) => {
-						d.showArchived = value === true;
-					},
-					setGroupExpanded: (d, key: string, expanded: boolean) => {
-						d.groupExpansion[key] = expanded;
-					},
-					retainAccountKeys: (d, workspaceKeys: string[]) => {
-						const retained = new Set(workspaceKeys);
-						d.groupExpansion = Object.fromEntries(Object.entries(d.groupExpansion).filter(([key]) => retained.has(key)));
-						d.sessionOrderByAccount = Object.fromEntries(Object.entries(d.sessionOrderByAccount).filter(([key]) => retained.has(key)));
-						d.sessionUpdatedAtByAccount = Object.fromEntries(Object.entries(d.sessionUpdatedAtByAccount).filter(([key]) => retained.has(key)));
-					},
-					syncSessionOrderAccount: (d, accountKey: string, order: string[], updatedAt: Record<string, number>) => {
-						d.sessionOrderByAccount[accountKey] = order;
-						d.sessionUpdatedAtByAccount[accountKey] = updatedAt;
-					},
-					setSessionOrder: (d, accountKey: string, order: string[]) => {
-						d.sessionOrderByAccount[accountKey] = order;
-					}
-				}
-			});
-		}
 		/** GitHub 品牌标识未由宿主图标库提供，内联以保持离线可用和主题适配。 */
 		function GithubMark16() {
 			return (0, react_jsx_runtime.jsx)("svg", { viewBox: "0 0 16 16", width: 16, height: 16, "aria-hidden": true, focusable: "false", children: (0, react_jsx_runtime.jsx)("path", { fill: "currentColor", d: "M8 0a8 8 0 0 0-2.53 15.59c.4.074.547-.173.547-.385 0-.19-.007-.693-.01-1.36-2.226.484-2.695-1.073-2.695-1.073-.364-.924-.89-1.17-.89-1.17-.726-.496.055-.486.055-.486.803.056 1.225.824 1.225.824.714 1.223 1.872.87 2.328.665.072-.517.28-.87.508-1.07-1.777-.202-3.645-.888-3.645-3.956 0-.874.31-1.588.823-2.148-.083-.202-.357-1.017.078-2.12 0 0 .672-.215 2.2.82A7.65 7.65 0 0 1 8 4.8c.68.003 1.365.092 2.004.27 1.527-1.035 2.197-.82 2.197-.82.437 1.103.162 1.918.08 2.12.513.56.822 1.274.822 2.148 0 3.076-1.872 3.752-3.654 3.95.288.248.544.735.544 1.482 0 1.07-.01 1.932-.01 2.195 0 .214.144.463.55.384A8.001 8.001 0 0 0 8 0Z" }) });
@@ -1636,34 +1533,6 @@ export function startArchiveClient(require: HostRequire) {
 			for (var e, t, f = 0, n = "", o = arguments.length; f < o; f++) (e = arguments[f]) && (t = r(e)) && (n && (n += " "), n += t);
 			return n;
 		}
-		/** Display label for the ungrouped bucket row. */
-		const UNGROUPED_LABEL = "Ungrouped";
-		/**
-		* Directory display label: basename of the path (both separators accepted).
-		* Ungrouped-bucket fallback for surfaces without a workspace title.
-		* @param cwd - directory path, or undefined for the ungrouped bucket.
-		* @returns basename, the raw cwd when it has no basename, or the ungrouped label.
-		*/
-		function workspaceLabel(cwd: string | undefined, ungroupedLabel = UNGROUPED_LABEL) {
-			if (cwd === void 0 || cwd === "") return ungroupedLabel;
-			const base = cwd.replace(/[/\\]+$/, "").split(/[/\\]/).pop();
-			return base !== void 0 && base !== "" ? base : cwd;
-		}
-		/** Recency comparator: newest first, id as the deterministic tiebreak (ids are unique per group). */
-		function byRecency(a: { updatedAt: number; id: string }, b: { updatedAt: number; id: string }) {
-			if (b.updatedAt !== a.updatedAt) return b.updatedAt - a.updatedAt;
-			return a.id < b.id ? -1 : 1;
-		}
-		/**
-		* Ordinary sessions are visible; among blank sessions, only the current one
-		* is visible. Subagent children use their parent header catalog. Archived
-		* sessions are hidden unless the "show archived" view toggle is on
-		* (`showArchived`); their accounting slots remain either way, so
-		* unarchiving restores position.
-		*/
-		function sessionVisible(session: ClientSession, current: string | undefined, archived: ReadonlySet<string>, showArchived: boolean) {
-			return session.origin !== "subagent" && (!archived.has(session.id) || showArchived === true) && (!session.blank || session.id === current);
-		}
 		/** 识别删除路径上“会话已不存在”的稳定标记；保留旧文案作兜底。 */
 		function isUnknownSessionError(reason: unknown) {
 			const message = reason instanceof Error ? reason.message : String(reason);
@@ -1725,68 +1594,6 @@ export function startArchiveClient(require: HostRequire) {
 		function formatForkError(reason: unknown, t: Translate) {
 			const detail = reason instanceof Error ? reason.message : String(reason);
 			return t("archives.forkFailed", { detail });
-		}
-		/**
-		* A blank session is the selected Workspace's provisional New Session row;
-		* its canonical title never enters search (blank rows are query-excluded)
-		* and the renderer localizes its display label.
-		*/
-		function sessionTitle(session: ClientSession) {
-			return session.blank ? "New Session" : session.displayTitle;
-		}
-		/** Build one group without projecting session lineage into presentation. */
-		function buildGroup(key: string, workspaceId: string | undefined, cwd: string | undefined, createdAt: number | undefined, label: string, members: readonly ClientSession[], order: string) {
-			const sessions = [...members];
-			if (order === "recency") sessions.sort(byRecency);
-			return {
-				key,
-				workspaceId,
-				cwd,
-				createdAt,
-				label,
-				sessions
-			};
-		}
-		/** Apply a stored Ungrouped order and append newly loose Sessions by recency. */
-		function orderedUngrouped(members: readonly ClientSession[], stored: readonly string[]) {
-			const byId = new Map(members.map((session) => [session.id, session]));
-			const included = /* @__PURE__ */ new Set<string>();
-			const ordered: ClientSession[] = [];
-			for (const key of stored) {
-				const session = byId.get(key);
-				if (session === void 0 || included.has(key)) continue;
-				ordered.push(session);
-				included.add(key);
-			}
-			for (const session of [...members].sort(byRecency)) {
-				if (included.has(session.id)) continue;
-				ordered.push(session);
-			}
-			return ordered;
-		}
-		/**
-		* Group Sessions by Host Workspace: one group per entity in stable Host
-		* order, with members resolved from sessionIds in their stored order. Sessions
-		* outside every Workspace trail in the browser-local Ungrouped order, which
-		* falls back to recency before that order is initialized.
-		*/
-		function groupByWorkspace(list: ClientList, workspaces: readonly ClientWorkspace[], archived: ReadonlySet<string>, ungroupedOrder: readonly string[] | undefined, showArchived: boolean) {
-			const groups = [];
-			const accounted = /* @__PURE__ */ new Set<string>();
-			for (const workspace of workspaces) {
-				const members = [];
-				for (const id of workspace.sessionIds) {
-					const summary = list.byId[id];
-					if (summary === void 0) continue;
-					accounted.add(id);
-					if (!sessionVisible(summary, currentSessionId(list), archived, showArchived)) continue;
-					members.push(summary);
-				}
-				groups.push(buildGroup(workspace.workspaceId, workspace.workspaceId, workspace.path, Date.parse(workspace.createdAt), workspace.title, members, "account"));
-			}
-			const stray = list.ids.map((id) => list.byId[id]).filter((s) => s !== void 0 && !accounted.has(s.id) && sessionVisible(s, currentSessionId(list), archived, showArchived));
-			if (stray.length > 0) groups.push(buildGroup("", void 0, void 0, void 0, UNGROUPED_LABEL, ungroupedOrder === void 0 ? stray : orderedUngrouped(stray, ungroupedOrder), ungroupedOrder === void 0 ? "recency" : "account"));
-			return groups;
 		}
 		/**
 		 * 判断会话是否属于当前工作区主任务侧栏的候选。
@@ -1894,20 +1701,6 @@ export function startArchiveClient(require: HostRequire) {
 			if (text.includes("删除工作区") || text.includes("delete workspace") || text.includes("удалить рабочее")) return true;
 			return allowDangerFallback && /(?:^|[_\s-])danger(?:$|[_\s-])/i.test(item.className);
 		}
-		/** 只把侧栏已支持的待处理交互类型交给行渲染，避免未知类型触发断言。 */
-		function visiblePendingKind(kind: string | undefined) {
-			switch (kind) {
-				case "approval":
-				case "plan-review":
-				case "question": return kind;
-				default: return;
-			}
-		}
-		function pendingInteractionForSession(session: ClientSession, pendingInteractions: Map<string, { kind: string }>) {
-			const entry = pendingInteractions.get(session.id);
-			const kind = entry === void 0 ? session.pendingInteraction : entry.kind;
-			return visiblePendingKind(kind);
-		}
 		const EMPTY_PENDING_INTERACTIONS = new Map<string, { kind: string }>();
 		const EMPTY_COMPLETED_SESSIONS = /* @__PURE__ */ new Set<string>();
 		const EMPTY_SESSION_STATUS: StatusMap = new Map();
@@ -1916,15 +1709,6 @@ export function startArchiveClient(require: HostRequire) {
 		}
 		function useEmptySessionStatus<T>(selector: (value: StatusMap) => T) {
 			return selector(EMPTY_SESSION_STATUS);
-		}
-		function pendingFacts(pendingInteractions: UiFacts | Map<string, { kind: string }> | undefined) {
-			if (pendingInteractions instanceof Map || pendingInteractions == null) {
-				return { pending: pendingInteractions ?? EMPTY_PENDING_INTERACTIONS, completed: EMPTY_COMPLETED_SESSIONS };
-			}
-			return {
-				pending: pendingInteractions.pending ?? EMPTY_PENDING_INTERACTIONS,
-				completed: pendingInteractions.completed ?? EMPTY_COMPLETED_SESSIONS
-			};
 		}
 		function factsFromSessionStatus(status: StatusMap) {
 			const pending = new Map<string, { kind: string }>();
@@ -1942,191 +1726,6 @@ export function startArchiveClient(require: HostRequire) {
 			const status = useStatus((s) => s);
 			return preferStatus ? factsFromSessionStatus(status) : { pending, completed: EMPTY_COMPLETED_SESSIONS };
 		}
-		function sessionNode(s: ClientSession, descendants: Map<string, { count: number; runningCount: number }>, archived: ReadonlySet<string>, pendingInteractions: UiFacts | Map<string, { kind: string }>) {
-			const facts = pendingFacts(pendingInteractions);
-			const pendingInteraction = pendingInteractionForSession(s, facts.pending);
-			return {
-				id: s.id,
-				title: sessionTitle(s),
-				blank: s.blank,
-				running: s.running,
-				runningSubagentCount: descendants.get(s.id)?.runningCount ?? 0,
-				completed: s.completed === true || facts.completed.has(s.id),
-				updatedAt: s.updatedAt,
-				archived: archived.has(s.id),
-				...pendingInteraction === void 0 ? {} : { pendingInteraction }
-			};
-		}
-		/**
-		* Derive the workspace browser groups with every session as a top-level row.
-		*
-		* Every group shows; sessions populate under expanded groups in the selected
-		* local order. Blank sessions are excluded except for the selected
-		* provisional New Session row; archived sessions are excluded unless the
-		* "show archived" view toggle is on.
-		* Content search lives outside this derivation
-		* (see {@link deriveSearchResults}).
-		* @param list - sessions list snapshot (`current` or `retainedBy.mainView` feeds containsCurrent).
-		* @param workspaces - real workspaces in stable Host order.
-		* @param archivedSessionIds - registry-global archive set.
-		* @param pendingInteractions - pending UI interactions by Session.
-		* @param view - local expansion arrays and the show-archived toggle.
-		* @returns group sections in render order.
-		*/
-		function deriveGroups(list: ClientList, workspaces: readonly ClientWorkspace[], archivedSessionIds: readonly string[], pendingInteractions: UiFacts | Map<string, { kind: string }>, view: { expandedGroups: string[]; ungroupedOrder?: string[]; showArchived: boolean }) {
-			const archived = new Set(archivedSessionIds);
-			const expandedGroups = new Set(view.expandedGroups);
-			const descendants = indexSubagentDescendants(list.byId);
-			const current = currentSessionId(list);
-			const currentGroup = current === void 0 ? void 0 : workspaces.find((w) => w.sessionIds.includes(current))?.workspaceId ?? "";
-			const groups = [];
-			for (const g of groupByWorkspace(list, workspaces, archived, view.ungroupedOrder, view.showArchived)) {
-				const expanded = expandedGroups.has(g.key);
-				groups.push({
-					key: g.key,
-					workspaceId: g.workspaceId,
-					cwd: g.cwd,
-					createdAt: g.createdAt,
-					label: g.label,
-					sessionCount: g.sessions.length,
-					expanded,
-					containsCurrent: g.key === currentGroup,
-					sessions: expanded ? g.sessions.map((session) => sessionNode(session, descendants, archived, pendingInteractions)) : []
-				});
-			}
-			return groups;
-		}
-		/**
-		* Derive the flat session list ("In one list" mode): every session — fork
-		* children included — as a top-level row, strictly newest-first. No grouping,
-		* no parent/child adjacency. Archived sessions are excluded unless the
-		* "show archived" view toggle is on.
-		* Content search lives outside this derivation
-		* (see {@link deriveSearchResults}).
-		* @param list - sessions list snapshot.
-		* @param archivedSessionIds - registry-global archive set.
-		* @param pendingInteractions - pending UI interactions by Session.
-		* @param showArchived - "show archived" view toggle.
-		* @returns flat rows in render order.
-		*/
-		function deriveFlat(list: ClientList, archivedSessionIds: readonly string[], pendingInteractions: UiFacts | Map<string, { kind: string }>, showArchived: boolean) {
-			const archived = new Set(archivedSessionIds);
-			const descendants = indexSubagentDescendants(list.byId);
-			const rows = [];
-			for (const id of list.ids) {
-				const s = list.byId[id];
-				if (s === void 0 || !sessionVisible(s, currentSessionId(list), archived, showArchived)) continue;
-				rows.push(s);
-			}
-			rows.sort(byRecency);
-			return rows.map((session) => sessionNode(session, descendants, archived, pendingInteractions));
-		}
-		/**
-		* Merge immediate title/Workspace substring matches with ranked Host content
-		* matches. Local rows lead newest-first, content-only rows retain backend
-		* order, and duplicate sessions receive the backend snippet in place.
-		* Archived sessions are excluded unless the "show archived" view toggle is on.
-		* @param list - session metadata authority.
-		* @param workspaces - Workspace membership and display labels.
-		* @param query - caller text; surrounding whitespace is ignored.
-		* @param archivedSessionIds - registry-global archive set.
-		* @param pendingInteractions - pending UI interactions by Session.
-		* @param content - ranked Host content-search page.
-		* @param limit - protocol-owned maximum merged row count.
-		* @param showArchived - "show archived" view toggle.
-		* @param ungroupedLabel - 未归属工作区会话的本地化回退标签。
-		* @returns bounded deduplicated flat rows and a refine-query hint bit.
-		*/
-		function deriveSearchResults(list: ClientList, workspaces: readonly ClientWorkspace[], query: string, archivedSessionIds: readonly string[], pendingInteractions: UiFacts | Map<string, { kind: string }>, content: { items: { sessionId: string; snippet: string }[]; hasMore: boolean }, limit: number, showArchived: boolean, ungroupedLabel = UNGROUPED_LABEL) {
-			const q = query.trim().toLowerCase();
-			if (q === "") return {
-				items: [],
-				hasMore: false
-			};
-			const archived = new Set(archivedSessionIds);
-			const descendants = indexSubagentDescendants(list.byId);
-			const workspaceBySession = new Map<string, string>();
-			for (const workspace of workspaces) for (const sessionId of workspace.sessionIds) if (!workspaceBySession.has(sessionId)) workspaceBySession.set(sessionId, workspace.title);
-			const labelOf = (summary: ClientSession) => workspaceBySession.get(summary.id) ?? workspaceLabel(summary.cwd, ungroupedLabel);
-			const contentBySession = new Map<string, { snippet: string }>();
-			for (const item of content.items) if (!contentBySession.has(item.sessionId)) contentBySession.set(item.sessionId, item);
-			const local = [];
-			for (const id of list.ids) {
-				const summary = list.byId[id];
-				if (summary === void 0 || summary.blank || !sessionVisible(summary, currentSessionId(list), archived, showArchived)) continue;
-				if (sessionTitle(summary).toLowerCase().includes(q) || labelOf(summary).toLowerCase().includes(q)) local.push(summary);
-			}
-			local.sort(byRecency);
-			const ordered: ClientSession[] = [];
-			const included = /* @__PURE__ */ new Set<string>();
-			const include = (summary: ClientSession) => {
-				if (included.has(summary.id)) return;
-				included.add(summary.id);
-				ordered.push(summary);
-			};
-			for (const summary of local) include(summary);
-			for (const item of content.items) {
-				const summary = list.byId[item.sessionId];
-				if (summary !== void 0 && !summary.blank && sessionVisible(summary, currentSessionId(list), archived, showArchived)) include(summary);
-			}
-			const facts = pendingFacts(pendingInteractions);
-			return {
-				items: ordered.slice(0, limit).map((summary) => {
-					const match = contentBySession.get(summary.id);
-					const pendingInteraction = pendingInteractionForSession(summary, facts.pending);
-					return {
-						id: summary.id,
-						title: sessionTitle(summary),
-						workspace: labelOf(summary),
-						running: summary.running,
-						runningSubagentCount: descendants.get(summary.id)?.runningCount ?? 0,
-						archived: archived.has(summary.id),
-						...pendingInteraction === void 0 ? {} : { pendingInteraction },
-						completed: summary.completed === true || facts.completed.has(summary.id),
-						...match === void 0 ? {} : { snippet: match.snippet }
-					};
-				}),
-				hasMore: content.hasMore || ordered.length > limit
-			};
-		}
-		/**
-		* Compact relative time for session rows, as a structured bucket the
-		* renderer localizes ("now"/"5min"/"3h"/"2d"/"4mo"/"1y" in en).
-		* @param updatedAt - epoch ms of the session's last activity.
-		* @param now - current epoch ms (injected for pure rendering).
-		* @returns the row's trailing time bucket and magnitude.
-		*/
-		function relativeTime(updatedAt: number, now: number) {
-			const MIN = 6e4;
-			const HOUR = 36e5;
-			const DAY = 864e5;
-			const diff = Math.max(0, now - updatedAt);
-			if (diff < MIN) return {
-				unit: "now",
-				n: 0
-			};
-			if (diff < HOUR) return {
-				unit: "minutes",
-				n: Math.floor(diff / MIN)
-			};
-			if (diff < DAY) return {
-				unit: "hours",
-				n: Math.floor(diff / HOUR)
-			};
-			if (diff < 30 * DAY) return {
-				unit: "days",
-				n: Math.floor(diff / DAY)
-			};
-			if (diff < 365 * DAY) return {
-				unit: "months",
-				n: Math.floor(diff / (30 * DAY))
-			};
-			return {
-				unit: "years",
-				n: Math.floor(diff / (365 * DAY))
-			};
-		}
-		//#endregion
 		const sidebarReveal = {
 			listeners: new Set<(sessionId: string) => void>(),
 			request(sessionId: string) {
@@ -2322,7 +1921,6 @@ export function startArchiveClient(require: HostRequire) {
 			".dsham_settingsRow{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:8px;min-height:40px;padding:4px 10px;border-bottom:1px solid var(--dsw-alias-border-l2)}",
 			".dsham_settingsRow:last-child{border-bottom:0}",
 			".dsham_settingsContent{min-width:0;flex:1}",
-			".dsham_settingsTitle{overflow:hidden;color:var(--dsw-alias-label-primary);font-size:13px;font-weight:600;line-height:16px;text-overflow:ellipsis;white-space:nowrap}",
 			".dsham_settingsMeta{margin-top:1px;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:13px}",
 			".dsham_settingsActions{display:flex;align-items:center;gap:4px;flex:none}",
 			".dsham_settingsEmpty{padding:28px 8px;color:var(--dsw-alias-label-secondary);text-align:center}",
@@ -2805,32 +2403,8 @@ export function startArchiveClient(require: HostRequire) {
 
 			"group.ungrouped": "未分组",
 			"session.new": "新会话",
-			"section.workspaces": "工作区",
-			"section.sessions": "会话",
-			"viewOptions.label": "视图选项",
-			"groupBy.label": "分组方式",
-			"groupBy.workspace": "按工作区",
-			"groupBy.flat": "单列表",
-			"orderBy.label": "排序方式",
-			"orderBy.manual": "手动排序",
-			"orderBy.updated": "最近更新",
-			"sessions.expand": "展开其余 {n} 个会话",
-			"sessions.collapse": "收起",
-			"empty.none": "暂无会话",
-			"workspace.add": "添加工作区",
-			"search.sessions.aria": "搜索会话",
-			"search.placeholder": "搜索会话…",
-			"search.clear": "清除搜索",
-			"search.results.aria": "搜索结果",
-			"search.pending": "正在搜索会话历史…",
-			"search.unavailable": "内容搜索暂不可用，仅显示名称匹配。",
-			"search.noMatches": "无匹配会话",
-			"search.hasMore": "仅显示前 {n} 条结果，请缩小搜索范围。",
-			"menu.addWorkspace": "添加工作区…",
-			"menu.unarchive": "取消归档",
 			"menu.deleteSession": "删除会话",
 			"archived.badge": "归档会话",
-			"archived.notOpenable": "已归档，取消归档后可继续对话",
 			"archives.title": "归档会话",
 			"archives.description": "管理已归档会话，或选择未归档会话进行批量归档。",
 			"archives.viewProject": "GitHub",
@@ -2838,7 +2412,6 @@ export function startArchiveClient(require: HostRequire) {
 			"archives.empty": "暂无已归档会话",
 			"archives.emptyFiltered": "没有符合筛选条件的聊天",
 			"archives.searchPlaceholder": "搜索已归档聊天",
-			"archives.sortBy": "排序方式",
 			"archives.sortLabel": "排序方式",
 			"archives.viewOptions": "视图选项",
 			"archives.sortArchived": "最近归档",
@@ -2885,7 +2458,6 @@ export function startArchiveClient(require: HostRequire) {
 			"archiveActive.title": "停止并归档",
 			"archiveActive.desc": "“{name}”仍有正在进行的工作：{kinds}。归档前会停止这些工作。",
 			"archiveActive.confirm": "停止并归档",
-			"archiveActive.pending": "正在停止并归档…",
 			"archives.forkFailed": "分叉会话失败：{detail}",
 			"deleteSession.title": "删除会话",
 			"deleteSession.confirmTitle": "删除会话？",
@@ -2893,58 +2465,17 @@ export function startArchiveClient(require: HostRequire) {
 			"deleteSession.pending": "正在删除会话…",
 			"deleteSession.unknown": "会话已不存在或已被删除。",
 			"deleteSession.failed": "删除会话失败：{detail}",
-			"picker.loading": "正在加载工作区…",
-			"conflict.named": "已存在名为“{name}”的工作区。",
-			"folderError.title": "无法打开文件夹",
-			"folderError.retry": "重新选择",
-			"rename": "重命名",
-			"rename.workspace.title": "重命名工作区",
-			"rename.session.title": "重命名会话",
-			"field.workspaceName": "工作区名称",
-			"field.sessionName": "会话名称",
-			"delete.workspace": "删除工作区",
-			"delete.desc": "将把“{name}”从工作区列表中移除。文件夹与会话记录会保留，其会话将显示在“未分组”下。",
-			"delete.pending": "正在删除工作区…",
-			"menu.fork": "分叉会话",
-			"menu.archiveSession": "归档会话",
 			"menu.archiveWorkspace": "归档会话",
 			"menu.copyWorkspacePath": "复制目录",
 			"menu.openInExplorer": "打开目录",
 			"menu.moveSession": "移动到工作区",
-			"moveSession.title": "移动会话到工作区",
-			"moveSession.desc": "将“{name}”移动到目标工作区，后续对话将在目标工作区环境中执行。",
-			"moveSession.warning": "提示：移动后该会话的工作目录将变更为目标项目目录。",
-			"moveSession.currentWorkspace": "当前工作区：{name}",
-			"moveSession.selectLabel": "选择目标工作区",
 			"moveSession.noOtherWorkspaces": "暂无可移动的其他工作区",
-			"moveSession.confirm": "移动",
-			"moveSession.pending": "正在移动会话…",
 			"moveSession.success": "会话已成功移动到“{name}”",
 			"archiveWorkspace.title": "归档 {n} 个会话？",
 			"archiveWorkspace.desc": "这会将“{name}”中的会话归档。之后可以在“设置 → 归档会话”中找到它们。",
 			"archiveWorkspace.confirm": "全部归档",
 			"archiveWorkspace.pending": "正在归档会话…",
-			"actions.workspace.aria": "工作区“{name}”的操作",
-			"actions.session.aria": "会话“{name}”的操作",
-			"actions.newSession.aria": "在“{name}”中新建会话",
-			"status.running": "进行中",
-			"status.subagentsRunning.one": "{n} 个子代理运行中",
-			"status.subagentsRunning.other": "{n} 个子代理运行中",
-			"status.idle": "空闲",
-			"status.waitingApproval": "等待审批",
-			"status.planReview": "计划待审",
-			"status.waitingAnswer": "等待回答",
-			"status.completed": "已完成",
-			"hover.created": "创建于 {time}",
-			"hover.copied": "已复制",
 			"date.ymd": "{y}年{m}月{d}日",
-			"time.now": "刚刚",
-			"time.minutes": "{n}分钟",
-			"time.hours": "{n}小时",
-			"time.days": "{n}天",
-			"time.months": "{n}个月",
-			"time.years": "{n}年",
-			"time.ago": "{t}前"
 		};
 		/** English dictionary, checked complete against the zh key set. */
 		const en = {
@@ -2990,32 +2521,8 @@ export function startArchiveClient(require: HostRequire) {
 
 			"group.ungrouped": "Ungrouped",
 			"session.new": "New Session",
-			"section.workspaces": "Workspaces",
-			"section.sessions": "Sessions",
-			"viewOptions.label": "View options",
-			"groupBy.label": "Group by",
-			"groupBy.workspace": "Workspace",
-			"groupBy.flat": "In one list",
-			"orderBy.label": "Order by",
-			"orderBy.manual": "Manual",
-			"orderBy.updated": "Last updated",
-			"sessions.expand": "Show {n} more sessions",
-			"sessions.collapse": "Show less",
-			"empty.none": "No sessions yet",
-			"workspace.add": "Add workspace",
-			"search.sessions.aria": "Search sessions",
-			"search.placeholder": "Search sessions...",
-			"search.clear": "Clear search",
-			"search.results.aria": "Search results",
-			"search.pending": "Searching session history…",
-			"search.unavailable": "Content search is temporarily unavailable. Showing name matches.",
-			"search.noMatches": "No matching sessions",
-			"search.hasMore": "Showing the first {n} results. Narrow your search.",
-			"menu.addWorkspace": "Add workspace…",
-			"menu.unarchive": "Unarchive",
 			"menu.deleteSession": "Delete session",
 			"archived.badge": "Archived sessions",
-			"archived.notOpenable": "This session is archived. Unarchive it to continue the conversation.",
 			"archives.title": "Archived sessions",
 			"archives.description": "Manage archived sessions or select unarchived sessions to archive in bulk.",
 			"archives.viewProject": "GitHub",
@@ -3023,7 +2530,6 @@ export function startArchiveClient(require: HostRequire) {
 			"archives.empty": "No archived sessions.",
 			"archives.emptyFiltered": "No chats match your filters.",
 			"archives.searchPlaceholder": "Search archived chats",
-			"archives.sortBy": "Sort archived chats",
 			"archives.sortLabel": "Sort order",
 			"archives.viewOptions": "View options",
 			"archives.sortArchived": "Recently archived",
@@ -3070,7 +2576,6 @@ export function startArchiveClient(require: HostRequire) {
 			"archiveActive.title": "Stop and archive",
 			"archiveActive.desc": "“{name}” still has work in progress: {kinds}. Archiving stops that work first.",
 			"archiveActive.confirm": "Stop and archive",
-			"archiveActive.pending": "Stopping and archiving…",
 			"archives.forkFailed": "Could not fork the session: {detail}",
 			"deleteSession.title": "Delete session",
 			"deleteSession.confirmTitle": "Delete session?",
@@ -3078,58 +2583,17 @@ export function startArchiveClient(require: HostRequire) {
 			"deleteSession.pending": "Deleting session…",
 			"deleteSession.unknown": "This session no longer exists or was already deleted.",
 			"deleteSession.failed": "Could not delete the session: {detail}",
-			"picker.loading": "Loading workspaces…",
-			"conflict.named": "A workspace named “{name}” already exists.",
-			"folderError.title": "Couldn’t open folder",
-			"folderError.retry": "Choose again",
-			"rename": "Rename",
-			"rename.workspace.title": "Rename workspace",
-			"rename.session.title": "Rename session",
-			"field.workspaceName": "Workspace name",
-			"field.sessionName": "Session name",
-			"delete.workspace": "Delete workspace",
-			"delete.desc": "This removes “{name}” from the workspace list. The folder and session logs will be kept. Its sessions will appear under Ungrouped.",
-			"delete.pending": "Deleting workspace…",
-			"menu.fork": "Fork session",
-			"menu.archiveSession": "Archive session",
 			"menu.archiveWorkspace": "Archive sessions",
 			"menu.copyWorkspacePath": "Copy folder path",
 			"menu.openInExplorer": "Open folder",
 			"menu.moveSession": "Move to workspace",
-			"moveSession.title": "Move session to workspace",
-			"moveSession.desc": "Move “{name}” to target workspace. Subsequent turns will execute within the destination context.",
-			"moveSession.warning": "Note: The session working directory will change to the destination project path.",
-			"moveSession.currentWorkspace": "Current workspace: {name}",
-			"moveSession.selectLabel": "Select destination workspace",
 			"moveSession.noOtherWorkspaces": "No other workspaces available",
-			"moveSession.confirm": "Move",
-			"moveSession.pending": "Moving session…",
 			"moveSession.success": "Session successfully moved to “{name}”",
 			"archiveWorkspace.title": "Archive {n} conversations?",
 			"archiveWorkspace.desc": "This archives all conversations in “{name}”. You can find them later in Archived sessions.",
 			"archiveWorkspace.confirm": "Archive all",
 			"archiveWorkspace.pending": "Archiving conversations…",
-			"actions.workspace.aria": "Workspace actions for {name}",
-			"actions.session.aria": "Session actions for {name}",
-			"actions.newSession.aria": "New session in {name}",
-			"status.running": "Running",
-			"status.subagentsRunning.one": "{n} subagent running",
-			"status.subagentsRunning.other": "{n} subagents running",
-			"status.idle": "Idle",
-			"status.waitingApproval": "Waiting for approval",
-			"status.planReview": "Plan awaiting review",
-			"status.waitingAnswer": "Waiting for answer",
-			"status.completed": "Completed",
-			"hover.created": "Created {time}",
-			"hover.copied": "Copied",
 			"date.ymd": "{y}-{m}-{d}",
-			"time.now": "now",
-			"time.minutes": "{n}min",
-			"time.hours": "{n}h",
-			"time.days": "{n}d",
-			"time.months": "{n}mo",
-			"time.years": "{n}y",
-			"time.ago": "{t} ago"
 		};
 		const ru = {
 			...organizerRu, ...discoveryRu,
@@ -3174,32 +2638,8 @@ export function startArchiveClient(require: HostRequire) {
 
 			"group.ungrouped": "Без группы",
 			"session.new": "Новая сессия",
-			"section.workspaces": "Рабочие пространства",
-			"section.sessions": "Сессии",
-			"viewOptions.label": "Параметры просмотра",
-			"groupBy.label": "Группировать по",
-			"groupBy.workspace": "Рабочее пространство",
-			"groupBy.flat": "В одном списке",
-			"orderBy.label": "Порядок",
-			"orderBy.manual": "Вручную",
-			"orderBy.updated": "Последнее обновление",
-			"sessions.expand": "Показать ещё {n} сессий",
-			"sessions.collapse": "Показать меньше",
-			"empty.none": "Пока нет сессий",
-			"workspace.add": "Добавить рабочее пространство",
-			"search.sessions.aria": "Поиск сессий",
-			"search.placeholder": "Поиск сессий...",
-			"search.clear": "Сбросить поиск",
-			"search.results.aria": "Результаты поиска",
-			"search.pending": "Поиск по истории сессий…",
-			"search.unavailable": "Поиск по содержимому временно недоступен. Показываются совпадения по названиям.",
-			"search.noMatches": "Нет подходящих сессий",
-			"search.hasMore": "Показаны первые {n} результатов. Сузьте поиск.",
-			"menu.addWorkspace": "Добавить рабочее пространство…",
-			"menu.unarchive": "Вернуть из архива",
 			"menu.deleteSession": "Удалить сессию",
 			"archived.badge": "Архив сессий",
-			"archived.notOpenable": "Эта сессия в архиве. Верните её из архива, чтобы продолжить разговор.",
 			"archives.title": "Архив сессий",
 			"archives.description": "Управление заархивированными сессиями или выбор незаархивированных для пакетной архивации.",
 			"archives.viewProject": "GitHub",
@@ -3207,7 +2647,6 @@ export function startArchiveClient(require: HostRequire) {
 			"archives.empty": "Нет заархивированных сессий.",
 			"archives.emptyFiltered": "Ни один чат не соответствует вашим фильтрам.",
 			"archives.searchPlaceholder": "Поиск по заархивированным чатам",
-			"archives.sortBy": "Сортировка заархивированных чатов",
 			"archives.sortLabel": "Сортировка",
 			"archives.viewOptions": "Параметры вида",
 			"archives.sortArchived": "Недавно архивированные",
@@ -3254,7 +2693,6 @@ export function startArchiveClient(require: HostRequire) {
 			"archiveActive.title": "Остановить и заархивировать",
 			"archiveActive.desc": "В «{name}» ещё идёт работа: {kinds}. Архивация сначала остановит её.",
 			"archiveActive.confirm": "Остановить и заархивировать",
-			"archiveActive.pending": "Остановка и архивация…",
 			"archives.forkFailed": "Не удалось создать ветку сессии: {detail}",
 			"deleteSession.title": "Удалить сессию",
 			"deleteSession.confirmTitle": "Удалить сессию?",
@@ -3262,58 +2700,17 @@ export function startArchiveClient(require: HostRequire) {
 			"deleteSession.pending": "Удаление сессии…",
 			"deleteSession.unknown": "Эта сессия больше не существует или уже удалена.",
 			"deleteSession.failed": "Не удалось удалить сессию: {detail}",
-			"picker.loading": "Загрузка рабочих пространств…",
-			"conflict.named": "Рабочее пространство с именем «{name}» уже существует.",
-			"folderError.title": "Не удалось открыть папку",
-			"folderError.retry": "Выбрать снова",
-			"rename": "Переименовать",
-			"rename.workspace.title": "Переименовать рабочее пространство",
-			"rename.session.title": "Переименовать сессию",
-			"field.workspaceName": "Имя рабочего пространства",
-			"field.sessionName": "Имя сессии",
-			"delete.workspace": "Удалить рабочее пространство",
-			"delete.desc": "Это удалит «{name}» из списка рабочих пространств. Папка и журналы сессий останутся. Его сессии появятся в разделе «Без группы».",
-			"delete.pending": "Удаление рабочего пространства…",
-			"menu.fork": "Создать ветку сессии",
-			"menu.archiveSession": "Заархивировать сессию",
 			"menu.archiveWorkspace": "Архивировать сессии",
 			"menu.copyWorkspacePath": "Копировать путь к папке",
 			"menu.openInExplorer": "Открыть папку",
 			"menu.moveSession": "Переместить в проект",
-			"moveSession.title": "Перемещение сессии",
-			"moveSession.desc": "Переместить «{name}» в целевое рабочее пространство. Дальнейшие реплики будут выполняться в контексте целевого проекта.",
-			"moveSession.warning": "Примечание: рабочий каталог сессии будет изменен на путь целевого проекта.",
-			"moveSession.currentWorkspace": "Текущий проект: {name}",
-			"moveSession.selectLabel": "Выберите проект",
 			"moveSession.noOtherWorkspaces": "Нет других доступных проектов",
-			"moveSession.confirm": "Переместить",
-			"moveSession.pending": "Перемещение сессии…",
 			"moveSession.success": "Сессия успешно перемещена в «{name}»",
 			"archiveWorkspace.title": "Архивировать {n} сессий?",
 			"archiveWorkspace.desc": "Это заархивирует сессии в «{name}». Их можно найти позже в разделе «Архив».",
 			"archiveWorkspace.confirm": "Архивировать все",
 			"archiveWorkspace.pending": "Архивация сессий…",
-			"actions.workspace.aria": "Действия рабочего пространства для {name}",
-			"actions.session.aria": "Действия сессии для {name}",
-			"actions.newSession.aria": "Новая сессия в {name}",
-			"status.running": "Выполняется",
-			"status.subagentsRunning.one": "{n} подагент работает",
-			"status.subagentsRunning.other": "{n} подагентов работают",
-			"status.idle": "Ожидание",
-			"status.waitingApproval": "Ожидание подтверждения",
-			"status.planReview": "План ожидает проверки",
-			"status.waitingAnswer": "Ожидание ответа",
-			"status.completed": "Завершено",
-			"hover.created": "Создано {time}",
-			"hover.copied": "Скопировано",
 			"date.ymd": "{y}-{m}-{d}",
-			"time.now": "сейчас",
-			"time.minutes": "{n}мин",
-			"time.hours": "{n}ч",
-			"time.days": "{n}д",
-			"time.months": "{n}мес",
-			"time.years": "{n}г",
-			"time.ago": "{t} назад"
 		};
 		//#endregion
 		//#region lib/types/client/index.js
@@ -4728,12 +4125,7 @@ export function startArchiveClient(require: HostRequire) {
 			ArchivedSessionsSection,
 			zh, en,
 			displayTitle,
-			sessionVisible,
-			indexSubagentDescendants,
 			isUnknownSessionError,
-			deriveGroups,
-			deriveFlat,
-			deriveSearchResults,
 			deriveArchivedGroups,
 			sortArchivedGroups,
 			deriveArchivedBatchIds,
@@ -4758,13 +4150,7 @@ export function startArchiveClient(require: HostRequire) {
 			archiveSessionsViaOfficial,
 			unarchiveSessionsViaOfficial,
 			createUnarchiveSession,
-			createWorkspaceViewStore,
-			migrateWorkspaceViewPersist,
-			WORKSPACE_VIEW_PERSIST_KEY,
-			LEGACY_WORKSPACE_VIEW_PERSIST_KEY,
 			bindObservable,
-			groupByWorkspace,
-			byRecency,
 			ARCHIVE_MANAGER_REMOTE,
 			currentSessionId,
 			setupSidebarEntry,

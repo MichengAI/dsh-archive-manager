@@ -1,6 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
 import type { StoredEntry } from "@deepseek-ai/dsh-client-ui-slots";
-import type { ArchiveProps, BrowserProps, ClientList, ClientWorkspace, Observable, SearchPage, WorkspaceSnapshot } from "./client-types.js";
+import type { ArchiveProps, ClientList, ClientWorkspace, Observable, SearchPage, WorkspaceSnapshot } from "./client-types.js";
 import type { ArchiveState } from "./contracts.js";
 import type { NavigationSource, SessionNavigationSource } from "./archive-experience.js";
 import type { DirectoryMirrorContext } from "./directory-flow-slot.js";
@@ -47,7 +47,6 @@ interface Services {
   "uiWorkspace": UiWorkspace;
   "layout": { selectPanel(panel: null): void; beginNavigation?(): void };
 }
-export type BrowserInjected = Pick<BrowserProps, "startSession" | "open" | "searchSessions" | "searchResultLimit" | "renameSession" | "forkSession" | "renameWorkspace" | "deleteWorkspace" | "insertWorkspaceBefore" | "archiveSession" | "archiveWorkspaceSessions" | "unarchiveSession" | "deleteSession" | "insertSessionBefore" | "createWorkspace"> & { hooks: { directoryFlow: Observable<boolean> } };
 /** 仅描述实际消费的客户端能力，隔离旧宿主缺失的公开声明。 */
 export interface ClientContext extends Omit<DirectoryMirrorContext, "slots"> {
   sessions: Sessions;
