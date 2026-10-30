@@ -1585,6 +1585,60 @@ test("deleteSession on a live session flushes and detaches before deleting the c
 	);
 });
 
+test("deleteSession on a live session succeeds even if flush throws SessionFormatError", async () => {
+	const corruptError = new Error("SessionFormatError: format v4 tool/result at seq 24 requires toolCallId matching its tool source");
+	const liveSession = { id: sLive, header: header(sLive, cwdA), events: [] };
+	const env = buildRoot({
+		headers: [header(s1, cwdA), header(sLive, cwdA)],
+		workspaces: { [A]: workspace("D:\\proj-a", [s1, sLive]) },
+		live: [liveSession],
+	});
+	env.sessions.flush = async () => {
+		throw corruptError;
+	};
+	const registry = await mountWorkspaceRegistry(env);
+	const res = await registry.deleteSession(sLive);
+	assert.deepEqual(res, { deleted: true });
+	assert.deepEqual(env.sessions.detached, [sLive]);
+	assert.deepEqual(env.table.get(A).sessionIds, [s1]);
+	assert.equal(
+		existsSync(env.located.get(sLive)),
+		false,
+		"live session transcript artifact removed even after flush failure",
+	);
+});
+
+test("deleteSession on a dynamically created live session caches header and succeeds even if flush throws", async () => {
+	const corruptError = new Error("SessionFormatError: format v4 tool/result at seq 24 requires toolCallId matching its tool source");
+	const env = buildRoot({
+		headers: [header(s1, cwdA)],
+		workspaces: { [A]: workspace("D:\\proj-a", [s1, sLive]) },
+	});
+	const dir = join(env.root, `sessions-${sLive}`);
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(join(dir, "session.jsonl.zstd"), "stub");
+	env.located.set(sLive, join(dir, "session.jsonl.zstd"));
+
+	const registry = await mountWorkspaceRegistry(env);
+	// 模拟启动后新建的活跃会话加入 store，此时 registry.headers 尚未对其索引
+	const liveSession = { id: sLive, header: header(sLive, cwdA), events: [] };
+	env.sessions.enter(liveSession);
+	env.sessions.flush = async () => {
+		throw corruptError;
+	};
+
+	assert.equal(registry.headers.has(sLive), false, "headers initially does not have sLive");
+	const res = await registry.deleteSession(sLive);
+	assert.deepEqual(res, { deleted: true });
+	assert.deepEqual(env.sessions.detached, [sLive]);
+	assert.deepEqual(env.table.get(A).sessionIds, [s1]);
+	assert.equal(
+		existsSync(env.located.get(sLive)),
+		false,
+		"unindexed live session transcript artifact removed",
+	);
+});
+
 test("deleteSession cascades to SUBAGENT children (origin = subagent) but never to fork branches", async () => {
 	// s5: subagent child of s4 (cascade-deleted); s2: fork branch of s4
 	// (parentSession set, no subagent origin — an independent user session)

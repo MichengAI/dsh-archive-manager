@@ -905,13 +905,28 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Re
 		const sessions = this.ctx.get("sessions");
 		const live = sessions?.get(sessionId);
 		if (live !== void 0) {
-			// 持久化屏障先行：不能有未落盘的转录写入与目录删除竞争
-			//（持久化后端按批关闭句柄，flush 过的会话不再持有打开的文件）。
-			await sessions.flush(live);
+			if (live.header !== void 0) {
+				this.headers?.set(sessionId, live.header);
+			}
+			// 持久化屏障先行：尽力而为排空未落盘的转录写入
+			//（若会话转录损坏导致 flush 失败，仅记录警告，不阻断后续分离与物理清理）。
+			try {
+				await sessions.flush(live);
+			} catch (error) {
+				this.ctx.logger.warn(
+					`archive-manager: could not flush live session "${sessionId}" before deletion: ${String(error)}`,
+				);
+			}
 			// 从存储分离；`session/disposed` 同步触发，驱动浏览器端的
 			// `host/session-removed` 帧并启动投影缓存的最终写后落盘。
-			const entry = sessions.liveEntryFor(live);
-			sessions.detachEntered(entry);
+			try {
+				const entry = sessions.liveEntryFor(live);
+				sessions.detachEntered(entry);
+			} catch (error) {
+				this.ctx.logger.warn(
+					`archive-manager: could not detach live session "${sessionId}" before deletion: ${String(error)}`,
+				);
+			}
 		} else if (sessions !== void 0)
 			await this.publishColdSessionRemoval(sessionId, sessions);
 		const projCache = this.ctx.get("sessionProjectionCache");
