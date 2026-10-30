@@ -4,6 +4,13 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 1.1.20 - 2026-10-30
+
+- Remove dead legacy workspace browser code and unconsumed locales (#100):
+  - Cleans up legacy store factory, migration helpers (`WorkspaceView`), obsolete derivation functions (`deriveGroups`, `deriveFlat`, `deriveSearchResults`, etc.), and outdated test fixtures left behind from the historical workspace browser removal.
+  - Decouples from `@deepseek-ai/dsh-client-store` by removing its unreferenced client require and stripping it from `peerDependencies`, making host environment requirements strictly minimal.
+  - Prunes 67 unconsumed i18n keys and orphaned CSS rules across Chinese, English, and Russian dictionaries to reduce bundle size and maintenance overhead.
+
 ## 1.1.19 - 2026-10-29
 
 - Add toggle to hide sidebar favorite star (#99):
