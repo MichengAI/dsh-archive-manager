@@ -3179,7 +3179,7 @@ export function startArchiveClient(require: HostRequire) {
 										})
 										: workspaces.map((ws) => {
 											const wsTitle = ws.title || ws.path || ws.workspaceId;
-											return (0, react_jsx_runtime.jsx)("button", {
+											return (0, react_jsx_runtime.jsxs)("button", {
 												type: "button",
 												role: "menuitem",
 												className: "dsham_moveSubmenuBtn",
@@ -3194,10 +3194,13 @@ export function startArchiveClient(require: HostRequire) {
 													e.stopPropagation();
 													void handleSelectWorkspace(ws.workspaceId, wsTitle);
 												},
-												children: (0, react_jsx_runtime.jsx)("span", {
-													style: { overflow: "hidden", textOverflow: "ellipsis", flex: 1 },
-													children: wsTitle
-												})
+												children: [
+													(0, react_jsx_runtime.jsx)("span", { "aria-hidden": true, style: { display: "inline-flex", flex: "none", marginRight: 8 }, children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderCloseMedium, { size: 14 }) }),
+													(0, react_jsx_runtime.jsx)("span", {
+														style: { overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 },
+														children: wsTitle
+													})
+												]
 											}, ws.workspaceId);
 										})
 								]
