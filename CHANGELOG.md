@@ -4,6 +4,10 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 1.1.22 - 2026-10-30
+
+- Add folder icons beside workspace names in the “Move to workspace” submenu, making destination workspaces easier to recognize.
+
 ## 1.1.21 - 2026-10-30
 
 - Fix failure deleting active sessions with corrupt transcripts or missing tool call IDs (#101):
