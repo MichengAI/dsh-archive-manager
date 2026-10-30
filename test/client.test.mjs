@@ -411,12 +411,12 @@ test("legacy forked row stylesheet is completely removed from source and build",
 	assert.equal(injected.includes("@michengai/dsh-archive-manager/WorkspacePicker.module.css"), false);
 });
 
-test("bundle resolves the current client-store", () => {
-	assert.equal(alphaRequests.includes("@deepseek-ai/dsh-client-store"), true);
+test("bundle does not require obsolete client-store or client-runtime", () => {
+	assert.equal(alphaRequests.includes("@deepseek-ai/dsh-client-store"), false);
 	assert.equal(alphaRequests.includes("@deepseek-ai/dsh-client-runtime/client"), false);
 });
 
-test("manifest keeps one DSH peer range; store optional; ghost client-runtime peer removed", () => {
+test("manifest keeps one DSH peer range; obsolete client-store and client-runtime removed", () => {
 	assert.equal(PACKAGE_MANIFEST.engines?.node, "^22.19.0 || >=24.0.0");
 	assert.equal(PACKAGE_MANIFEST.engines?.dsh, ">=0.2.0-rc.1 <0.3.0-0");
 	assert.equal(PACKAGE_MANIFEST.packageManager, "pnpm@11.22.0");
@@ -437,6 +437,7 @@ test("manifest keeps one DSH peer range; store optional; ghost client-runtime pe
 	}
 	assert.ok(dshDevelopmentVersions.length > 0);
 	assert.deepEqual([...new Set(dshDevelopmentVersions)], ["0.2.1-rc.3"]);
+	assert.equal(PACKAGE_MANIFEST.peerDependencies?.["@deepseek-ai/dsh-client-store"], undefined);
 	assert.equal(PACKAGE_MANIFEST.peerDependenciesMeta?.["@deepseek-ai/dsh-client-store"], undefined);
 	assert.equal(PACKAGE_MANIFEST.peerDependenciesMeta?.["@deepseek-ai/dsh-client-runtime"], undefined);
 	assert.equal(PACKAGE_MANIFEST.peerDependencies?.["@deepseek-ai/dsh-client-runtime"], undefined);

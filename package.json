@@ -47,7 +47,6 @@
     "@deepseek-ai/cordis": ">=4.0.1 <5.0.0",
     "@deepseek-ai/dsh-client-connection": ">=0.2.0-rc.1 <0.3.0-0",
     "@deepseek-ai/dsh-client-locale": ">=0.2.0-rc.1 <0.3.0-0",
-    "@deepseek-ai/dsh-client-store": ">=0.2.0-rc.1 <0.3.0-0",
     "@deepseek-ai/dsh-client-ui-conversation": ">=0.2.0-rc.1 <0.3.0-0",
     "@deepseek-ai/dsh-client-ui-primitives": ">=0.2.0-rc.1 <0.3.0-0",
     "@deepseek-ai/dsh-client-ui-sidebar": ">=0.2.0-rc.1 <0.3.0-0",

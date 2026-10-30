@@ -25,7 +25,6 @@ export function startArchiveClient(require: HostRequire) {
 		var module: { exports: Record<string, unknown> } = { exports: {} };
 		var exports = module.exports;
 		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
-		let _deepseek_ai_dsh_client_store = require("@deepseek-ai/dsh-client-store");
 		let react_jsx_runtime = require("react/jsx-runtime");
 		let react = require("react");
 		let react_dom = require("react-dom");
