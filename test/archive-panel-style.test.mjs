@@ -117,6 +117,16 @@ test("预览弹窗直挂 body 并配置防穿透实色底、遮罩模糊与标�
   assert.match(client, /\.dsham_modalWide \.dsham_previewMessages\{[^}]*overflow-y:auto/);
 });
 
+test("工作区分组折叠状态与文件夹图标及隐藏边框正确联动", async () => {
+  const client = await readFile(clientPath, "utf8");
+
+  // 折叠时使用闭合文件夹图标，展开时使用打开文件夹图标
+  assert.match(client, /collapsedGroups\.has\(group\.key\)\s*\?\s*[^:]*IconFolderCloseMedium\s*:\s*[^,]*IconFolderOpenOutlineMedium/);
+
+  // 隐藏时彻底 display: none 与 border: 0，避免类选择器 display: grid 覆盖 UA [hidden] 造成重叠边框
+  assert.match(client, /\.dsham_settingsList\[hidden\]\{display:none!important;border:0!important\}/);
+});
+
 test("工作区分组采用技能管理同款一体化卡片，列表超紧凑40px并美化暗色复选框", async () => {
   const client = await readFile(clientPath, "utf8");
 
