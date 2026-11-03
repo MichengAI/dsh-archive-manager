@@ -4,6 +4,14 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 1.2.0 - 2026-11-03
+
+- **Entry placement upgraded to 3-state control** (#103):
+  - Replaces the single sidebar toggle in plugin settings with a native 3-state segmented control (All locations / Sidebar only / Settings only), preventing accidental panel loss caused by disabling both entry points;
+  - Choosing "Sidebar only" unregisters the "Archived sessions" entry from the settings dialog for a cleaner settings view;
+  - Shows an inline error message when saving entry placement fails, preventing silent rollbacks;
+  - Automatically migrates existing configurations seamlessly with full backward compatibility.
+
 ## 1.1.22 - 2026-10-30
 
 - Add folder icons beside workspace names in the “Move to workspace” submenu, making destination workspaces easier to recognize.
