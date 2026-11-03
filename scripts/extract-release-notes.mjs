@@ -1,7 +1,14 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { resolve, relative, isAbsolute } from 'node:path'
 
 const tag = process.argv[2] || process.env.GITHUB_REF_NAME
-const outputPath = process.argv[3] || 'release-notes.md'
+const requestedOutputPath = process.argv[3] || 'release-notes.md'
+const outputPath = resolve(process.cwd(), requestedOutputPath)
+const relativeToCwd = relative(process.cwd(), outputPath)
+
+if (isAbsolute(relativeToCwd) || relativeToCwd.startsWith('..')) {
+  throw new Error(`Output path must stay within the working directory: ${requestedOutputPath}`)
+}
 
 if (!tag) {
   throw new Error('Usage: node scripts/extract-release-notes.mjs <tag> [output]')
