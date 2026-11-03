@@ -4116,24 +4116,29 @@ export function startArchiveClient(require: HostRequire) {
 			})();
 			if (nativeContextMenus && typeof nativeContextMenus.register === "function") {
 				ctx.effect(() => {
-					const unregIcon = (ctx.slots.register as unknown as (spec: object, comp: unknown) => () => void)({
-						name: "contextMenu.icon",
-						key: "archive-manager.explorer",
-					}, () => (0, react_jsx_runtime.jsx)("svg", {
-						width: 14,
-						height: 14,
-						viewBox: "0 0 16 16",
-						fill: "none",
-						stroke: "currentColor",
-						strokeWidth: 1.3,
-						strokeLinecap: "round",
-						strokeLinejoin: "round",
-						children: [
-							(0, react_jsx_runtime.jsx)("path", { d: "M1.5 3.5C1.5 2.94772 1.94772 2.5 2.5 2.5H6.5L8 4.5H13.5C14.0523 4.5 14.5 4.94772 14.5 5.5V12.5C14.5 13.0523 14.0523 13.5 13.5 13.5H2.5C1.94772 13.5 1.5 13.0523 1.5 12.5V3.5Z" }),
-							(0, react_jsx_runtime.jsx)("path", { d: "M10 8.5L12 10.5L10 12.5" }),
-							(0, react_jsx_runtime.jsx)("path", { d: "M6.5 10.5H12" }),
-						],
-					}));
+					let unregIcon: (() => void) | undefined;
+					try {
+						unregIcon = (ctx.slots.register as unknown as (spec: object, comp: unknown) => () => void)({
+							name: "contextMenu.icon",
+							key: "archive-manager.explorer",
+						}, () => (0, react_jsx_runtime.jsx)("svg", {
+							width: 14,
+							height: 14,
+							viewBox: "0 0 16 16",
+							fill: "none",
+							stroke: "currentColor",
+							strokeWidth: 1.3,
+							strokeLinecap: "round",
+							strokeLinejoin: "round",
+							children: [
+								(0, react_jsx_runtime.jsx)("path", { d: "M1.5 3.5C1.5 2.94772 1.94772 2.5 2.5H6.5L8 4.5H13.5C14.0523 4.5 14.5 4.94772 14.5 5.5V12.5C14.5 13.0523 14.0523 13.5 13.5 13.5H2.5C1.94772 13.5 1.5 13.0523 1.5 12.5V3.5Z" }),
+								(0, react_jsx_runtime.jsx)("path", { d: "M10 8.5L12 10.5L10 12.5" }),
+								(0, react_jsx_runtime.jsx)("path", { d: "M6.5 10.5H12" }),
+							],
+						}));
+					} catch {
+						// contextMenu.icon 插槽在部分宿主或隔离测试夹具中未声明时安全降级
+					}
 					const unregMenu = nativeContextMenus.register({
 						id: "archive-manager.workspace-actions",
 						target: "workspace",

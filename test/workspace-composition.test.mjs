@@ -50,6 +50,9 @@ const provideShortcuts = (root) => {
 	if (root.get("remoteAccess") === undefined) {
 		root.provide("remoteAccess", { source: () => undefined });
 	}
+	if (root.get("contextMenus") === undefined) {
+		root.provide("contextMenus", { register: () => () => {}, open: () => {}, close: () => {} });
+	}
 };
 
 test("真实官方导航监听器：显式查看归档不再被清空，切换和卸载恢复默认策略", async (t) => {
