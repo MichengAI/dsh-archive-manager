@@ -5,27 +5,51 @@ import { tmpdir } from 'node:os'
 import { createServer } from 'node:http'
 import test from 'node:test'
 import React from 'react'
-import { getSidebarEntry, setSidebarEntry } from '../src/plugin-settings.ts'
+import { getEntryLocation, getSidebarEntry, setEntryLocation, setSidebarEntry } from '../src/plugin-settings.ts'
 import { apply as applyPlugin } from '../src/index.ts'
 
-test('侧边栏入口配置：设置方法、持久化与 HTTP API', async () => {
+test('入口位置配置（三合一）：设置方法、持久化与 HTTP API', async () => {
   const temporary = await mkdtemp(join(tmpdir(), 'dsh-archive-sidebar-test-'))
   const previousDshHome = process.env.DSH_HOME
   process.env.DSH_HOME = temporary
 
   try {
     // 1. 默认值与设置方法测试
-    assert.equal(await getSidebarEntry(), false, 'sidebarEntry 默认关闭（false）')
+    assert.equal(await getEntryLocation(), 'settings', '默认 entryLocation 为 settings')
+    assert.equal(await getSidebarEntry(), false, '默认 sidebarEntry 为 false')
 
+    // 切换到 both
+    assert.equal(await setEntryLocation('both'), 'both')
+    assert.equal(await getEntryLocation(), 'both')
+    assert.equal(await getSidebarEntry(), true, 'both 时 sidebarEntry 为 true')
+
+    // 切换到 sidebar
+    assert.equal(await setEntryLocation('sidebar'), 'sidebar')
+    assert.equal(await getEntryLocation(), 'sidebar')
+    assert.equal(await getSidebarEntry(), true, 'sidebar 时 sidebarEntry 为 true')
+
+    // 切换到 settings
+    assert.equal(await setEntryLocation('settings'), 'settings')
+    assert.equal(await getEntryLocation(), 'settings')
+    assert.equal(await getSidebarEntry(), false, 'settings 时 sidebarEntry 为 false')
+
+    // 兼容旧接口 setSidebarEntry
     const enabled = await setSidebarEntry(true)
     assert.equal(enabled, true, 'setSidebarEntry(true) 返回 true')
-    assert.equal(await getSidebarEntry(), true, 'getSidebarEntry() 返回已更新的 true')
+    assert.equal(await getEntryLocation(), 'both', 'setSidebarEntry(true) 映射为 both')
+    assert.equal(await getSidebarEntry(), true)
 
     const disabled = await setSidebarEntry(false)
     assert.equal(disabled, false, 'setSidebarEntry(false) 返回 false')
-    assert.equal(await getSidebarEntry(), false, 'getSidebarEntry() 返回已更新的 false')
+    assert.equal(await getEntryLocation(), 'settings', 'setSidebarEntry(false) 映射为 settings')
+    assert.equal(await getSidebarEntry(), false)
 
-    // 非布尔值校验
+    // 非法值校验
+    await assert.rejects(
+      async () => setEntryLocation('none'),
+      (err) => err instanceof TypeError,
+      '非法 location 拒绝写入',
+    )
     await assert.rejects(
       async () => setSidebarEntry('true'),
       (err) => err instanceof TypeError,
@@ -91,8 +115,21 @@ test('侧边栏入口配置：设置方法、持久化与 HTTP API', async () =>
       const getData = await getRes.json()
       assert.equal(getData.ok, true)
       assert.equal(getData.enabled, false, 'HTTP GET 默认 enabled 为 false')
+      assert.equal(getData.location, 'settings', 'HTTP GET 默认 location 为 settings')
 
-      // POST 更新开启
+      // POST location 更新为 both
+      const postLocRes = await fetch(baseUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ location: 'both' }),
+      })
+      assert.equal(postLocRes.status, 200)
+      const postLocData = await postLocRes.json()
+      assert.equal(postLocData.ok, true)
+      assert.equal(postLocData.location, 'both')
+      assert.equal(postLocData.enabled, true)
+
+      // POST 更新开启（兼容旧版 enabled 字段）
       const postRes = await fetch(baseUrl, {
         method: 'POST',
         headers,
@@ -254,6 +291,8 @@ test('客户端侧边栏入口与 bundle.config 开关槽位生命周期', async
   // 1. 开启侧边栏入口
   await controller.setEnabled(true)
   assert.equal(controller.isEnabled(), true)
+  assert.equal(controller.getLocation(), 'both')
+  assert.equal(controller.isSettingsSectionEnabled(), true)
   assert.ok(slotRegistrations.has('main'), '开启后注册 main 槽位')
   assert.equal(slotRegistrations.get('main').meta.key, 'archived-sessions')
   
@@ -268,6 +307,20 @@ test('客户端侧边栏入口与 bundle.config 开关槽位生命周期', async
   assert.ok(slotRegistrations.has('sidebar.panellist'), '开启后注册 sidebar.panellist 槽位')
   assert.equal(slotRegistrations.get('sidebar.panellist').meta.id, 'archived-sessions')
   assert.equal(slotRegistrations.get('sidebar.panellist').meta.order, 4)
+
+  // 1.1 切换为仅侧边栏 (sidebar)
+  await controller.setLocation('sidebar')
+  assert.equal(controller.getLocation(), 'sidebar')
+  assert.equal(controller.isEnabled(), true, '仅侧边栏模式下侧栏处于开启状态')
+  assert.equal(controller.isSettingsSectionEnabled(), false, '仅侧边栏模式下设置菜单不显示')
+  assert.ok(slotRegistrations.has('sidebar.panellist'), '保留侧边栏图标')
+
+  // 1.2 切换为仅设置 (settings)
+  await controller.setLocation('settings')
+  assert.equal(controller.getLocation(), 'settings')
+  assert.equal(controller.isEnabled(), false, '仅设置模式下侧栏关闭')
+  assert.equal(controller.isSettingsSectionEnabled(), true, '仅设置模式下设置菜单显示')
+  assert.equal(slotRegistrations.has('sidebar.panellist'), false, '仅设置模式下注销侧栏图标')
 
   // 2. 关闭侧边栏入口，验证槽位清理以及安全切回 layout.selectPanel(null)
   selectedPanel = 'archived-sessions'

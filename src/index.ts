@@ -8,7 +8,7 @@ import type { Context } from "@deepseek-ai/cordis";
  * 不再另插一条可以单独停用的 host 行。浏览器端由 package.json 的
  * `dsh.client` 声明发现，对应同一个插件入口。
  */
-import { getOnlineUpdate, getSidebarEntry, getSidebarFavoriteStar, setOnlineUpdate, setSidebarEntry, setSidebarFavoriteStar } from "./plugin-settings.js";
+import { getEntryLocation, getOnlineUpdate, getSidebarEntry, getSidebarFavoriteStar, setEntryLocation, setOnlineUpdate, setSidebarEntry, setSidebarFavoriteStar } from "./plugin-settings.js";
 import { isTrustedUpdateRequest, rawService, registerPluginUpdater, releaseUpdateRoute } from "./plugin-updater.js";
 import { apply as installHost, inject as hostInject } from "./host-install.js";
 import { authorizeExplorerPath } from "./explorer-path-policy.js";
@@ -66,8 +66,8 @@ function registerSettingsRoutes(ctx: Context, hostUpdateDisabled: boolean): () =
 		path: SIDEBAR_ENTRY_ENDPOINT,
 		handler: async (request: IncomingMessage, response: ServerResponse) => {
 			if (request.method === "GET" || request.method === "HEAD") {
-				const enabled = await getSidebarEntry();
-				sendJson(response, 200, { ok: true, enabled });
+				const location = await getEntryLocation();
+				sendJson(response, 200, { ok: true, location, enabled: location !== "settings" });
 				return;
 			}
 			if (request.method === "POST") {
@@ -76,12 +76,25 @@ function registerSettingsRoutes(ctx: Context, hostUpdateDisabled: boolean): () =
 					return;
 				}
 				const body = await readJsonBody(request);
-				if (!body || typeof body.enabled !== "boolean") {
-					sendJson(response, 400, { ok: false, error: "enabled 必须是布尔值" });
+				if (!body) {
+					sendJson(response, 400, { ok: false, error: "请求体不能为空" });
 					return;
 				}
-				const enabled = await setSidebarEntry(body.enabled);
-				sendJson(response, 200, { ok: true, enabled });
+				if (typeof body.location === "string") {
+					if (body.location !== "both" && body.location !== "sidebar" && body.location !== "settings") {
+						sendJson(response, 400, { ok: false, error: "location 必须是 both、sidebar 或 settings" });
+						return;
+					}
+					const location = await setEntryLocation(body.location);
+					sendJson(response, 200, { ok: true, location, enabled: location !== "settings" });
+					return;
+				}
+				if (typeof body.enabled === "boolean") {
+					const location = await setEntryLocation(body.enabled ? "both" : "settings");
+					sendJson(response, 200, { ok: true, location, enabled: location !== "settings" });
+					return;
+				}
+				sendJson(response, 400, { ok: false, error: "缺少合法的 location 或 enabled 参数" });
 				return;
 			}
 			response.writeHead(405, { allow: "GET, HEAD, POST" });

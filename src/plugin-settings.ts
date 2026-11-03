@@ -4,7 +4,10 @@ import { readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
+export type EntryLocation = "both" | "sidebar" | "settings";
+
 export interface ArchiveManagerSettings {
+  entryLocation?: EntryLocation;
   sidebarEntry?: boolean;
   onlineUpdate?: boolean;
   sidebarFavoriteStar?: boolean;
@@ -63,35 +66,76 @@ async function replaceTextFile(file: string, next: string): Promise<void> {
 
 export async function readSettings(): Promise<ArchiveManagerSettings> {
   const path = managerSettingsPath();
+  const defaultSettings: ArchiveManagerSettings = {
+    entryLocation: "settings",
+    sidebarEntry: false,
+    onlineUpdate: true,
+    sidebarFavoriteStar: true,
+  };
   if (!existsSync(path)) {
-    return { sidebarEntry: false, onlineUpdate: true, sidebarFavoriteStar: true };
+    return defaultSettings;
   }
   try {
     const raw = await readFile(path, "utf8");
     const parsed = JSON.parse(raw) as unknown;
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return { sidebarEntry: false, onlineUpdate: true, sidebarFavoriteStar: true };
+      return defaultSettings;
     }
     const item = parsed as Record<string, unknown>;
+    let entryLocation: EntryLocation;
+    if (item.entryLocation === "both" || item.entryLocation === "sidebar" || item.entryLocation === "settings") {
+      entryLocation = item.entryLocation;
+    } else if (item.sidebarEntry === true) {
+      entryLocation = "both";
+    } else {
+      entryLocation = "settings";
+    }
+
     return {
-      sidebarEntry: typeof item.sidebarEntry === "boolean" ? item.sidebarEntry : false,
+      entryLocation,
+      sidebarEntry: entryLocation !== "settings",
       onlineUpdate: typeof item.onlineUpdate === "boolean" ? item.onlineUpdate : true,
       sidebarFavoriteStar: typeof item.sidebarFavoriteStar === "boolean" ? item.sidebarFavoriteStar : true,
     };
   } catch {
-    return { sidebarEntry: false, onlineUpdate: true, sidebarFavoriteStar: true };
+    return defaultSettings;
   }
 }
 
 export async function writeSettings(next: ArchiveManagerSettings): Promise<void> {
   const path = managerSettingsPath();
-  const serialized = `${JSON.stringify(next, null, 2)}\n`;
+  const location = next.entryLocation ?? (next.sidebarEntry ? "both" : "settings");
+  const normalized: ArchiveManagerSettings = {
+    entryLocation: location,
+    sidebarEntry: location !== "settings",
+    onlineUpdate: next.onlineUpdate !== false,
+    sidebarFavoriteStar: next.sidebarFavoriteStar !== false,
+  };
+  const serialized = `${JSON.stringify(normalized, null, 2)}\n`;
   await replaceTextFile(path, serialized);
+}
+
+export async function getEntryLocation(): Promise<EntryLocation> {
+  const current = await readSettings();
+  return current.entryLocation ?? "settings";
+}
+
+export async function setEntryLocation(location: EntryLocation): Promise<EntryLocation> {
+  if (location !== "both" && location !== "sidebar" && location !== "settings") {
+    throw new TypeError("entryLocation must be one of 'both', 'sidebar', or 'settings'");
+  }
+  return enqueueWrite(async () => {
+    const current = await readSettings();
+    current.entryLocation = location;
+    current.sidebarEntry = location !== "settings";
+    await writeSettings(current);
+    return location;
+  });
 }
 
 export async function getSidebarEntry(): Promise<boolean> {
   const current = await readSettings();
-  return current.sidebarEntry === true;
+  return current.entryLocation !== "settings";
 }
 
 export async function setSidebarEntry(enabled: boolean): Promise<boolean> {
@@ -99,7 +143,9 @@ export async function setSidebarEntry(enabled: boolean): Promise<boolean> {
     throw new TypeError("sidebarEntry must be a boolean");
   }
   return enqueueWrite(async () => {
+    const location: EntryLocation = enabled ? "both" : "settings";
     const current = await readSettings();
+    current.entryLocation = location;
     current.sidebarEntry = enabled;
     await writeSettings(current);
     return enabled;

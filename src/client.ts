@@ -2363,8 +2363,13 @@ export function startArchiveClient(require: HostRequire) {
 		const zh = {
 			...organizerZh, ...discoveryZh,
             "locale.language": "zh", "service.unavailable": "服务尚未就绪，请重试",
-			"common.close": "关闭",
-			"sidebar.entry.title": "侧边栏入口",
+            "common.close": "关闭",
+            "entry.location.title": "入口展示位置",
+            "entry.location.desc": "选择归档管理入口的展示位置（至少保留一处，防止无法打开面板）。",
+            "entry.location.both": "两边显示",
+            "entry.location.sidebar": "仅侧边栏",
+            "entry.location.settings": "仅设置",
+            "sidebar.entry.title": "侧边栏入口",
 			"sidebar.entry.desc": "在左侧主导航栏显示归档管理器。设置里的入口不变。",
 			"sidebar.entry.toggle": "切换侧边栏入口",
 			"sidebar.favoriteStar.title": "侧栏收藏星标",
@@ -2481,8 +2486,13 @@ export function startArchiveClient(require: HostRequire) {
 		const en = {
 			...organizerEn, ...discoveryEn,
             "locale.language": "en", "service.unavailable": "The service is not ready. Please retry.",
-			"common.close": "Close",
-			"sidebar.entry.title": "Sidebar entry",
+            "common.close": "Close",
+            "entry.location.title": "Entry placement",
+            "entry.location.desc": "Choose where to show the entry (at least one is retained to avoid losing access).",
+            "entry.location.both": "Both",
+            "entry.location.sidebar": "Sidebar only",
+            "entry.location.settings": "Settings only",
+            "sidebar.entry.title": "Sidebar entry",
 			"sidebar.entry.desc": "Show Archived Sessions in the left sidebar. The Settings entry stays either way.",
 			"sidebar.entry.toggle": "Toggle sidebar entry",
 			"sidebar.favoriteStar.title": "Sidebar favorite star",
@@ -2598,8 +2608,13 @@ export function startArchiveClient(require: HostRequire) {
 		const ru = {
 			...organizerRu, ...discoveryRu,
             "locale.language": "ru", "service.unavailable": "Сервис ещё не готов. Повторите.",
-			"common.close": "Закрыть",
-			"sidebar.entry.title": "Пункт боковой панели",
+            "common.close": "Закрыть",
+            "entry.location.title": "Расположение пункта",
+            "entry.location.desc": "Выберите, где отображать пункт входа (хотя бы один остается активным).",
+            "entry.location.both": "Оба места",
+            "entry.location.sidebar": "Только боковая панель",
+            "entry.location.settings": "Только настройки",
+            "sidebar.entry.title": "Пункт боковой панели",
 			"sidebar.entry.desc": "Показывать архив сессий на левой панели. Пункт в настройках сохраняется.",
 			"sidebar.entry.toggle": "Переключить пункт боковой панели",
 			"sidebar.favoriteStar.title": "Звезда избранного в боковой панели",
@@ -4126,6 +4141,44 @@ export function startArchiveClient(require: HostRequire) {
 				return data;
 			};
 
+			let offSettingsSection: (() => void) | null = null;
+			let settingsSectionSupported = false;
+
+			const mountSettingsSection = () => {
+				if (!settingsSectionSupported || offSettingsSection) return;
+				if (sidebarController && !sidebarController.isSettingsSectionEnabled()) return;
+				try {
+					const unreg = ctx.slots.register({
+						name: "settings.section",
+						id: "archive-manager",
+						order: 45,
+						label: () => ctx.locale.bind(NS)("archived.badge"),
+						icon: "archive",
+						locale: NS,
+						inject: buildArchivedSectionProps
+					}, ArchivedSessionsSection);
+					offSettingsSection = typeof unreg === "function" ? (unreg as () => void) : () => {};
+				} catch (reason) {
+					console.warn("archive-manager: register settings.section failed:", reason);
+					offSettingsSection = null;
+				}
+			};
+
+			const unmountSettingsSection = () => {
+				if (offSettingsSection) {
+					try { offSettingsSection(); } catch {}
+					offSettingsSection = null;
+				}
+			};
+
+			const syncSettingsSection = () => {
+				if (sidebarController?.isSettingsSectionEnabled?.() ?? true) {
+					mountSettingsSection();
+				} else {
+					unmountSettingsSection();
+				}
+			};
+
 			sidebarController = setupSidebarEntry(ctx, {
 				callApi: callSettingsApi,
 				renderPanel: (ownerProps) => (0, react_jsx_runtime.jsx)(ArchivedSessionsSection, Object.assign({}, buildArchivedSectionProps(), ownerProps)),
@@ -4137,8 +4190,14 @@ export function startArchiveClient(require: HostRequire) {
 				onSidebarFavoriteStarChange: (enabled: boolean) => {
 					if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("dsham-favorite-star-toggle", { detail: { enabled } }));
 				},
+				onLocationChange: () => {
+					syncSettingsSection();
+				},
 			});
-			ctx.effect(() => () => sidebarController?.destroy(), "archive-manager: sidebar entry");
+			ctx.effect(() => () => {
+				sidebarController?.destroy();
+				unmountSettingsSection();
+			}, "archive-manager: sidebar entry");
 
 			ctx.effect(() => observePluginUpdate({
 				endpoint: "/api/michengai/dsh-archive-manager/update",
@@ -4153,8 +4212,15 @@ export function startArchiveClient(require: HostRequire) {
 			}), "dsh-archive-manager: plugin update ui");
 
 			ctx.slots.inject("settings.section", () => {
+				settingsSectionSupported = true;
 				try {
-					return ctx.slots.register({
+					if (sidebarController && !sidebarController.isSettingsSectionEnabled()) {
+						return () => {
+							settingsSectionSupported = false;
+							unmountSettingsSection();
+						};
+					}
+					const unreg = ctx.slots.register({
 						name: "settings.section",
 						id: "archive-manager",
 						order: 45,
@@ -4163,9 +4229,16 @@ export function startArchiveClient(require: HostRequire) {
 						locale: NS,
 						inject: buildArchivedSectionProps
 					}, ArchivedSessionsSection);
+					offSettingsSection = typeof unreg === "function" ? (unreg as () => void) : () => {};
+					return () => {
+						settingsSectionSupported = false;
+						unmountSettingsSection();
+					};
 				} catch (reason) {
 					console.warn("archive-manager: register settings.section failed:", reason);
-					return () => {};
+					return () => {
+						settingsSectionSupported = false;
+					};
 				}
 			});
 		}
