@@ -404,6 +404,9 @@ export function startArchiveClient(require: HostRequire) {
 		/** 移动会话二级悬浮菜单样式 */
 		const MOVE_SUBMENU_CSS = ".dsham_moveSessionWrap{position:relative}.dsham_moveSubmenu{position:fixed;z-index:99999;min-width:160px;max-width:260px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.25) transparent;background:var(--dsw-menu-surface-fill,var(--dsw-alias-surface-overlay,#1e1e22));backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));-webkit-backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));border:1px solid var(--dsw-alias-border-l1,rgba(255,255,255,0.12));border-radius:var(--dsw-radius-md,8px);box-shadow:var(--dsw-elevation-prominent,0 6px 20px rgba(0,0,0,0.45));padding:4px;display:flex;flex-direction:column;gap:2px}.dsham_moveSubmenu::-webkit-scrollbar{width:6px}.dsham_moveSubmenu::-webkit-scrollbar-track{background:transparent}.dsham_moveSubmenu::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.2);border-radius:3px}.dsham_moveSubmenu::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.35)}.dsham_moveSubmenuBtn{display:flex;align-items:center;width:100%;padding:6px 10px;border:none;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-primary,#ededed);font:inherit;font-size:13px;line-height:20px;text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background-color .12s ease}.dsham_moveSubmenuBtn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,0.08))}.dsham_moveSubmenuBtn:focus-visible:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,0.08));outline:none}";
 		ensurePluginStyle("dsh-archive-manager/MoveSubmenu.css", MOVE_SUBMENU_CSS);
+		/** 工作区右键菜单：归档工作区与官方删除工作区紧贴在同一区域，消除两者之间的分割线 */
+		const WORKSPACE_MENU_GROUP_CSS = "div:has([data-dsham-archive-icon]) + div[role=\"separator\"],div:has([data-dsham-archive-icon]) + div[class*=\"separator\"],div:has(svg[data-dsham-archive-icon]) + div[role=\"separator\"],div:has(svg[data-dsham-archive-icon]) + [class*=\"separator\"]{display:none!important}";
+		ensurePluginStyle("dsh-archive-manager/WorkspaceMenuGroup.css", WORKSPACE_MENU_GROUP_CSS);
 		/**
 		 * 收藏星住在一个**独立容器**里，容器紧跟在宿主的前导格（`_slot`，状态点/定时标记）之后：
 		 * 前导格永远是 16px，所以容器的起点恒定，不管格子里是空的还是转圈图标，星的位置都不变。
@@ -4139,6 +4142,7 @@ export function startArchiveClient(require: HostRequire) {
 					let unregIcon: (() => void) | undefined;
 					let unregStarFill: (() => void) | undefined;
 					let unregStarOutline: (() => void) | undefined;
+					let unregArchiveIcon: (() => void) | undefined;
 					try {
 						unregIcon = (ctx.slots.register as unknown as (spec: object, comp: unknown) => () => void)({
 							name: "contextMenu.icon",
@@ -4183,6 +4187,25 @@ export function startArchiveClient(require: HostRequire) {
 							strokeWidth: 1.3,
 							strokeLinejoin: "round",
 							children: (0, react_jsx_runtime.jsx)("path", { d: STAR_PATH }),
+						}));
+						unregArchiveIcon = (ctx.slots.register as unknown as (spec: object, comp: unknown) => () => void)({
+							name: "contextMenu.icon",
+							key: "archive-manager.workspace-archive",
+						}, () => (0, react_jsx_runtime.jsx)("svg", {
+							"data-dsham-archive-icon": "true",
+							width: 14,
+							height: 14,
+							viewBox: "0 0 16 16",
+							fill: "none",
+							stroke: "currentColor",
+							strokeWidth: 1.3,
+							strokeLinecap: "round",
+							strokeLinejoin: "round",
+							children: [
+								(0, react_jsx_runtime.jsx)("path", { d: "M13.5 2.5H2.5C1.94772 2.5 1.5 2.94772 1.5 3.5V4.5C1.5 5.05228 1.94772 5.5 2.5 5.5H13.5C14.0523 5.5 14.5 4.94772 14.5 4.5V3.5C14.5 2.94772 14.0523 2.5 13.5 2.5Z" }),
+								(0, react_jsx_runtime.jsx)("path", { d: "M2.5 5.5V13.5C2.5 13.7652 2.60536 14.0196 2.79289 14.2071C2.98043 14.3946 3.23478 14.5 3.5 14.5H12.5C12.7652 14.5 13.0196 14.3946 13.2071 14.2071C13.3946 14.0196 13.5 13.7652 13.5 13.5V5.5" }),
+								(0, react_jsx_runtime.jsx)("path", { d: "M6.5 9.5H9.5" }),
+							],
 						}));
 					} catch {
 						// contextMenu.icon 插槽在部分宿主或隔离测试夹具中未声明时安全降级
@@ -4279,7 +4302,7 @@ export function startArchiveClient(require: HostRequire) {
 							result.push({
 								id: "archive-workspace",
 								label: t("menu.archiveWorkspace"),
-								icon: { key: "workspace.archive" },
+								icon: { key: "archive-manager.workspace-archive" },
 								disabled: count === 0,
 								separatorBefore: true,
 								run: () => {
@@ -4301,6 +4324,7 @@ export function startArchiveClient(require: HostRequire) {
 						unregIcon?.();
 						unregStarFill?.();
 						unregStarOutline?.();
+						unregArchiveIcon?.();
 					};
 				}, "archive-manager: native workspace context menu");
 			} else {

@@ -784,6 +784,7 @@ test("DSH 0.2.2-alpha.3 上下文菜单体系：会话菜单插槽就绪判定�
 	assert.equal(menuEntries[1].id, "open-in-explorer");
 	assert.equal(menuEntries[2].id, "archive-workspace");
 	assert.equal(menuEntries[2].disabled, false);
+	assert.deepEqual(menuEntries[2].icon, { key: "archive-manager.workspace-archive" });
 });
 
 test("DSH 0.2.2-alpha.3 上下文菜单：宿主仅声明原生 contextMenus 与未嵌套插槽时的就绪判定", async () => {
