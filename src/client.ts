@@ -1829,6 +1829,17 @@ export function startArchiveClient(require: HostRequire) {
 		function applySettingsNavIcon(button: HTMLElement, label: string): boolean {
 			const isOwn = isOwnSettingsNavRow(button.textContent, label);
 			if (isOwn) {
+				const hasSlotIcon = Array.from(button.children).some((child) =>
+					child.tagName === "SPAN" &&
+					(child.className.includes("navIcon") || child.getAttribute("aria-hidden") === "true")
+				) || Boolean(button.querySelector?.('[class*="navIcon"]'));
+				if (hasSlotIcon) {
+					if (button.hasAttribute(SETTINGS_NAV_ICON_MARKER)) {
+						button.removeAttribute(SETTINGS_NAV_ICON_MARKER);
+						return true;
+					}
+					return false;
+				}
 				if (button.getAttribute(SETTINGS_NAV_ICON_MARKER) === "") return false;
 				button.setAttribute(SETTINGS_NAV_ICON_MARKER, "");
 				return true;
@@ -4138,10 +4149,32 @@ export function startArchiveClient(require: HostRequire) {
 			let offSettingsSection: (() => void) | null = null;
 			let settingsSectionSupported = false;
 
-			const mountSettingsSection = () => {
+			const ArchiveNavIcon = ({ size = 16 }: { size?: number }) => (0, react_jsx_runtime.jsx)("svg", {
+			xmlns: "http://www.w3.org/2000/svg",
+			viewBox: "0 0 16 16",
+			width: size,
+			height: size,
+			fill: "none",
+			stroke: "currentColor",
+			strokeWidth: 1.3,
+			strokeLinecap: "round",
+			strokeLinejoin: "round",
+			children: [
+				(0, react_jsx_runtime.jsx)("path", { d: "M13.5 2.5H2.5C1.94772 2.5 1.5 2.94772 1.5 3.5V4.5C1.5 5.05228 1.94772 5.5 2.5 5.5H13.5C14.0523 5.5 14.5 5.05228 14.5 4.5V3.5C14.5 2.94772 14.0523 2.5 13.5 2.5Z" }),
+				(0, react_jsx_runtime.jsx)("path", { d: "M2.5 5.5V13.5C2.5 13.7652 2.60536 14.0196 2.79289 14.2071C2.98043 14.3946 3.23478 14.5 3.5 14.5H12.5C12.7652 14.5 13.0196 14.3946 13.2071 14.2071C13.3946 14.0196 13.5 13.7652 13.5 13.5V5.5" }),
+				(0, react_jsx_runtime.jsx)("path", { d: "M6.5 9.5H9.5" })
+			]
+		});
+
+		const mountSettingsSection = () => {
 				if (!settingsSectionSupported || offSettingsSection) return;
 				if (sidebarController && !sidebarController.isSettingsSectionEnabled()) return;
 				try {
+					(ctx.slots.register as any)({
+						name: "settings.section.icon",
+						id: "archive-manager",
+						locale: NS,
+					}, ArchiveNavIcon);
 					const unreg = ctx.slots.register({
 						name: "settings.section",
 						id: "archive-manager",
