@@ -4,6 +4,13 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 1.2.5 - 2026-11-04
+
+- **Workspace and Session Context Menu Polish**:
+  - Aligns "Archive workspace" and host "Delete workspace" into the same management group at the bottom of the workspace context menu, eliminating unnecessary divider lines;
+  - Hardens settings section and navigation icon registrations on older hosts, preventing missing settings tabs;
+  - Refines native context menu detection and fallback handling across different host environments.
+
 ## 1.2.4 - 2026-11-03
 
 - **Session Context Menu Layout and Ordering Optimization**:
