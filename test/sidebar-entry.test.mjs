@@ -246,14 +246,10 @@ test('客户端侧边栏入口与 bundle.config 开关槽位生命周期', async
       if (path === '/sidebar-entry') {
         if (options?.method === 'POST') {
           const body = JSON.parse(options.body)
-          if (body.location !== undefined) {
-            assert.ok(['both', 'sidebar', 'settings'].includes(body.location), 'POST location 必须合法')
-            clientLocation = body.location
-            clientSidebar = body.location !== 'settings'
-          } else if (body.enabled !== undefined) {
-            clientSidebar = Boolean(body.enabled)
-            clientLocation = clientSidebar ? 'both' : 'settings'
-          }
+          assert.equal(typeof body.location, 'string', '客户端 POST 必须显式携带 location 字段（拒绝旧协议回退）')
+          assert.ok(['both', 'sidebar', 'settings'].includes(body.location), 'POST location 必须是合法枚举')
+          clientLocation = body.location
+          clientSidebar = body.location !== 'settings'
           return { ok: true, location: clientLocation, enabled: clientSidebar }
         }
         return { ok: true, location: clientLocation, enabled: clientSidebar }
@@ -301,6 +297,8 @@ test('客户端侧边栏入口与 bundle.config 开关槽位生命周期', async
   assert.equal(controller.isEnabled(), true)
   assert.equal(controller.getLocation(), 'both')
   assert.equal(controller.isSettingsSectionEnabled(), true)
+  assert.equal(clientLocation, 'both', '服务端实际落盘为 both')
+  assert.equal(clientSidebar, true, '服务端状态 enabled=true')
   assert.ok(slotRegistrations.has('main'), '开启后注册 main 槽位')
   assert.equal(slotRegistrations.get('main').meta.key, 'archived-sessions')
   
@@ -321,6 +319,8 @@ test('客户端侧边栏入口与 bundle.config 开关槽位生命周期', async
   assert.equal(controller.getLocation(), 'sidebar')
   assert.equal(controller.isEnabled(), true, '仅侧边栏模式下侧栏处于开启状态')
   assert.equal(controller.isSettingsSectionEnabled(), false, '仅侧边栏模式下设置菜单不显示')
+  assert.equal(clientLocation, 'sidebar', '服务端实际落盘为 sidebar')
+  assert.equal(clientSidebar, true, '服务端状态 enabled=true')
   assert.ok(slotRegistrations.has('sidebar.panellist'), '保留侧边栏图标')
 
   // 1.2 切换为仅设置 (settings)
@@ -328,12 +328,16 @@ test('客户端侧边栏入口与 bundle.config 开关槽位生命周期', async
   assert.equal(controller.getLocation(), 'settings')
   assert.equal(controller.isEnabled(), false, '仅设置模式下侧栏关闭')
   assert.equal(controller.isSettingsSectionEnabled(), true, '仅设置模式下设置菜单显示')
+  assert.equal(clientLocation, 'settings', '服务端实际落盘为 settings')
+  assert.equal(clientSidebar, false, '服务端状态 enabled=false')
   assert.equal(slotRegistrations.has('sidebar.panellist'), false, '仅设置模式下注销侧栏图标')
 
   // 2. 关闭侧边栏入口，验证槽位清理以及安全切回 layout.selectPanel(null)
   selectedPanel = 'archived-sessions'
   await controller.setEnabled(false)
   assert.equal(controller.isEnabled(), false)
+  assert.equal(clientLocation, 'settings', '服务端实际落盘为 settings')
+  assert.equal(clientSidebar, false, '服务端状态 enabled=false')
   assert.equal(slotRegistrations.has('main'), false, '关闭后注销 main 槽位')
   assert.equal(slotRegistrations.has('sidebar.panellist'), false, '关闭后注销 sidebar.panellist 槽位')
   assert.equal(selectedPanel, null, '关闭正在查看的面板时安全切回 null（杜绝悬空白屏）')
