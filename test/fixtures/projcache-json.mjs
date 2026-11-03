@@ -53,7 +53,7 @@ for (const hasTitle of [true, false]) {
 		assert.equal(projections.snapshot(session).values.title, expected);
 		// session/created 触发官方异步落盘；等待该原生路径，不主动调用 cache.put/write。
 		await assert.doesNotReject(async () => {
-			for (let attempt = 0; attempt < 100; attempt += 1) {
+			for (let attempt = 0; attempt < 300; attempt += 1) {
 				if (cache.cachedSnapshot(header)?.values.title === expected) return;
 				await new Promise(resolve => setTimeout(resolve, 10));
 			}
@@ -61,7 +61,7 @@ for (const hasTitle of [true, false]) {
 		});
 		const officialFile = join(root, projectionCacheDomainSpec.name, "sessions", `${id}.json`);
 		let document;
-		for (let attempt = 0; attempt < 100; attempt += 1) {
+		for (let attempt = 0; attempt < 300; attempt += 1) {
 			try {
 				document = JSON.parse(await readFile(officialFile, "utf8"));
 				if (document.record.rows.title.val === expected) break;

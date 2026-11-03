@@ -10,7 +10,6 @@ Published release notes are retained below; new versions are added without remov
   - Fixes missing session context menu actions (delete session, favorite, move to workspace) under the latest Web host;
   - Fixes missing workspace context menu items ("Archive workspace sessions", "Copy workspace path", etc.);
   - Seamlessly integrates workspace actions into the host's native context menu system with reactive session count updates and native icon styling;
-  - Hardens icon registration and session lifecycle integration across varying host setups and sidebar combinations with safe fallbacks;
   - Fully retains backward compatibility across all previously supported host releases.
 
 ## 1.2.0 - 2026-11-03

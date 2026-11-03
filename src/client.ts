@@ -4048,8 +4048,9 @@ export function startArchiveClient(require: HostRequire) {
 				if (declaredInWorkspaces) return true;
 				const declaredInContextMenu = ctx.slots.entries("contextMenu.content").some((entry) => entry.children?.[sessionMenuSlot] !== undefined);
 				if (declaredInContextMenu) return true;
+				// 仅在 contextMenus 服务存在且 contextMenu.content 插槽已由宿主挂载时才兜底放行，避免无界面宿主误判
 				try {
-					if (ctx.get("contextMenus") !== undefined) return true;
+					if (ctx.get("contextMenus") !== undefined && ctx.slots.entries("contextMenu.content").length > 0) return true;
 				} catch {}
 				return false;
 			}

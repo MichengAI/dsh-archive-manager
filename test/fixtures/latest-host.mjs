@@ -131,6 +131,17 @@ async function setup(t, compression = "none") {
 	};
 }
 
+const activateSessionForAppend = (sessions, session) => {
+	if (typeof sessions?.enter === "function") {
+		const detach = sessions.enter(session);
+		if (typeof sessions.announce === "function") {
+			sessions.announce(session);
+		}
+		return detach;
+	}
+	return () => {};
+};
+
 for (const compression of ["none", "zstd"]) {
 	test(`最新宿主实时会话落盘并释放写句柄后删除，重开存储不复活 (${compression})`, async (t) => {
 		const env = await setup(t, compression);
@@ -147,8 +158,8 @@ for (const compression of ["none", "zstd"]) {
 				closed = true;
 			}));
 		t.after(() => writer.close());
-		env.sessions.enter(session);
-		env.sessions.announce(session);
+		const detachLive = activateSessionForAppend(env.sessions, session);
+		t.after(() => detachLive());
 		await env.registry.archiveSession(session.id);
 		const directory = dirname(env.persistence.locate(session.header).path);
 		let flushedEvents;
@@ -265,19 +276,6 @@ test("正文读取共用只读句柄并在完成后释放", async (t) => {
 	const writer = await env.persistence.open(header.id, "write");
 	await writer.close();
 });
-
-const activateSessionForAppend = (sessions, session) => {
-	if (typeof sessions?.enter === "function") {
-		const detach = sessions.enter(session);
-		if (typeof sessions.announce === "function") {
-			try {
-				sessions.announce(session);
-			} catch {}
-		}
-		return detach;
-	}
-	return () => {};
-};
 
 for (const { previousCache, seeded } of ["缺失", "无版本", "旧代际"].flatMap(
 	(previousCache) => [false, true].map((seeded) => ({ previousCache, seeded })),
