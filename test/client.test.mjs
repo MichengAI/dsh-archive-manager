@@ -828,6 +828,64 @@ test("DSH 0.2.2-alpha.3 上下文菜单：宿主仅声明原生 contextMenus 与
 	assert.ok(injectedSlots.includes(sessionMenuSlot), "基于 contextMenus 与 contextMenu.content 判定就绪");
 });
 
+test("DSH 0.2.2-alpha.3 上下文菜单：content 插槽存在但为空时不得放行会话菜单", async () => {
+	const sessionMenuSlot = "sidebar.workspaces.session.menu.item";
+	const registeredSlots = [];
+	const injectedSlots = [];
+	const fakeContext = {
+		workspaces: {
+			list: { getSnapshot: () => ({ items: [], archivedSessionIds: [] }) },
+		},
+		sessions: {
+			list: { getSnapshot: () => ({ byId: {} }) },
+		},
+		locale: {
+			register: () => {},
+			bind: () => (key) => key,
+		},
+		slots: {
+			inject: (target, effect) => {
+				injectedSlots.push(target);
+				effect?.();
+				return () => {};
+			},
+			register: (spec) => {
+				registeredSlots.push(spec);
+				return () => {};
+			},
+			// 无界面宿主：contextMenus 服务在，但宿主没有挂载 contextMenu.content
+			entries: () => [],
+		},
+		effect: (fn) => fn(),
+		get: (name) => (name === "contextMenus" ? { register: () => () => {} } : undefined),
+	};
+
+	await bundle.apply(fakeContext);
+
+	assert.ok(!injectedSlots.includes(sessionMenuSlot), "contextMenu.content 为空时不得注入会话菜单插槽");
+	assert.ok(
+		!registeredSlots.some((spec) => spec.name === sessionMenuSlot),
+		"插槽未就绪时不得注册任何会话菜单项"
+	);
+});
+
+test("原生上下文菜单判定：服务缺失 / register 非函数 / get 抛错都必须降级为旧宿主路径", () => {
+	const check = t.hasNativeContextMenuService;
+	assert.equal(typeof check, "function", "判定函数必须暴露到 __test 供自测");
+	assert.equal(check(() => ({ register: () => () => {} })), true, "提供了可用的 register 才算原生可用");
+	assert.equal(check(() => ({ register: "not-a-function" })), false, "register 非函数不得当成原生可用");
+	assert.equal(check(() => ({})), false);
+	assert.equal(check(() => undefined), false);
+	assert.equal(check(() => null), false);
+	assert.equal(
+		check(() => {
+			throw new Error("cannot get property \"contextMenus\" without inject");
+		}),
+		false,
+		"服务未 provide 导致 get 抛错时必须按没有原生菜单处理"
+	);
+});
+
 test("双模会话菜单组件行为级测试：原生环境渲染 null，旧宿主环境渲染菜单项", async () => {
 	const sessionMenuSlot = "sidebar.workspaces.session.menu.item";
 	let deleteComp = null;
@@ -856,10 +914,18 @@ test("双模会话菜单组件行为级测试：原生环境渲染 null，旧宿
 	assert.ok(deleteComp, "DeleteSessionMenuItem 必须被传入 register");
 	assert.ok(favoriteComp, "FavoriteMenuItem 必须被传入 register");
 
-	// 1. 原生环境生效时，slot 组件执行返回 null
+	// 1. 原生环境生效时，两个 slot 组件都必须返回 null（只漏一处就会出现同一操作两条菜单）
 	hasNative = true;
-	const delResNative = deleteComp({ sessionId: "s1", displayTitle: "S1", useMenuOpenState: () => [false, () => {}], t: (k) => k });
-	assert.equal(delResNative, null, "原生环境 DeleteSessionMenuItem 必须返回 null 避免双菜单");
+	const favoriteRowStub = {
+		subscribe: () => () => {},
+		getSnapshot: () => ({ ready: true, ids: new Set(), pending: new Set() }),
+		toggle: async () => {},
+	};
+	const nativeResults = [
+		["DeleteSessionMenuItem", deleteComp({ sessionId: "s1", displayTitle: "S1", useMenuOpenState: () => [false, () => {}], t: (k) => k })],
+		["FavoriteMenuItem", favoriteComp({ sessionId: "s1", favoriteRow: favoriteRowStub, useMenuOpenState: () => [false, () => {}], t: (k) => k })],
+	];
+	for (const [name, result] of nativeResults) assert.equal(result, null, `原生环境 ${name} 必须返回 null 避免双菜单`);
 
 	// 2. 旧宿主环境（无原生 contextMenus）时，slot 组件返回实际菜单项 JSX（非 null）
 	hasNative = false;

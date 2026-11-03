@@ -7,6 +7,20 @@ import { join } from "node:path";
 import { assertIsolatedHost } from "../helpers/isolated-host.mjs";
 
 assertIsolatedHost();
+/**
+ * 轮询等待宿主自己的异步副作用完成：指数退避（10ms → 100ms 封顶）+ 总预算，
+ * 超时抛出带实际观测值的错误。固定次数的紧凑轮询在 CI 高负载时会误报，这里改成带预算的退避。
+ */
+async function waitFor(predicate, describe, budgetMs = 5000) {
+	const startedAt = Date.now();
+	let delay = 10;
+	for (;;) {
+		if (await predicate()) return;
+		if (Date.now() - startedAt >= budgetMs) throw new Error(`等待 ${budgetMs}ms 仍未满足：${describe()}`);
+		await new Promise((resolve) => setTimeout(resolve, delay));
+		delay = Math.min(delay * 2, 100);
+	}
+}
 const { Context, Service } = await import("@deepseek-ai/cordis");
 const { SessionStore } = await import("@deepseek-ai/dsh-session");
 const { SessionProjectionRegistry } = await import("@deepseek-ai/dsh-session-projection");
@@ -52,23 +66,21 @@ for (const hasTitle of [true, false]) {
 		const expected = hasTitle ? "会话日志中的标题" : null;
 		assert.equal(projections.snapshot(session).values.title, expected);
 		// session/created 触发官方异步落盘；等待该原生路径，不主动调用 cache.put/write。
-		await assert.doesNotReject(async () => {
-			for (let attempt = 0; attempt < 300; attempt += 1) {
-				if (cache.cachedSnapshot(header)?.values.title === expected) return;
-				await new Promise(resolve => setTimeout(resolve, 10));
-			}
-			assert.fail(`官方会话创建事件未重建缓存，实际快照: ${JSON.stringify(cache.cachedSnapshot(header))}`);
-		});
+		// 等宿主自己的异步路径完成：指数退避 + 总预算，超时把实际观测值带出来，避免只报「没等到」。
+		await waitFor(
+			() => cache.cachedSnapshot(header)?.values.title === expected,
+			() => `官方会话创建事件未重建缓存，实际快照: ${JSON.stringify(cache.cachedSnapshot(header))}`
+		);
 		const officialFile = join(root, projectionCacheDomainSpec.name, "sessions", `${id}.json`);
 		let document;
-		for (let attempt = 0; attempt < 300; attempt += 1) {
+		await waitFor(async () => {
 			try {
 				document = JSON.parse(await readFile(officialFile, "utf8"));
-				if (document.record.rows.title.val === expected) break;
-			} catch {}
-			await new Promise(resolve => setTimeout(resolve, 10));
-		}
-		assert.equal(document?.record.rows.title.val, expected, `官方写入应持久化到缓存表，实际读到: ${JSON.stringify(document?.record?.rows?.title)}`);
+				return document.record.rows.title.val === expected;
+			} catch {
+				return false;
+			}
+		}, () => `官方写入应持久化到缓存表，实际读到: ${JSON.stringify(document?.record?.rows?.title)}`);
 		await domains.get(projectionCacheDomainSpec.name).close();
 		const reopened = await domains.open(projectionCacheDomainSpec);
 		assert.equal(reopened.table("sessions").get(id).rows.title.val, expected);

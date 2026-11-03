@@ -29,6 +29,18 @@ export function startArchiveClient(require: HostRequire) {
 		let react = require("react");
 		let react_dom = require("react-dom");
 		let _deepseek_ai_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
+		/**
+		 * 宿主是否提供原生上下文菜单服务：提供时 slot 版会话菜单项让位给原生注册，避免同一操作出现两次。
+		 * 只依赖注入进来的 get，便于自测覆盖「服务缺失 / register 非函数 / get 抛错」三种降级路径。
+		 */
+		function hasNativeContextMenuService(get: (name: "contextMenus") => unknown): boolean {
+			try {
+				const service = get("contextMenus") as { register?: unknown } | null | undefined;
+				return typeof service?.register === "function";
+			} catch {
+				return false;
+			}
+		}
 		function SettingsModal({ open, onClose, title, description, footer, children, className, width, portalToBody = false, closeLabel, t }: { open: boolean; onClose(): void; title: ReactNode; description?: ReactNode; footer?: ReactNode; children?: ReactNode; className?: string; width?: number; portalToBody?: boolean; closeLabel?: string; t: Translate }) {
 			const anchor = react.useRef<HTMLSpanElement>(null);
 			// 设置壳会把 body 下的外部分支标成 inert。宿主 Modal 固定挂到 body，
@@ -3031,13 +3043,11 @@ export function startArchiveClient(require: HostRequire) {
 					() => deleteTarget
 				);
 			}
-			const hasNativeContextMenus = () => {
-				try {
-					return typeof ctx.get("contextMenus")?.register === "function";
-				} catch {
-					return false;
-				}
-			};
+			/**
+			 * 两个会话菜单项共用同一份判定：只要宿主提供原生命令菜单，slot 版条目就让位，
+			 * 避免同一操作在原生菜单与插槽菜单里各出现一次。
+			 */
+			const hasNativeContextMenus = () => hasNativeContextMenuService((name) => ctx.get(name));
 			function DeleteSessionMenuItem({ sessionId, displayTitle: title, useMenuOpenState, t }: { sessionId: string; displayTitle: string; useMenuOpenState: () => readonly [boolean, (open: boolean) => void]; t: Translate }) {
 				if (hasNativeContextMenus()) return null;
 				const [, setMenuOpen] = useMenuOpenState();
@@ -4494,6 +4504,7 @@ export function startArchiveClient(require: HostRequire) {
         exports.__test = {
             computeSubmenuPosition,
             forkWithFeedback,
+            hasNativeContextMenuService,
 			favoritesOnlyVisibility,
 			favoriteGroupPredicate,
 			createFavoriteRowStore,
