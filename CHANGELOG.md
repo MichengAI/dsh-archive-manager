@@ -4,6 +4,14 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 1.2.1 - 2026-11-03
+
+- **Compatibility with latest DSH Web (0.2.2-alpha.3+) and context menu overhaul**:
+  - Fixes missing session context menu actions (delete session, favorite, move to workspace) under the latest Web host;
+  - Fixes missing workspace context menu items ("Archive workspace sessions", "Copy workspace path", etc.);
+  - Seamlessly integrates workspace actions into the host's native context menu system with reactive session count updates and native icon styling;
+  - Fully retains backward compatibility across all previously supported host releases.
+
 ## 1.2.0 - 2026-11-03
 
 - **Entry placement upgraded to 3-state control** (#103):
