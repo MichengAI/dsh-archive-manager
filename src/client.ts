@@ -14,7 +14,7 @@ import { createCacheRebuildController } from "./cache-rebuild-client.js";
 import type { CacheRepairState } from "./cache-rebuild-client.js";
 import { allowArchivedNavigation, openArchivedConversation, formatArchiveNavigationError, ArchiveNavigationError, currentSessionId } from "./archive-experience.js";
 import { observePluginUpdate } from "./plugin-update-ui.js";
-import { setupSidebarEntry, ArchiveBundleConfigCard } from "./sidebar-entry.js";
+import { setupSidebarEntry, ArchiveBundleConfigCard, ArchiveBundleConfigCardWrapper } from "./sidebar-entry.js";
 import { resolveApiUrl } from "./api-base.js";
 import { favoriteInvocations, idleArchiveCandidate, createSessionOrganizer, runSessionBatch } from "./archive-organizer.js";
 import { createOrganizerPanel, organizerZh, organizerEn, organizerRu } from "./archive-organizer-ui.js";
@@ -4284,6 +4284,7 @@ export function startArchiveClient(require: HostRequire) {
 			currentSessionId,
 			setupSidebarEntry,
 			ArchiveBundleConfigCard,
+			ArchiveBundleConfigCardWrapper,
 			setupWorkspaceFavoritesOnly,
 		};
 		exports.apply = apply;

@@ -19,7 +19,7 @@ export const sidebarEntryCss = `
 .dsham_bundle_label_box{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;text-align:left}
 .dsham_bundle_title{font-size:13px;font-weight:500;line-height:20px;color:var(--dsw-alias-label-primary)}
 .dsham_bundle_desc{font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}
-.dsham_bundle_error{font-size:12px;line-height:16px;color:var(--dsw-alias-status-danger,#ef4444);margin-top:2px}
+.dsham_bundle_error{font-size:12px;line-height:16px;color:var(--dsw-alias-state-error-primary,#ef4444);margin-top:2px}
 `;
 
 export function ensureSidebarEntryStyle(): void {
@@ -147,7 +147,7 @@ export function ArchiveBundleConfigCard(props: {
   return h(React.Fragment, null, rows);
 }
 
-function ArchiveBundleConfigCardWrapper(props: {
+export function ArchiveBundleConfigCardWrapper(props: {
   t: Translate;
   getLocation: () => EntryLocation;
   setLocation: (next: EntryLocation) => Promise<unknown>;

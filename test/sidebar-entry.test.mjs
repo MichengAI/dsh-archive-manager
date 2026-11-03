@@ -451,3 +451,16 @@ test('ArchiveBundleConfigCard: 存在 errorMessage 时渲染错误警示信息',
   assert.equal(errorSpan.props.className, 'dsham_bundle_error')
   assert.equal(errorSpan.props.children, '保存失败测试')
 })
+
+test('ArchiveBundleConfigCardWrapper 错误提示接线与 CSS Token 规范性（N1 & N2）', async () => {
+  const clientJs = await readFile(new URL('../lib/client.js', import.meta.url), 'utf8')
+
+  // 1. 守住 N1: CSS Token 规范性（必须使用宿主官方 state-error-primary）
+  assert.match(clientJs, /\.dsham_bundle_error\{[^}]*color:var\(--dsw-alias-state-error-primary/, '必须使用官方 state-error-primary token')
+  assert.doesNotMatch(clientJs, /dsw-alias-status-danger/, '绝不能使用不存在的 status-danger token')
+
+  // 2. 守住 N2: 失败接线（验证 catch 块切实调用了 setSaveError 并提取 entry.location.saveFailed）
+  const catchBlockMatch = clientJs.match(/setLocation\([^)]*\)\.catch\([^)]*=>\{([\s\S]*?)\}\)\.finally/)
+  assert.ok(catchBlockMatch, '必须包含 setLocation.catch 错误拦截块')
+  assert.match(catchBlockMatch[1], /entry\.location\.saveFailed/, 'catch 块内部必须接线并设置 entry.location.saveFailed 错误状态')
+})
