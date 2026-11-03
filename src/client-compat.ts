@@ -41,11 +41,30 @@ interface Sessions extends SessionNavigationSource {
   fork(input: { sessionId: string; increaseTitle: boolean }): Promise<string>;
 }
 interface UiWorkspace extends NavigationSource { startSession(id: string): unknown; forkSession?(id: string): Promise<unknown> }
+export interface ContextMenuEntry {
+  id: string;
+  label: string;
+  icon?: { key: string };
+  danger?: boolean;
+  disabled?: boolean;
+  separatorBefore?: boolean;
+  run: () => void;
+}
+export interface ContextMenusService {
+  register(definition: {
+    id: string;
+    target: string;
+    order?: number;
+    observe?: (target: { value: unknown }) => unknown[];
+    resolve: (value: { workspaceId: string; path?: string; displayTitle?: string }) => ContextMenuEntry[];
+  }): () => void;
+}
 interface Services {
   "remote": { $mount(contribution: { package: string; descriptors: readonly unknown[] }): Promise<() => void | Promise<void>> };
   "remote.workspaceRegistry": Registry;
   "uiWorkspace": UiWorkspace;
   "layout": { selectPanel(panel: null): void; beginNavigation?(): void };
+  "contextMenus": ContextMenusService;
 }
 /** 仅描述实际消费的客户端能力，隔离旧宿主缺失的公开声明。 */
 export interface ClientContext extends Omit<DirectoryMirrorContext, "slots"> {

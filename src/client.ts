@@ -4044,7 +4044,14 @@ export function startArchiveClient(require: HostRequire) {
 			}
 			function hostSidebarDeclaresSessionMenu() {
 				if (typeof ctx.slots.entries !== "function") return false;
-				return ctx.slots.entries("sidebar.workspaces").some((entry) => entry.children?.[sessionMenuSlot] !== undefined);
+				const declaredInWorkspaces = ctx.slots.entries("sidebar.workspaces").some((entry) => entry.children?.[sessionMenuSlot] !== undefined);
+				if (declaredInWorkspaces) return true;
+				const declaredInContextMenu = ctx.slots.entries("contextMenu.content").some((entry) => entry.children?.[sessionMenuSlot] !== undefined);
+				if (declaredInContextMenu) return true;
+				try {
+					if (ctx.get("contextMenus") !== undefined) return true;
+				} catch {}
+				return false;
 			}
 			let sidebarMode: "menu" | "waiting" | undefined;
 			let disposeMenu: (() => void) | undefined;
@@ -4100,11 +4107,113 @@ export function startArchiveClient(require: HostRequire) {
 					}, GlobalToastOverlay));
 			};
 			reconcileSidebar();
-			ctx.effect(() => setupWorkspaceMenuInjector(ctx.locale.bind(NS)), "archive-manager: workspace menu injector");
+			const nativeContextMenus = (() => {
+				try {
+					return ctx.get("contextMenus");
+				} catch {
+					return undefined;
+				}
+			})();
+			if (nativeContextMenus && typeof nativeContextMenus.register === "function") {
+				ctx.effect(() => {
+					const unregIcon = (ctx.slots.register as unknown as (spec: object, comp: unknown) => () => void)({
+						name: "contextMenu.icon",
+						key: "archive-manager.explorer",
+					}, () => (0, react_jsx_runtime.jsx)("svg", {
+						width: 14,
+						height: 14,
+						viewBox: "0 0 16 16",
+						fill: "none",
+						stroke: "currentColor",
+						strokeWidth: 1.3,
+						strokeLinecap: "round",
+						strokeLinejoin: "round",
+						children: [
+							(0, react_jsx_runtime.jsx)("path", { d: "M1.5 3.5C1.5 2.94772 1.94772 2.5 2.5 2.5H6.5L8 4.5H13.5C14.0523 4.5 14.5 4.94772 14.5 5.5V12.5C14.5 13.0523 14.0523 13.5 13.5 13.5H2.5C1.94772 13.5 1.5 13.0523 1.5 12.5V3.5Z" }),
+							(0, react_jsx_runtime.jsx)("path", { d: "M10 8.5L12 10.5L10 12.5" }),
+							(0, react_jsx_runtime.jsx)("path", { d: "M6.5 10.5H12" }),
+						],
+					}));
+					const unregMenu = nativeContextMenus.register({
+						id: "archive-manager.workspace-actions",
+						target: "workspace",
+						order: 250,
+						observe: () => [ctx.workspaces.list, ctx.sessions.list, ctx.locale],
+						resolve: ({ workspaceId, path, displayTitle }) => {
+							const items = ctx.workspaces.list?.getSnapshot?.()?.items ?? [];
+							const workspace = items.find((item) => item.workspaceId === workspaceId);
+							const sessionMap = ctx.sessions.list?.getSnapshot?.()?.byId ?? {};
+							const archived = new Set(ctx.workspaces.list?.getSnapshot?.()?.archivedSessionIds ?? []);
+							const candidateIds = workspace ? workspace.sessionIds.filter((id) => isWorkspaceTaskCandidate(id, sessionMap, archived)) : [];
+							const count = candidateIds.length;
+							const t = ctx.locale.bind(NS);
+							const wsPath = path ?? workspace?.path ?? workspace?.cwd;
+
+							const result = [];
+							if (wsPath) {
+								result.push({
+									id: "copy-workspace-path",
+									label: t("menu.copyWorkspacePath"),
+									icon: { key: "workspace.copy" },
+									run: () => {
+										void copySessionText(wsPath).catch(() => {});
+									},
+								});
+								result.push({
+									id: "open-in-explorer",
+									label: t("menu.openInExplorer"),
+									icon: { key: "archive-manager.explorer" },
+									run: () => {
+										void (async () => {
+											try {
+												const res = await fetch(resolveApiUrl("/open-in-app/open"), {
+													method: "POST",
+													headers: { "content-type": "application/json" },
+													body: JSON.stringify({ app: "explorer", path: wsPath }),
+												}).catch(() => null);
+												if (res && res.ok) return;
+											} catch {}
+											try {
+												await callSettingsApi("/open-in-explorer", {
+													method: "POST",
+													body: JSON.stringify({ path: wsPath, workspaceId }),
+												});
+											} catch (err) {
+												console.warn("archive-manager: open in explorer failed", err);
+											}
+										})();
+									},
+								});
+							}
+							result.push({
+								id: "archive-workspace",
+								label: t("menu.archiveWorkspace"),
+								icon: { key: "workspace.archive" },
+								disabled: count === 0,
+								run: () => {
+									if (count === 0) return;
+									publishArchiveWsTarget({
+										workspaceId,
+										title: displayTitle || workspaceId,
+										count,
+									});
+								},
+							});
+							return result;
+						},
+					});
+					return () => {
+						unregMenu?.();
+						unregIcon?.();
+					};
+				}, "archive-manager: native workspace context menu");
+			} else {
+				ctx.effect(() => setupWorkspaceMenuInjector(ctx.locale.bind(NS)), "archive-manager: workspace menu injector");
+			}
 			ctx.effect(() => setupSidebarRowContextMenu(), "archive-manager: sidebar row contextmenu trigger");
 			installSettingsNavIcon(ctx);
 			const unsubscribeSidebar = typeof ctx.on === "function" ? ctx.on("slots/changed", (key: string) => {
-				if (key !== "sidebar.workspaces") return;
+				if (key !== "sidebar.workspaces" && key !== "contextMenu.content") return;
 				try { reconcileSidebar(); }
 				catch (error) { console.warn("archive-manager: sidebar mode switch failed", error); }
 			}) : undefined;
@@ -4170,7 +4279,7 @@ export function startArchiveClient(require: HostRequire) {
 				if (!settingsSectionSupported || offSettingsSection) return;
 				if (sidebarController && !sidebarController.isSettingsSectionEnabled()) return;
 				try {
-					(ctx.slots.register as any)({
+					(ctx.slots.register as unknown as (spec: object, comp: unknown) => () => void)({
 						name: "settings.section.icon",
 						id: "archive-manager",
 						locale: NS,

@@ -44,16 +44,21 @@ statics["@deepseek-ai/dsh-client-ui-primitives"] = new Proxy({}, {
 
 // --- browser environment stubs for bundle materialization ---
 globalThis.window = globalThis;
+globalThis.addEventListener = () => {};
+globalThis.removeEventListener = () => {};
+globalThis.dispatchEvent = () => true;
 const styleStub = { dataset: {}, style: {}, setAttribute() {}, appendChild() {}, set textContent(v) {} };
-const headStub = { appendChild() {}, removeChild() {}, insertBefore() {}, contains: () => false, querySelector: () => null, querySelectorAll: () => [] };
+const headStub = { append() {}, appendChild() {}, removeChild() {}, insertBefore() {}, contains: () => false, querySelector: () => null, querySelectorAll: () => [] };
 globalThis.document = {
 	head: headStub,
 	body: headStub,
 	querySelector: (selector) => selector === "head" || selector === "body" ? headStub : null,
 	querySelectorAll: () => [],
+	getElementById: () => null,
 	createElement: () => styleStub
 };
 globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
+globalThis.MutationObserver = class { observe() {} disconnect() {} takeRecords() { return []; } };
 
 // --- minimal client module system ---
 const factories = new Map();
@@ -678,4 +683,95 @@ test("未归档列表排除已归档、子代理和空白占位，保留跨项�
 		summary("a"), summary("b"), summary("loose"), summary("old"), summary("child", {origin:"subagent"}), summary("blank", {blank:true})
 	].map(item => [item.id, item]));
 	assert.deepEqual(t.unarchivedSessionIds(byId, ["old"]), ["a", "b", "loose"]);
+});
+
+test("DSH 0.2.2-alpha.3 上下文菜单体系：会话菜单插槽就绪判定与工作区原生注册", async () => {
+	const sessionMenuSlot = "sidebar.workspaces.session.menu.item";
+	const injectedSlots = [];
+	const registeredSlots = [];
+	const registeredMenus = [];
+
+	const fakeContext = {
+		workspaces: {
+			list: {
+				getSnapshot: () => ({
+					items: [
+						{ workspaceId: "w1", path: "/test/w1", sessionIds: ["s1", "s2"] }
+					],
+					archivedSessionIds: []
+				}),
+				archiveSession: async () => {},
+				unarchiveSession: async () => {}
+			}
+		},
+		sessions: {
+			list: {
+				getSnapshot: () => ({
+					byId: {
+						s1: { id: "s1", title: "Task 1" },
+						s2: { id: "s2", title: "Task 2" }
+					}
+				})
+			}
+		},
+		locale: {
+			register: () => () => {},
+			bind: () => (key) => key
+		},
+		slots: {
+			inject: (target, effect) => {
+				injectedSlots.push(target);
+				effect?.();
+				return () => {};
+			},
+			register: (spec, comp) => {
+				registeredSlots.push(spec);
+				return () => {};
+			},
+			entries: (name) => {
+				if (name === "contextMenu.content") {
+					return [{ children: { [sessionMenuSlot]: { kind: "list" } } }];
+				}
+				if (name === "sidebar.workspaces") {
+					return [{ children: {} }]; // 0.2.2-alpha.3 中 sidebar.workspaces 不含该 slot
+				}
+				return [];
+			}
+		},
+		effect: (fn) => fn(),
+		get: (name) => {
+			if (name === "contextMenus") {
+				return {
+					register: (definition) => {
+						registeredMenus.push(definition);
+						return () => {};
+					}
+				};
+			}
+			return undefined;
+		}
+	};
+
+	await bundle.apply(fakeContext);
+
+	// 1. 验证会话菜单与弹窗在 0.2.2-alpha.3 contextMenu 架构下正常 inject 并 register
+	assert.ok(injectedSlots.includes(sessionMenuSlot), "0.2.2-alpha.3 下会话菜单插槽必须被成功 inject");
+	assert.ok(registeredSlots.some(s => s.name === sessionMenuSlot && s.id === "archive-manager.delete-session"), "删除会话项必须注册");
+	assert.ok(registeredSlots.some(s => s.name === sessionMenuSlot && s.id === "archive-manager.favorite"), "收藏会话项必须注册");
+	assert.ok(registeredSlots.some(s => s.name === sessionMenuSlot && s.id === "archive-manager.move-session"), "移动工作区项必须注册");
+	assert.ok(registeredSlots.some(s => s.name === "shell.overlay" && s.id === "archive-manager.archive-workspace"), "归档工作区弹窗必须注册");
+
+	// 2. 验证原生工作区上下文菜单被注册
+	const wsContribution = registeredMenus.find(m => m.id === "archive-manager.workspace-actions");
+	assert.ok(wsContribution, "工作区原生菜单项必须注册到 contextMenus");
+	assert.equal(wsContribution.target, "workspace");
+	assert.equal(wsContribution.order, 250);
+
+	// 3. 验证 resolve 解析候选与菜单项
+	const menuEntries = wsContribution.resolve({ workspaceId: "w1", path: "/test/w1", displayTitle: "Test WS" });
+	assert.equal(menuEntries.length, 3);
+	assert.equal(menuEntries[0].id, "copy-workspace-path");
+	assert.equal(menuEntries[1].id, "open-in-explorer");
+	assert.equal(menuEntries[2].id, "archive-workspace");
+	assert.equal(menuEntries[2].disabled, false);
 });
