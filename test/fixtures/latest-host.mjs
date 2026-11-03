@@ -266,6 +266,19 @@ test("正文读取共用只读句柄并在完成后释放", async (t) => {
 	await writer.close();
 });
 
+const activateSessionForAppend = (sessions, session) => {
+	if (typeof sessions?.enter === "function") {
+		const detach = sessions.enter(session);
+		if (typeof sessions.announce === "function") {
+			try {
+				sessions.announce(session);
+			} catch {}
+		}
+		return detach;
+	}
+	return () => {};
+};
+
 for (const { previousCache, seeded } of ["缺失", "无版本", "旧代际"].flatMap(
 	(previousCache) => [false, true].map((seeded) => ({ previousCache, seeded })),
 )) {
@@ -274,7 +287,9 @@ for (const { previousCache, seeded } of ["缺失", "无版本", "旧代际"].fla
 		const parent = env.sessions.prepare("projection-parent", {
 			meta: { cwd: env.cwd },
 		});
+		const detachParent = activateSessionForAppend(env.sessions, parent);
 		const seed = [parent.append("session/title", { title: "父会话继承标题", messageSeqs: [], source: { kind: "user" } })];
+		detachParent();
 		const session = env.sessions.prepare(
 			"projection-repair",
 			seeded
@@ -287,7 +302,9 @@ for (const { previousCache, seeded } of ["缺失", "无版本", "旧代际"].fla
 		);
 		const inheritedEventCount = seeded ? seed.length : 0;
 		assert.equal(session.inheritedEventCount, inheritedEventCount);
+		const detachSession = activateSessionForAppend(env.sessions, session);
 		const event = session.append("session/title", { title: "从原文恢复的标题", messageSeqs: [], source: { kind: "user" } });
+		detachSession();
 		const writer = await env.persistence.create(session.header, {
 			inheritedEventCount,
 		});
