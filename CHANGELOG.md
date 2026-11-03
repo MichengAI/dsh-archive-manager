@@ -4,6 +4,13 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 1.2.4 - 2026-11-03
+
+- **Session Context Menu Layout and Ordering Optimization**:
+  - Prioritizes "Favorite / Unfavorite" to the very top as the first menu item for quick access;
+  - Relocates destructive "Delete session" to the very bottom as the last item;
+  - Fully dual-mode compatible: uses native context menus on newer DSH Web releases while gracefully adjusting slot orders on older hosts.
+
 ## 1.2.3 - 2026-11-03
 
 - **Compatibility with latest DSH Web (0.2.2-alpha.3+) and context menu overhaul**:

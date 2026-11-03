@@ -240,3 +240,19 @@ test("Issue #91: settings.section 使用专用 id archive-manager 并具备 try/
   assert.doesNotMatch(client, /name:\s*"settings\.section",[\s\S]*?id:\s*"archived-sessions"/);
 });
 
+test("兼容旧宿主：settings.section.icon 插槽未声明抛错时不阻断 settings.section 注册", async () => {
+  const client = await readFile(clientPath, "utf8");
+
+  // 提取 mountSettingsSection 函数体
+  const mountMatch = client.match(/const mountSettingsSection = \(\) => \{([\s\S]*?)\n\t\t\t\};/);
+  assert.ok(mountMatch, "必须存在 mountSettingsSection 函数");
+  const body = mountMatch[1];
+
+  // settings.section.icon 必须在自己独立的 try/catch 块中，并在其后单独注册 settings.section
+  assert.match(
+    body,
+    /try\s*\{[\s\S]*?name:\s*"settings\.section\.icon"[\s\S]*?\}\s*catch[\s\S]*?const unreg = ctx\.slots\.register\(\{[\s\S]*?name:\s*"settings\.section"/,
+    "mountSettingsSection 中 settings.section.icon 必须独立 try/catch，防止抛错跳过 settings.section",
+  );
+});
+

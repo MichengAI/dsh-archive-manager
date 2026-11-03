@@ -132,14 +132,9 @@ async function setup(t, compression = "none") {
 }
 
 const activateSessionForAppend = (sessions, session) => {
-	if (typeof sessions?.enter === "function") {
-		const detach = sessions.enter(session);
-		if (typeof sessions.announce === "function") {
-			sessions.announce(session);
-		}
-		return detach;
-	}
-	return () => {};
+	const detach = sessions.enter(session);
+	sessions.announce(session);
+	return detach;
 };
 
 for (const compression of ["none", "zstd"]) {

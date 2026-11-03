@@ -2479,7 +2479,7 @@ export function startArchiveClient(require: HostRequire) {
 			"deleteSession.pending": "正在删除会话…",
 			"deleteSession.unknown": "会话已不存在或已被删除。",
 			"deleteSession.failed": "删除会话失败：{detail}",
-			"menu.archiveWorkspace": "归档会话",
+			"menu.archiveWorkspace": "归档工作区",
 			"menu.copyWorkspacePath": "复制目录",
 			"menu.openInExplorer": "打开目录",
 			"menu.moveSession": "移动到工作区",
@@ -2600,7 +2600,7 @@ export function startArchiveClient(require: HostRequire) {
 			"deleteSession.pending": "Deleting session…",
 			"deleteSession.unknown": "This session no longer exists or was already deleted.",
 			"deleteSession.failed": "Could not delete the session: {detail}",
-			"menu.archiveWorkspace": "Archive sessions",
+			"menu.archiveWorkspace": "Archive workspace",
 			"menu.copyWorkspacePath": "Copy folder path",
 			"menu.openInExplorer": "Open folder",
 			"menu.moveSession": "Move to workspace",
@@ -2720,7 +2720,7 @@ export function startArchiveClient(require: HostRequire) {
 			"deleteSession.pending": "Удаление сессии…",
 			"deleteSession.unknown": "Эта сессия больше не существует или уже удалена.",
 			"deleteSession.failed": "Не удалось удалить сессию: {detail}",
-			"menu.archiveWorkspace": "Архивировать сессии",
+			"menu.archiveWorkspace": "Архивировать рабочую область",
 			"menu.copyWorkspacePath": "Копировать путь к папке",
 			"menu.openInExplorer": "Открыть папку",
 			"menu.moveSession": "Переместить в проект",
@@ -3047,7 +3047,7 @@ export function startArchiveClient(require: HostRequire) {
 					setMenuOpen(false);
 					publishDeleteTarget({ sessionId, title });
 				};
-				if (typeof Item === "function") return (0, react_jsx_runtime.jsx)(Item, { danger: true, separatorBefore: true, icon, onSelect, children: t("menu.deleteSession") });
+				if (typeof Item === "function") return (0, react_jsx_runtime.jsx)(Item, { danger: true, icon, onSelect, children: t("menu.deleteSession") });
 				return (0, react_jsx_runtime.jsx)("button", { type: "button", role: "menuitem", onClick: onSelect, children: t("menu.deleteSession") });
 			}
 			/**
@@ -4208,7 +4208,6 @@ export function startArchiveClient(require: HostRequire) {
 								label: t("menu.deleteSession"),
 								icon: { key: "workspace.delete" },
 								danger: true,
-								separatorBefore: true,
 								afterContent: true,
 								run: () => {
 									publishDeleteTarget({ sessionId, title: displayTitle || sessionId });
@@ -4272,6 +4271,7 @@ export function startArchiveClient(require: HostRequire) {
 								label: t("menu.archiveWorkspace"),
 								icon: { key: "workspace.archive" },
 								disabled: count === 0,
+								separatorBefore: true,
 								run: () => {
 									if (count === 0) return;
 									publishArchiveWsTarget({
@@ -4342,6 +4342,7 @@ export function startArchiveClient(require: HostRequire) {
 			};
 
 			let offSettingsSection: (() => void) | null = null;
+			let offSettingsSectionIcon: (() => void) | null = null;
 			let settingsSectionSupported = false;
 
 			const ArchiveNavIcon = ({ size = 16 }: { size?: number }) => (0, react_jsx_runtime.jsx)("svg", {
@@ -4365,11 +4366,16 @@ export function startArchiveClient(require: HostRequire) {
 				if (!settingsSectionSupported || offSettingsSection) return;
 				if (sidebarController && !sidebarController.isSettingsSectionEnabled()) return;
 				try {
-					(ctx.slots.register as unknown as (spec: object, comp: unknown) => () => void)({
+					const iconRes = (ctx.slots.register as unknown as (spec: object, comp: unknown) => () => void)({
 						name: "settings.section.icon",
 						id: "archive-manager",
 						locale: NS,
 					}, ArchiveNavIcon);
+					offSettingsSectionIcon = typeof iconRes === "function" ? iconRes : null;
+				} catch {
+					offSettingsSectionIcon = null;
+				}
+				try {
 					const unreg = ctx.slots.register({
 						name: "settings.section",
 						id: "archive-manager",
@@ -4387,6 +4393,10 @@ export function startArchiveClient(require: HostRequire) {
 			};
 
 			const unmountSettingsSection = () => {
+				if (offSettingsSectionIcon) {
+					try { offSettingsSectionIcon(); } catch {}
+					offSettingsSectionIcon = null;
+				}
 				if (offSettingsSection) {
 					try { offSettingsSection(); } catch {}
 					offSettingsSection = null;
@@ -4441,6 +4451,16 @@ export function startArchiveClient(require: HostRequire) {
 							settingsSectionSupported = false;
 							unmountSettingsSection();
 						};
+					}
+					try {
+						const iconRes = (ctx.slots.register as unknown as (spec: object, comp: unknown) => () => void)({
+							name: "settings.section.icon",
+							id: "archive-manager",
+							locale: NS,
+						}, ArchiveNavIcon);
+						offSettingsSectionIcon = typeof iconRes === "function" ? iconRes : null;
+					} catch {
+						offSettingsSectionIcon = null;
 					}
 					const unreg = ctx.slots.register({
 						name: "settings.section",

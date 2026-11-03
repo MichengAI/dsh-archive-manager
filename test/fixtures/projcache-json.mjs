@@ -57,7 +57,7 @@ for (const hasTitle of [true, false]) {
 				if (cache.cachedSnapshot(header)?.values.title === expected) return;
 				await new Promise(resolve => setTimeout(resolve, 10));
 			}
-			assert.fail("官方会话创建事件未重建缓存");
+			assert.fail(`官方会话创建事件未重建缓存，实际快照: ${JSON.stringify(cache.cachedSnapshot(header))}`);
 		});
 		const officialFile = join(root, projectionCacheDomainSpec.name, "sessions", `${id}.json`);
 		let document;
@@ -68,7 +68,7 @@ for (const hasTitle of [true, false]) {
 			} catch {}
 			await new Promise(resolve => setTimeout(resolve, 10));
 		}
-		assert.equal(document?.record.rows.title.val, expected, "官方写入应持久化到缓存表");
+		assert.equal(document?.record.rows.title.val, expected, `官方写入应持久化到缓存表，实际读到: ${JSON.stringify(document?.record?.rows?.title)}`);
 		await domains.get(projectionCacheDomainSpec.name).close();
 		const reopened = await domains.open(projectionCacheDomainSpec);
 		assert.equal(reopened.table("sessions").get(id).rows.title.val, expected);

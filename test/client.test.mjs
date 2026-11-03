@@ -785,3 +785,85 @@ test("DSH 0.2.2-alpha.3 上下文菜单体系：会话菜单插槽就绪判定�
 	assert.equal(menuEntries[2].id, "archive-workspace");
 	assert.equal(menuEntries[2].disabled, false);
 });
+
+test("DSH 0.2.2-alpha.3 上下文菜单：宿主仅声明原生 contextMenus 与未嵌套插槽时的就绪判定", async () => {
+	const sessionMenuSlot = "sidebar.workspaces.session.menu.item";
+	const registeredSlots = [];
+	const injectedSlots = [];
+	const fakeContext = {
+		workspaces: {
+			list: { getSnapshot: () => ({ items: [], archivedSessionIds: [] }) },
+		},
+		sessions: {
+			list: { getSnapshot: () => ({ byId: {} }) },
+		},
+		locale: {
+			register: () => {},
+			bind: () => (key) => key,
+		},
+		slots: {
+			inject: (target, effect) => {
+				injectedSlots.push(target);
+				effect?.();
+				return () => {};
+			},
+			register: (spec) => {
+				registeredSlots.push(spec);
+				return () => {};
+			},
+			entries: (name) => {
+				// 模拟新版宿主：不声明旧版 children[sessionMenuSlot]
+				if (name === "contextMenu.content") {
+					return [{ children: {} }]; // length > 0 但不含 children[sessionMenuSlot]
+				}
+				return [];
+			}
+		},
+		effect: (fn) => fn(),
+		get: (name) => (name === "contextMenus" ? { register: () => () => {} } : undefined),
+	};
+
+	await bundle.apply(fakeContext);
+
+	assert.ok(injectedSlots.includes(sessionMenuSlot), "基于 contextMenus 与 contextMenu.content 判定就绪");
+});
+
+test("双模会话菜单组件行为级测试：原生环境渲染 null，旧宿主环境渲染菜单项", async () => {
+	const sessionMenuSlot = "sidebar.workspaces.session.menu.item";
+	let deleteComp = null;
+	let favoriteComp = null;
+	let hasNative = true;
+
+	const fakeContext = {
+		workspaces: { list: { getSnapshot: () => ({ items: [], archivedSessionIds: [] }) } },
+		sessions: { list: { getSnapshot: () => ({ byId: {} }) } },
+		locale: { register: () => {}, bind: () => (k) => k },
+		slots: {
+			inject: (_, eff) => { eff?.(); return () => {}; },
+			register: (spec, comp) => {
+				if (spec.name === sessionMenuSlot && spec.id === "archive-manager.delete-session") deleteComp = comp;
+				if (spec.name === sessionMenuSlot && spec.id === "archive-manager.favorite") favoriteComp = comp;
+				return () => {};
+			},
+			entries: () => [{ children: { [sessionMenuSlot]: {} } }]
+		},
+		effect: (fn) => fn(),
+		get: (name) => (hasNative && name === "contextMenus" ? { register: () => () => {} } : undefined),
+	};
+
+	await bundle.apply(fakeContext);
+
+	assert.ok(deleteComp, "DeleteSessionMenuItem 必须被传入 register");
+	assert.ok(favoriteComp, "FavoriteMenuItem 必须被传入 register");
+
+	// 1. 原生环境生效时，slot 组件执行返回 null
+	hasNative = true;
+	const delResNative = deleteComp({ sessionId: "s1", displayTitle: "S1", useMenuOpenState: () => [false, () => {}], t: (k) => k });
+	assert.equal(delResNative, null, "原生环境 DeleteSessionMenuItem 必须返回 null 避免双菜单");
+
+	// 2. 旧宿主环境（无原生 contextMenus）时，slot 组件返回实际菜单项 JSX（非 null）
+	hasNative = false;
+	const delResLegacy = deleteComp({ sessionId: "s1", displayTitle: "S1", useMenuOpenState: () => [false, () => {}], t: (k) => k });
+	assert.notEqual(delResLegacy, null, "旧宿主环境 DeleteSessionMenuItem 必须返回菜单元素");
+	assert.equal(typeof delResLegacy, "object");
+});
