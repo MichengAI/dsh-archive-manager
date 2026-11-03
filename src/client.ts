@@ -14,7 +14,7 @@ import { createCacheRebuildController } from "./cache-rebuild-client.js";
 import type { CacheRepairState } from "./cache-rebuild-client.js";
 import { allowArchivedNavigation, openArchivedConversation, formatArchiveNavigationError, ArchiveNavigationError, currentSessionId } from "./archive-experience.js";
 import { observePluginUpdate } from "./plugin-update-ui.js";
-import { setupSidebarEntry } from "./sidebar-entry.js";
+import { setupSidebarEntry, ArchiveBundleConfigCard } from "./sidebar-entry.js";
 import { resolveApiUrl } from "./api-base.js";
 import { favoriteInvocations, idleArchiveCandidate, createSessionOrganizer, runSessionBatch } from "./archive-organizer.js";
 import { createOrganizerPanel, organizerZh, organizerEn, organizerRu } from "./archive-organizer-ui.js";
@@ -2369,6 +2369,7 @@ export function startArchiveClient(require: HostRequire) {
             "entry.location.both": "两边显示",
             "entry.location.sidebar": "仅侧边栏",
             "entry.location.settings": "仅设置",
+            "entry.location.saveFailed": "保存入口设置失败，请检查网络或重启宿主进程",
             "sidebar.favoriteStar.title": "侧栏收藏星标",
 			"sidebar.favoriteStar.desc": "在会话列表行前显示收藏星标。关闭后不显示图标，仍可通过菜单收藏和筛选。",
 			"sidebar.favoriteStar.toggle": "切换侧栏收藏星标",
@@ -2489,6 +2490,7 @@ export function startArchiveClient(require: HostRequire) {
             "entry.location.both": "Both",
             "entry.location.sidebar": "Sidebar only",
             "entry.location.settings": "Settings only",
+            "entry.location.saveFailed": "Failed to save entry location. Please check your network or restart the host.",
             "sidebar.favoriteStar.title": "Sidebar favorite star",
 			"sidebar.favoriteStar.desc": "Show favorite star on session rows in the sidebar. When disabled, the star is hidden while menu actions and filters stay available.",
 			"sidebar.favoriteStar.toggle": "Toggle sidebar favorite star",
@@ -2608,6 +2610,7 @@ export function startArchiveClient(require: HostRequire) {
             "entry.location.both": "Оба места",
             "entry.location.sidebar": "Только боковая панель",
             "entry.location.settings": "Только настройки",
+            "entry.location.saveFailed": "Не удалось сохранить расположение пункта. Проверьте сеть или перезапустите хост.",
             "sidebar.favoriteStar.title": "Звезда избранного в боковой панели",
 			"sidebar.favoriteStar.desc": "Отображать звезду избранного у строк сессий в боковой панели. При отключении значок скрывается, а добавление через меню и фильтрация остаются доступными.",
 			"sidebar.favoriteStar.toggle": "Переключить звезду избранного в боковой панели",
@@ -4280,6 +4283,7 @@ export function startArchiveClient(require: HostRequire) {
 			ARCHIVE_MANAGER_REMOTE,
 			currentSessionId,
 			setupSidebarEntry,
+			ArchiveBundleConfigCard,
 			setupWorkspaceFavoritesOnly,
 		};
 		exports.apply = apply;

@@ -19,6 +19,7 @@ export const sidebarEntryCss = `
 .dsham_bundle_label_box{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;text-align:left}
 .dsham_bundle_title{font-size:13px;font-weight:500;line-height:20px;color:var(--dsw-alias-label-primary)}
 .dsham_bundle_desc{font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}
+.dsham_bundle_error{font-size:12px;line-height:16px;color:var(--dsw-alias-status-danger,#ef4444);margin-top:2px}
 `;
 
 export function ensureSidebarEntryStyle(): void {
@@ -40,6 +41,7 @@ export function ArchiveBundleConfigCard(props: {
   t: Translate;
   location?: EntryLocation;
   onLocationChange?: (location: EntryLocation) => void;
+  errorMessage?: string | null;
   enabled?: boolean;
   onToggle?: (enabled: boolean) => void;
   disabled?: boolean;
@@ -56,6 +58,7 @@ export function ArchiveBundleConfigCard(props: {
     t,
     location: propLocation,
     onLocationChange,
+    errorMessage,
     enabled = false,
     onToggle,
     disabled,
@@ -84,7 +87,8 @@ export function ArchiveBundleConfigCard(props: {
     h("div", { key: "entry-location", className: "dsham_bundle_row" },
       h("div", { className: "dsham_bundle_label_box" },
         h("span", { className: "dsham_bundle_title" }, t("entry.location.title")),
-        h("span", { className: "dsham_bundle_desc" }, t("entry.location.desc"))
+        h("span", { className: "dsham_bundle_desc" }, t("entry.location.desc")),
+        errorMessage ? h("span", { className: "dsham_bundle_error", role: "alert" }, errorMessage) : null
       ),
       h(SegmentedControl, {
         id: "dsham-bundle-entry-location",
@@ -160,6 +164,7 @@ function ArchiveBundleConfigCardWrapper(props: {
   const [onlineUpdateEnabled, setOnlineUpdateEnabled] = React.useState(props.getOnlineUpdateEnabled ? props.getOnlineUpdateEnabled : () => true);
   const [onlineUpdateLocked, setOnlineUpdateLocked] = React.useState(props.getOnlineUpdateLocked ? props.getOnlineUpdateLocked : () => false);
   const [sidebarFavoriteStarEnabled, setSidebarFavoriteStarEnabled] = React.useState(props.getSidebarFavoriteStarEnabled ? props.getSidebarFavoriteStarEnabled : () => true);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
   const [savingLocation, setSavingLocation] = React.useState(false);
   const [savingUpdate, setSavingUpdate] = React.useState(false);
   const [savingFavoriteStar, setSavingFavoriteStar] = React.useState(false);
@@ -167,6 +172,7 @@ function ArchiveBundleConfigCardWrapper(props: {
   React.useEffect(() => {
     const syncState = () => {
       setLocation(props.getLocation());
+      setSaveError(null);
       if (props.getOnlineUpdateEnabled) {
         setOnlineUpdateEnabled(props.getOnlineUpdateEnabled());
       }
@@ -183,10 +189,12 @@ function ArchiveBundleConfigCardWrapper(props: {
 
   const onLocationChange = (next: EntryLocation) => {
     setSavingLocation(true);
+    setSaveError(null);
     setLocation(next);
     props.setLocation(next).catch((err) => {
       console.error("archive-manager: setLocation failed:", err);
       setLocation(props.getLocation());
+      setSaveError(props.t("entry.location.saveFailed") || "保存入口设置失败，请检查网络或重启宿主进程");
     }).finally(() => {
       setSavingLocation(false);
     });
@@ -220,6 +228,7 @@ function ArchiveBundleConfigCardWrapper(props: {
   return h(ArchiveBundleConfigCard, {
     t: props.t,
     location,
+    errorMessage: saveError,
     disabled: savingLocation,
     onLocationChange,
     onlineUpdateEnabled,

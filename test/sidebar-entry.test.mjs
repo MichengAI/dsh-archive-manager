@@ -417,3 +417,37 @@ test('客户端 setLocation 保存失败时的乐观回退', async () => {
   assert.equal(failingController.getLocation(), 'settings', '网络失败后回滚原状态')
   failingController.destroy()
 })
+
+test('ArchiveBundleConfigCard: 存在 errorMessage 时渲染错误警示信息', async () => {
+  let definition
+  new Function('window', await readFile(new URL('../lib/client.js', import.meta.url), 'utf8'))({
+    __ModuleLoader__: { load(value) { definition = value } },
+  })
+  const client = definition.factory((id) => {
+    if (id === 'react') return React
+    if (id === 'react/jsx-runtime') return { jsx: React.createElement, jsxs: React.createElement, Fragment: React.Fragment }
+    return new Proxy({}, { get: () => function Dummy() { return null } })
+  })
+  const { ArchiveBundleConfigCard } = client.__test
+  assert.equal(typeof ArchiveBundleConfigCard, 'function')
+
+  // 无错误时不渲染
+  const okEl = ArchiveBundleConfigCard({
+    t: (key) => key,
+    location: 'both',
+  })
+  const okBox = okEl.props.children[0].props.children[0]
+  assert.equal(okBox.props.children[2], null, '无错误时不渲染 error')
+
+  // 有错误时渲染红字警示
+  const errEl = ArchiveBundleConfigCard({
+    t: (key) => key,
+    location: 'both',
+    errorMessage: '保存失败测试',
+  })
+  const errBox = errEl.props.children[0].props.children[0]
+  const errorSpan = errBox.props.children[2]
+  assert.ok(errorSpan, '有错误时渲染错误节点')
+  assert.equal(errorSpan.props.className, 'dsham_bundle_error')
+  assert.equal(errorSpan.props.children, '保存失败测试')
+})
