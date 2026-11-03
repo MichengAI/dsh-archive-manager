@@ -761,11 +761,21 @@ test("DSH 0.2.2-alpha.3 上下文菜单体系：会话菜单插槽就绪判定�
 	assert.ok(registeredSlots.some(s => s.name === sessionMenuSlot && s.id === "archive-manager.move-session"), "移动工作区项必须注册");
 	assert.ok(registeredSlots.some(s => s.name === "shell.overlay" && s.id === "archive-manager.archive-workspace"), "归档工作区弹窗必须注册");
 
-	// 2. 验证原生工作区上下文菜单被注册
+	// 2. 验证原生上下文菜单被注册（工作区与会话）
 	const wsContribution = registeredMenus.find(m => m.id === "archive-manager.workspace-actions");
 	assert.ok(wsContribution, "工作区原生菜单项必须注册到 contextMenus");
 	assert.equal(wsContribution.target, "workspace");
 	assert.equal(wsContribution.order, 250);
+
+	const favContribution = registeredMenus.find(m => m.id === "archive-manager.session-favorite");
+	assert.ok(favContribution, "会话收藏项必须原生注册到 contextMenus");
+	assert.equal(favContribution.target, "session");
+	assert.equal(favContribution.order, 1);
+
+	const delContribution = registeredMenus.find(m => m.id === "archive-manager.session-delete");
+	assert.ok(delContribution, "会话删除项必须原生注册到 contextMenus");
+	assert.equal(delContribution.target, "session");
+	assert.equal(delContribution.order, 9999);
 
 	// 3. 验证 resolve 解析候选与菜单项
 	const menuEntries = wsContribution.resolve({ workspaceId: "w1", path: "/test/w1", displayTitle: "Test WS" });

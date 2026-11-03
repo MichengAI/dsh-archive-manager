@@ -3031,7 +3031,15 @@ export function startArchiveClient(require: HostRequire) {
 					() => deleteTarget
 				);
 			}
+			const hasNativeContextMenus = () => {
+				try {
+					return typeof ctx.get("contextMenus")?.register === "function";
+				} catch {
+					return false;
+				}
+			};
 			function DeleteSessionMenuItem({ sessionId, displayTitle: title, useMenuOpenState, t }: { sessionId: string; displayTitle: string; useMenuOpenState: () => readonly [boolean, (open: boolean) => void]; t: Translate }) {
+				if (hasNativeContextMenus()) return null;
 				const [, setMenuOpen] = useMenuOpenState();
 				const Item = _deepseek_ai_dsh_client_ui_primitives.MenuItemButton;
 				const icon = (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconTrashOutlineRegular, { size: 14 });
@@ -3039,7 +3047,7 @@ export function startArchiveClient(require: HostRequire) {
 					setMenuOpen(false);
 					publishDeleteTarget({ sessionId, title });
 				};
-				if (typeof Item === "function") return (0, react_jsx_runtime.jsx)(Item, { danger: true, icon, onSelect, children: t("menu.deleteSession") });
+				if (typeof Item === "function") return (0, react_jsx_runtime.jsx)(Item, { danger: true, separatorBefore: true, icon, onSelect, children: t("menu.deleteSession") });
 				return (0, react_jsx_runtime.jsx)("button", { type: "button", role: "menuitem", onClick: onSelect, children: t("menu.deleteSession") });
 			}
 			/**
@@ -3047,6 +3055,7 @@ export function startArchiveClient(require: HostRequire) {
 			 * 读写走同一份 favoriteRow 存储，和标题左侧的星完全同步。
 			 */
 			function FavoriteMenuItem({ sessionId, favoriteRow, useMenuOpenState, t }: { sessionId: string; favoriteRow: FavoriteRowStore; useMenuOpenState: () => readonly [boolean, (open: boolean) => void]; t: Translate }) {
+				if (hasNativeContextMenus()) return null;
 				const [, setMenuOpen] = useMenuOpenState();
 				const state = (0, react.useSyncExternalStore)(favoriteRow.subscribe, favoriteRow.getSnapshot);
 				const favorited = state.ready && state.ids.has(sessionId);
@@ -4070,14 +4079,14 @@ export function startArchiveClient(require: HostRequire) {
 				disposeMenu ??= ctx.slots.inject(sessionMenuSlot, () => ctx.slots.register({
 						name: sessionMenuSlot,
 						id: "archive-manager.delete-session",
-						order: 500,
+						order: 9999,
 						locale: NS,
 						inject: () => ({})
 					}, DeleteSessionMenuItem));
 				disposeFavoriteMenu ??= ctx.slots.inject(sessionMenuSlot, () => ctx.slots.register({
 						name: sessionMenuSlot,
 						id: "archive-manager.favorite",
-						order: 50,
+						order: 1,
 						locale: NS,
 						inject: () => ({ favoriteRow: favoriteRowStore })
 					}, FavoriteMenuItem));
@@ -4118,6 +4127,8 @@ export function startArchiveClient(require: HostRequire) {
 			if (nativeContextMenus && typeof nativeContextMenus.register === "function") {
 				ctx.effect(() => {
 					let unregIcon: (() => void) | undefined;
+					let unregStarFill: (() => void) | undefined;
+					let unregStarOutline: (() => void) | undefined;
 					try {
 						unregIcon = (ctx.slots.register as unknown as (spec: object, comp: unknown) => () => void)({
 							name: "contextMenu.icon",
@@ -4132,14 +4143,79 @@ export function startArchiveClient(require: HostRequire) {
 							strokeLinecap: "round",
 							strokeLinejoin: "round",
 							children: [
-								(0, react_jsx_runtime.jsx)("path", { d: "M1.5 3.5C1.5 2.94772 1.94772 2.5 2.5H6.5L8 4.5H13.5C14.0523 4.5 14.5 4.94772 14.5 5.5V12.5C14.5 13.0523 14.0523 13.5 13.5 13.5H2.5C1.94772 13.5 1.5 13.0523 1.5 12.5V3.5Z" }),
+								(0, react_jsx_runtime.jsx)("path", { d: "M1.5 3.5C1.5 2.94772 1.94772 2.5 2.5 2.5H6.5L8 4.5H13.5C14.0523 4.5 14.5 4.94772 14.5 5.5V12.5C14.5 13.0523 14.0523 13.5 13.5 13.5H2.5C1.94772 13.5 1.5 13.0523 1.5 12.5V3.5Z" }),
 								(0, react_jsx_runtime.jsx)("path", { d: "M10 8.5L12 10.5L10 12.5" }),
 								(0, react_jsx_runtime.jsx)("path", { d: "M6.5 10.5H12" }),
 							],
 						}));
+						unregStarFill = (ctx.slots.register as unknown as (spec: object, comp: unknown) => () => void)({
+							name: "contextMenu.icon",
+							key: "archive-manager.star-fill",
+						}, () => (0, react_jsx_runtime.jsx)("svg", {
+							width: 14,
+							height: 14,
+							viewBox: "0 0 16 16",
+							fill: "#e8b931",
+							stroke: "#e8b931",
+							strokeWidth: 1.2,
+							strokeLinejoin: "round",
+							children: (0, react_jsx_runtime.jsx)("path", { d: STAR_PATH }),
+						}));
+						unregStarOutline = (ctx.slots.register as unknown as (spec: object, comp: unknown) => () => void)({
+							name: "contextMenu.icon",
+							key: "archive-manager.star-outline",
+						}, () => (0, react_jsx_runtime.jsx)("svg", {
+							width: 14,
+							height: 14,
+							viewBox: "0 0 16 16",
+							fill: "none",
+							stroke: "currentColor",
+							strokeWidth: 1.3,
+							strokeLinejoin: "round",
+							children: (0, react_jsx_runtime.jsx)("path", { d: STAR_PATH }),
+						}));
 					} catch {
 						// contextMenu.icon 插槽在部分宿主或隔离测试夹具中未声明时安全降级
 					}
+					const unregSessionFav = nativeContextMenus.register({
+						id: "archive-manager.session-favorite",
+						target: "session",
+						order: 1,
+						observe: () => [favoriteRowStore, ctx.locale],
+						resolve: ({ sessionId }: { sessionId: string }) => {
+							const state = favoriteRowStore.getSnapshot();
+							const favorited = state.ready && state.ids.has(sessionId);
+							const t = ctx.locale.bind(NS);
+							return [{
+								id: "favorite",
+								label: t(favorited ? "organizer.unfavorite" : "organizer.favorite"),
+								icon: { key: favorited ? "archive-manager.star-fill" : "archive-manager.star-outline" },
+								run: () => {
+									void favoriteRowStore.toggle(sessionId);
+								},
+							}];
+						},
+					});
+					const unregSessionDel = nativeContextMenus.register({
+						id: "archive-manager.session-delete",
+						target: "session",
+						order: 9999,
+						observe: () => [ctx.locale],
+						resolve: ({ sessionId, displayTitle }: { sessionId: string; displayTitle?: string }) => {
+							const t = ctx.locale.bind(NS);
+							return [{
+								id: "delete-session",
+								label: t("menu.deleteSession"),
+								icon: { key: "workspace.delete" },
+								danger: true,
+								separatorBefore: true,
+								afterContent: true,
+								run: () => {
+									publishDeleteTarget({ sessionId, title: displayTitle || sessionId });
+								},
+							}];
+						},
+					});
 					const unregMenu = nativeContextMenus.register({
 						id: "archive-manager.workspace-actions",
 						target: "workspace",
@@ -4209,8 +4285,12 @@ export function startArchiveClient(require: HostRequire) {
 						},
 					});
 					return () => {
+						unregSessionFav?.();
+						unregSessionDel?.();
 						unregMenu?.();
 						unregIcon?.();
+						unregStarFill?.();
+						unregStarOutline?.();
 					};
 				}, "archive-manager: native workspace context menu");
 			} else {

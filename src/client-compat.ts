@@ -48,15 +48,30 @@ export interface ContextMenuEntry {
   danger?: boolean;
   disabled?: boolean;
   separatorBefore?: boolean;
+  afterContent?: boolean;
   run: () => void;
 }
 export interface ContextMenusService {
   register(definition: {
     id: string;
+    target: "workspace";
+    order?: number;
+    observe?: (target?: { workspaceId: string; path?: string; displayTitle?: string }) => unknown[];
+    resolve: (value: { workspaceId: string; path?: string; displayTitle?: string }) => ContextMenuEntry[];
+  }): () => void;
+  register(definition: {
+    id: string;
+    target: "session";
+    order?: number;
+    observe?: (target?: { sessionId: string; displayTitle?: string }) => unknown[];
+    resolve: (value: { sessionId: string; displayTitle?: string }) => ContextMenuEntry[];
+  }): () => void;
+  register(definition: {
+    id: string;
     target: string;
     order?: number;
-    observe?: (target: { value: unknown }) => unknown[];
-    resolve: (value: { workspaceId: string; path?: string; displayTitle?: string }) => ContextMenuEntry[];
+    observe?: (target?: Record<string, unknown>) => unknown[];
+    resolve: (value: Record<string, unknown>) => ContextMenuEntry[];
   }): () => void;
 }
 interface Services {
