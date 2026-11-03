@@ -2785,6 +2785,58 @@ export function startArchiveClient(require: HostRequire) {
 				failures: batch.failures,
 			};
 		}
+		/**
+		 * 移动会话二级子菜单几何定位与视口防溢出算法（Issue #102）。
+		 *
+		 * 核心原则：
+		 * 1. 废除使用静态上限常量（如 360px）直接参与越界检测与向上平移，必须基于 DOM 测量或项数预估的实际高度；
+		 * 2. 默认向下展开：与触发菜单项顶部平齐（top = triggerRect.top - 4）；
+		 * 3. 当向下空间不足时，优先向上翻转并让子菜单底边与触发项底边对齐（top = triggerRect.bottom + 4 - actualHeight），
+		 *    确保鼠标从触发项水平划入时永不发生垂直脱离或出现空白断层；
+		 * 4. 仅当视口极端扁平时，才贴合视口边界，并通过 maxHeight 与 overflow-y 保证内容可滚动访问。
+		 */
+		interface SubmenuPositionOptions {
+			triggerRect: { top: number; bottom: number; left: number; right: number };
+			viewport: { width: number; height: number };
+			itemCount: number;
+			measuredHeight?: number;
+		}
+
+		function computeSubmenuPosition({ triggerRect, viewport, itemCount, measuredHeight }: SubmenuPositionOptions): { top: number; left: number; maxHeight: number } {
+			const winWidth = viewport.width;
+			const winHeight = viewport.height;
+			const menuWidth = 220;
+
+			const maxAvailableHeight = Math.max(140, winHeight - 20);
+			const targetMaxHeight = Math.min(360, maxAvailableHeight);
+
+			// 预估高度：无项时空提示约 44px；有项时每项 32px + 2px 间距，加上 10px 内边距与边框
+			const estimatedHeight = itemCount === 0 ? 44 : 34 * itemCount + 8;
+			const actualHeight = Math.min(targetMaxHeight, Math.max(20, typeof measuredHeight === "number" && measuredHeight > 0 ? measuredHeight : estimatedHeight));
+
+			// 水平位置：优先右侧，右侧空间不足时翻转到左侧
+			let left = triggerRect.right + 2;
+			if (left + menuWidth > winWidth - 10) {
+				left = Math.max(10, triggerRect.left - menuWidth - 4);
+			}
+
+			// 垂直位置：
+			// 1. 优先向下展开（与触发项顶部对齐）
+			let top = triggerRect.top - 4;
+			if (top + actualHeight > winHeight - 10) {
+				// 2. 向下空间不足时，向上翻转：底边对齐触发按钮底边
+				const flippedTop = triggerRect.bottom + 4 - actualHeight;
+				if (flippedTop >= 10) {
+					top = flippedTop;
+				} else {
+					// 3. 上下双向均不足（极矮窗口）：贴近屏幕底部兜底
+					top = Math.max(10, winHeight - actualHeight - 10);
+				}
+			}
+			if (top < 10) top = 10;
+
+			return { top, left, maxHeight: targetMaxHeight };
+		}
 		async function apply(ctx: ClientContext) {
 			// 先挂侧栏和设置页，再等 Remote；否则官方侧栏会一直占着，菜单里没有删除。
 			applyWorkspaceBrowser(ctx);
@@ -3042,46 +3094,51 @@ export function startArchiveClient(require: HostRequire) {
 					children: toast.text
 				});
 			}
+
 			function MoveSessionMenuItem({ sessionId, displayTitle: title, useMenuOpenState, t }: { sessionId: string; displayTitle: string; useMenuOpenState: () => readonly [boolean, (open: boolean) => void]; t: Translate }) {
 				const [, setMenuOpen] = useMenuOpenState();
 				const [subOpen, setSubOpen] = react.useState(false);
 				const [subPos, setSubPos] = react.useState<{ top: number; left: number; maxHeight: number } | null>(null);
 				const [moving, setMoving] = react.useState(false);
 				const rowRef = react.useRef<HTMLDivElement>(null);
+				const subMenuRef = react.useRef<HTMLDivElement>(null);
 				const leaveTimerRef = react.useRef<ReturnType<typeof setTimeout> | null>(null);
 
 				const workspaces = ctx.workspaces.list?.getSnapshot?.()?.items ?? [];
 				const Item = _deepseek_ai_dsh_client_ui_primitives.MenuItemButton;
 
+				const updatePosition = (measuredHeight?: number) => {
+					if (!rowRef.current) return;
+					const rect = rowRef.current.getBoundingClientRect();
+					const winWidth = typeof window !== "undefined" ? window.innerWidth : 1024;
+					const winHeight = typeof window !== "undefined" ? window.innerHeight : 768;
+					const nextPos = computeSubmenuPosition({
+						triggerRect: rect,
+						viewport: { width: winWidth, height: winHeight },
+						itemCount: workspaces.length,
+						measuredHeight
+					});
+					setSubPos((prev) => {
+						if (prev && prev.top === nextPos.top && prev.left === nextPos.left && prev.maxHeight === nextPos.maxHeight) {
+							return prev;
+						}
+						return nextPos;
+					});
+				};
+
 				const handleMouseEnter = () => {
 					if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
-					if (rowRef.current) {
-						const rect = rowRef.current.getBoundingClientRect();
-						const winWidth = typeof window !== "undefined" ? window.innerWidth : 1024;
-						const winHeight = typeof window !== "undefined" ? window.innerHeight : 768;
-
-						// 二级菜单宽度约 180~240px，最大高度自适应屏幕并留出上下安全边距
-						const menuWidth = 220;
-						const maxAvailableHeight = Math.max(140, winHeight - 20);
-						const targetMaxHeight = Math.min(360, maxAvailableHeight);
-
-						// 水平位置：优先右侧，右侧空间不足时翻转到左侧
-						let left = rect.right + 2;
-						if (left + menuWidth > winWidth - 10) {
-							left = Math.max(10, rect.left - menuWidth - 4);
-						}
-
-						// 垂直位置：优先与菜单项顶部平齐，若底部超出屏幕，则向上平移，确保整个菜单都在可视区域内
-						let top = rect.top - 4;
-						if (top + targetMaxHeight > winHeight - 10) {
-							top = Math.max(10, winHeight - targetMaxHeight - 10);
-						}
-						if (top < 10) top = 10;
-
-						setSubPos({ top, left, maxHeight: targetMaxHeight });
-					}
+					updatePosition();
 					setSubOpen(true);
 				};
+
+				react.useLayoutEffect(() => {
+					if (!subOpen || !subMenuRef.current) return;
+					const measured = subMenuRef.current.offsetHeight;
+					if (measured > 0) {
+						updatePosition(measured);
+					}
+				}, [subOpen, workspaces.length]);
 
 				const handleMouseLeave = () => {
 					leaveTimerRef.current = setTimeout(() => {
@@ -3153,6 +3210,7 @@ export function startArchiveClient(require: HostRequire) {
 						itemButton,
 						subOpen && subPos && typeof document !== "undefined" && typeof react_dom?.createPortal === "function" && (0, react_dom.createPortal)(
 							(0, react_jsx_runtime.jsxs)("div", {
+								ref: subMenuRef,
 								className: "dsham_moveSubmenu",
 								role: "menu",
 								onPointerDown: (e) => {
@@ -4119,6 +4177,7 @@ export function startArchiveClient(require: HostRequire) {
             catch (reason) { notify(formatForkError(reason, t)); }
         }
         exports.__test = {
+            computeSubmenuPosition,
             forkWithFeedback,
 			favoritesOnlyVisibility,
 			favoriteGroupPredicate,
