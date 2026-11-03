@@ -123,15 +123,18 @@ Restart DSH Web, then refresh the page (or hard-refresh with `Ctrl+Shift+R`). Op
 The plugin follows standard DSH bundle configuration conventions. Options are located at:
 > **Sidebar → Plugins → Click `Archive Manager`** (the host's `plugins.bundle.config` slot).
 
-Two native switches are available:
+Native configuration options are available:
 
-### 1. Sidebar Entry (`sidebarEntry`)
-- **Default**: Disabled (`false`)
-- **Description**: Displays a persistent **Archive** navigation icon in the host's left primary sidebar under **Plugins**.
+### 1. Entry Location (`entryLocation`)
+- **Options**:
+  - **All locations (`both`)**: Displays the Archive navigation icon in the left sidebar and keeps the menu entry under **Settings → Archived sessions**.
+  - **Sidebar only (`sidebar`)**: Displays the Archive navigation icon in the left sidebar and unregisters the settings section for a streamlined settings dialog.
+  - **Settings only (`settings`)** (Default): Keeps the entry under **Settings → Archived sessions** while maintaining a minimal sidebar.
+- **Fail-safe Guarantee**: A mutually-exclusive 3-state segmented control ensures at least one entry point is always accessible, preventing accidental orphan states.
 - **Effect**:
-  - When enabled, clicking the sidebar icon opens the Archive Manager directly in the primary workspace with a **960px centered container** (matching host plugin manager conventions). This eliminates vertical scrolling constraints in narrow settings dialogs;
-  - When disabled, unregisters the sidebar entry cleanly (and resets the active panel gracefully if currently viewing the panel, preventing blank views);
-  - The standard **Settings → Archived sessions** view remains active either way, and state is synchronized live across both entry points.
+  - When the sidebar is enabled, clicking the icon opens Archive Manager directly in the primary workspace with a **960px centered container** (matching host plugin manager conventions). This eliminates vertical scrolling constraints in narrow settings dialogs;
+  - When switching to **Settings only**, safely unregisters the sidebar entry (and resets the active panel gracefully if currently viewing the panel, preventing blank views);
+  - Backward compatible with legacy `sidebarEntry` boolean settings (`true` maps to `both`, `false` maps to `settings`).
 
 ### 2. Online Updates (`onlineUpdate` / `updater`)
 - **Default**: Enabled (`true`)

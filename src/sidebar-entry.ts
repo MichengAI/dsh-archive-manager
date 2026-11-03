@@ -83,19 +83,19 @@ export function ArchiveBundleConfigCard(props: {
   const rows = [
     h("div", { key: "entry-location", className: "dsham_bundle_row" },
       h("div", { className: "dsham_bundle_label_box" },
-        h("span", { className: "dsham_bundle_title" }, t("entry.location.title") || t("sidebar.entry.title")),
-        h("span", { className: "dsham_bundle_desc" }, t("entry.location.desc") || t("sidebar.entry.desc"))
+        h("span", { className: "dsham_bundle_title" }, t("entry.location.title")),
+        h("span", { className: "dsham_bundle_desc" }, t("entry.location.desc"))
       ),
       h(SegmentedControl, {
         id: "dsham-bundle-entry-location",
         value: effectiveLocation,
         onChange: handleLocationChange,
-        label: t("entry.location.title") || t("sidebar.entry.title"),
+        label: t("entry.location.title"),
         disabled: disabled,
         options: [
-          { value: "both", label: t("entry.location.both") || "两边显示" },
-          { value: "sidebar", label: t("entry.location.sidebar") || "仅侧边栏" },
-          { value: "settings", label: t("entry.location.settings") || "仅设置" },
+          { value: "both", label: t("entry.location.both") },
+          { value: "sidebar", label: t("entry.location.sidebar") },
+          { value: "settings", label: t("entry.location.settings") },
         ],
       })
     ),
@@ -184,7 +184,8 @@ function ArchiveBundleConfigCardWrapper(props: {
   const onLocationChange = (next: EntryLocation) => {
     setSavingLocation(true);
     setLocation(next);
-    props.setLocation(next).catch(() => {
+    props.setLocation(next).catch((err) => {
+      console.error("archive-manager: setLocation failed:", err);
       setLocation(props.getLocation());
     }).finally(() => {
       setSavingLocation(false);

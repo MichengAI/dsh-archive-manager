@@ -239,16 +239,24 @@ test('客户端侧边栏入口与 bundle.config 开关槽位生命周期', async
   }
 
   let clientSidebar = false
+  let clientLocation = 'settings'
   let clientUpdate = true
   const controller = setupSidebarEntry(mockCtx, {
     callApi: async (path, options) => {
       if (path === '/sidebar-entry') {
         if (options?.method === 'POST') {
           const body = JSON.parse(options.body)
-          clientSidebar = body.enabled
-          return { enabled: clientSidebar }
+          if (body.location !== undefined) {
+            assert.ok(['both', 'sidebar', 'settings'].includes(body.location), 'POST location 必须合法')
+            clientLocation = body.location
+            clientSidebar = body.location !== 'settings'
+          } else if (body.enabled !== undefined) {
+            clientSidebar = Boolean(body.enabled)
+            clientLocation = clientSidebar ? 'both' : 'settings'
+          }
+          return { ok: true, location: clientLocation, enabled: clientSidebar }
         }
-        return { enabled: clientSidebar }
+        return { ok: true, location: clientLocation, enabled: clientSidebar }
       }
       if (path === '/online-update') {
         if (options?.method === 'POST') {
@@ -374,4 +382,34 @@ test('客户端侧边栏入口与 bundle.config 开关槽位生命周期', async
   await lockedController.setOnlineUpdate(true)
   assert.equal(lockedController.isOnlineUpdateEnabled(), false, '宿主锁定状态下拒绝开启在线更新')
   lockedController.destroy()
+})
+
+test('客户端 setLocation 保存失败时的乐观回退', async () => {
+  let definition
+  new Function('window', await readFile(new URL('../lib/client.js', import.meta.url), 'utf8'))({
+    __ModuleLoader__: { load(value) { definition = value } },
+  })
+  const client = definition.factory((id) => {
+    if (id === 'react') return React
+    if (id === 'react/jsx-runtime') return { jsx: React.createElement, jsxs: React.createElement, Fragment: React.Fragment }
+    return new Proxy({}, { get: () => function Dummy() { return null } })
+  })
+  const { setupSidebarEntry } = client.__test
+
+  const isolatedCtx = {
+    locale: { bind: () => (key) => key },
+    slots: { inject() {}, register() { return () => {} } },
+  }
+
+  const failingController = setupSidebarEntry(isolatedCtx, {
+    callApi: async () => { throw new Error('Network error') },
+    renderPanel: () => null,
+    ns: 'dsh-archive-manager',
+  })
+  assert.equal(failingController.getLocation(), 'settings')
+  await assert.rejects(async () => {
+    await failingController.setLocation('sidebar')
+  }, /Network error/, '保存失败抛出异常')
+  assert.equal(failingController.getLocation(), 'settings', '网络失败后回滚原状态')
+  failingController.destroy()
 })

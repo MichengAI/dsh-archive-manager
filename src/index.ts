@@ -8,7 +8,7 @@ import type { Context } from "@deepseek-ai/cordis";
  * 不再另插一条可以单独停用的 host 行。浏览器端由 package.json 的
  * `dsh.client` 声明发现，对应同一个插件入口。
  */
-import { getEntryLocation, getOnlineUpdate, getSidebarEntry, getSidebarFavoriteStar, setEntryLocation, setOnlineUpdate, setSidebarEntry, setSidebarFavoriteStar } from "./plugin-settings.js";
+import { getEntryLocation, getOnlineUpdate, getSidebarFavoriteStar, setEntryLocation, setOnlineUpdate, setSidebarFavoriteStar } from "./plugin-settings.js";
 import { isTrustedUpdateRequest, rawService, registerPluginUpdater, releaseUpdateRoute } from "./plugin-updater.js";
 import { apply as installHost, inject as hostInject } from "./host-install.js";
 import { authorizeExplorerPath } from "./explorer-path-policy.js";
