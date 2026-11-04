@@ -7,6 +7,7 @@
 // functions and store through its `__test` export.
 import { test } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { createElement } from "react";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
@@ -898,7 +899,7 @@ test("双模会话菜单组件行为级测试：原生环境渲染 null，旧宿
 		workspaces: {
 			list: {
 				getSnapshot: () => ({
-					items: [{ workspaceId: "ws-1", title: "WS1", path: "/path/1", sessionIds: [] }],
+					items: [],
 					archivedSessionIds: []
 				})
 			}
@@ -937,6 +938,16 @@ test("双模会话菜单组件行为级测试：原生环境渲染 null，旧宿
 		["FavoriteMenuItem", favoriteComp({ sessionId: "s1", favoriteRow: favoriteRowStub, useMenuOpenState: () => [false, () => {}], t: (k) => k })],
 	];
 	for (const [name, result] of nativeResults) assert.equal(result, null, `原生环境 ${name} 必须返回 null 避免双菜单`);
+
+	// 移动会话在原生菜单里没有对等项，两种模式下都必须由 slot 渲染（宿主原语存在时）。
+	// 该组件带 hooks，必须交给 renderer，不能像无 hooks 的行组件那样直接调用。
+	const moveMarkup = renderToStaticMarkup(createElement(moveComp, {
+		sessionId: "s1",
+		displayTitle: "S1",
+		useMenuOpenState: () => [false, () => {}],
+		t: (k) => k
+	}));
+	assert.match(moveMarkup, /dsham_moveSessionWrap/, "移动会话入口必须由 slot 渲染，否则原生宿主上会缺失该操作");
 
 	// 2. 旧宿主环境（无原生 contextMenus）时，slot 组件返回实际菜单项 JSX（非 null）
 	hasNative = false;

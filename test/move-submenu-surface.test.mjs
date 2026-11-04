@@ -80,11 +80,13 @@ function loadWithPrimitives({ withMenuItemButton = true, withSurface = true } = 
 			surfaceProps.push(props);
 			return createElement("div", {
 				ref,
+				id: props.id,
 				"data-testid": "surface",
 				className: props.className,
 				role: props.role,
 				"aria-label": props["aria-label"],
 				"data-menu-material": props["data-menu-material"],
+				"data-dsham-side": props["data-dsham-side"],
 				style: props.style
 			}, props.children);
 		});
@@ -106,14 +108,23 @@ function loadWithPrimitives({ withMenuItemButton = true, withSurface = true } = 
 			"@deepseek-ai/dsh-client-ui-primitives": primitives
 		}
 	});
-	return { bundle, MoveSubmenu: bundle.__test.MoveSubmenu, computeSubmenuPosition: bundle.__test.computeSubmenuPosition, surfaceProps, itemProps };
+	return {
+		bundle,
+		MoveSubmenu: bundle.__test.MoveSubmenu,
+		computeSubmenuPosition: bundle.__test.computeSubmenuPosition,
+		mergeSubmenuMeasurement: bundle.__test.mergeSubmenuMeasurement,
+		movableWorkspaces: bundle.__test.movableWorkspaces,
+		surfaceProps,
+		itemProps
+	};
 }
 
 const ws = (id, title) => ({ workspaceId: id, title, path: `D:\\repo\\${id}`, sessionIds: [] });
 const translate = (key) => key;
 const baseProps = (overrides = {}) => ({
 	surfaceRef: { current: null },
-	pos: { top: 40, left: 120, maxHeight: 320 },
+	submenuId: "dsham-move-submenu-test",
+	pos: { top: 40, left: 120, maxHeight: 320, side: "right" },
 	workspaces: [ws("w1", "proj-a"), ws("w2", "proj-b")],
 	moving: false,
 	t: translate,
@@ -132,6 +143,8 @@ test("二级子菜单容器使用宿主 MenuSurface，不再自绘材质层", ()
 	assert.equal(props.className, "dsham_moveSubmenu", "定位样式挂在自己的类名上");
 	assert.equal(props.role, "menu");
 	assert.equal(props["aria-label"], "menu.moveSession", "二级菜单要有可读名称");
+	assert.equal(props.id, "dsham-move-submenu-test", "二级菜单要有稳定 id 供 aria-controls 引用");
+	assert.equal(props["data-dsham-side"], "right", "翻转方向写进 data 属性，供悬停桥接条镜像定位");
 	assert.deepEqual(props.style, { top: 40, left: 120, maxHeight: 320 }, "定位仍由插件计算并传入");
 	assert.equal(
 		props["data-menu-material"],
@@ -230,6 +243,58 @@ test("水平定位使用实测宽度：仅当实测宽度放不下时才翻转",
 	assert.equal(clamped.left, 10, "超过 CSS max-width 的测量值先夹到 280 再判断");
 });
 
+test("实测尺寸跨重算保留：拿不到新测量值时不退回估算宽度", () => {
+	const { mergeSubmenuMeasurement } = loadWithPrimitives();
+
+	const measured = mergeSubmenuMeasurement({}, 110, 280);
+	assert.deepEqual(measured, { height: 110, width: 280 }, "首次测量要写入两个维度");
+
+	// 悬停进入子菜单、父菜单滚动、窗口 resize 都会重算，此时没有新测量值，必须沿用真实尺寸
+	assert.deepEqual(mergeSubmenuMeasurement(measured), { height: 110, width: 280 }, "缺少新值时不得丢掉已测量尺寸");
+	assert.deepEqual(mergeSubmenuMeasurement(measured, 0, -1), { height: 110, width: 280 }, "非法测量值不得覆盖真实尺寸");
+});
+
+test("水平翻转返回 side，极矮视口按剩余空间收敛 maxHeight", () => {
+	const { computeSubmenuPosition } = loadWithPrimitives();
+
+	const flipped = computeSubmenuPosition({
+		triggerRect: { top: 100, bottom: 132, left: 100, right: 280 },
+		viewport: { width: 520, height: 600 },
+		itemCount: 2,
+		measuredWidth: 280
+	});
+	assert.equal(flipped.side, "left", "翻到左侧时必须标记 side，桥接条才挂得对");
+
+	const normal = computeSubmenuPosition({
+		triggerRect: { top: 100, bottom: 132, left: 10, right: 190 },
+		viewport: { width: 900, height: 600 },
+		itemCount: 2
+	});
+	assert.equal(normal.side, "right", "右侧放得下时保持 right");
+
+	const shortViewport = computeSubmenuPosition({
+		triggerRect: { top: 150, bottom: 182, left: 10, right: 190 },
+		viewport: { width: 420, height: 180 },
+		itemCount: 3
+	});
+	assert.ok(
+		shortViewport.top + shortViewport.maxHeight <= 180 - 10,
+		`极矮视口下元素底部不得越界：top=${shortViewport.top} maxHeight=${shortViewport.maxHeight}`
+	);
+});
+
+test("可移动目标排除会话当前所在的工作区", () => {
+	const { movableWorkspaces } = loadWithPrimitives();
+	const items = [
+		{ workspaceId: "w1", sessionIds: ["s1", "s2"] },
+		{ workspaceId: "w2", sessionIds: ["s3"] },
+		{ workspaceId: "w3" }
+	];
+
+	assert.deepEqual(movableWorkspaces(items, "s1").map((item) => item.workspaceId), ["w2", "w3"], "当前工作区不能作为移动目标");
+	assert.deepEqual(movableWorkspaces(items, "unknown").map((item) => item.workspaceId), ["w1", "w2", "w3"], "找不到归属时不误删");
+});
+
 test("源码防回归：不得重新引入一级菜单 DOM 克隆、自绘材质层或降级按钮", async () => {
 	const source = await readFile(new URL("../src/client.ts", import.meta.url), "utf8");
 	assert.match(source, /MenuSurface/, "二级菜单必须使用宿主 MenuSurface 原语");
@@ -242,4 +307,11 @@ test("源码防回归：不得重新引入一级菜单 DOM 克隆、自绘材质
 	assert.doesNotMatch(source, /dsham_moveSubmenuMaterial/, "不得自绘材质层");
 	assert.doesNotMatch(source, /dsham_moveSubmenuBtn/, "不得保留自绘行按钮样式");
 	assert.doesNotMatch(source, /data-menu-material": "translucent"/, "不得硬编码宿主材质标记");
+
+	// 接线守卫：这些行为没法在无 DOM 环境里驱动，用源码断言防止被静默删掉
+	const rowRegion = source.slice(source.indexOf("function MoveSessionMenuItem("), source.indexOf("function focusSessionRow("));
+	assert.ok(rowRegion.length > 0, "必须存在 MoveSessionMenuItem 组件");
+	assert.match(rowRegion, /measuredSizeRef\.current\.width/, "位置重算必须沿用实测宽度，否则会退回估算值回跳");
+	assert.match(rowRegion, /addEventListener\("scroll"/, "父菜单滚动时必须有重定位监听");
+	assert.match(rowRegion, /setAttribute\("aria-controls"/, "展开时必须把 aria-controls 指到二级菜单 id");
 });

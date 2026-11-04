@@ -50,6 +50,10 @@ export function startArchiveClient(require: HostRequire) {
 			const primitives = _deepseek_ai_dsh_client_ui_primitives as { MenuSurface?: unknown; MenuItemButton?: unknown } | undefined;
 			return Boolean(primitives?.MenuSurface && primitives?.MenuItemButton);
 		}
+		/** 可移动目标：排除会话当前所在的工作区，选中自己只会是空操作 */
+		function movableWorkspaces<T extends { sessionIds?: readonly string[] }>(items: readonly T[], sessionId: string): readonly T[] {
+			return items.filter((workspace) => !workspace.sessionIds?.includes(sessionId));
+		}
 		function SettingsModal({ open, onClose, title, description, footer, children, className, width, portalToBody = false, closeLabel, t }: { open: boolean; onClose(): void; title: ReactNode; description?: ReactNode; footer?: ReactNode; children?: ReactNode; className?: string; width?: number; portalToBody?: boolean; closeLabel?: string; t: Translate }) {
 			const anchor = react.useRef<HTMLSpanElement>(null);
 			// 设置壳会把 body 下的外部分支标成 inert。宿主 Modal 固定挂到 body，
@@ -417,6 +421,7 @@ export function startArchiveClient(require: HostRequire) {
 		const MOVE_SUBMENU_CSS = `.dsham_moveSessionWrap{position:relative}
 .dsham_moveSubmenu{position:fixed;z-index:1100;min-width:160px;max-width:280px;box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain;padding:4px;display:flex;flex-direction:column;gap:0;border:none;border-radius:var(--dsw-radius-lg,14px);box-shadow:var(--dsw-elevation-prominent,0 6px 20px rgba(0,0,0,.45));color:var(--dsw-alias-label-primary,#ededed);isolation:isolate}
 .dsham_moveSubmenu::before{content:'';position:absolute;top:0;bottom:0;left:-6px;width:8px}
+.dsham_moveSubmenu[data-dsham-side="left"]::before{left:auto;right:-6px}
 .dsham_moveSubmenu::-webkit-scrollbar{width:0px;height:0px;display:none}
 .dsham_moveSubmenu{scrollbar-width:none;-ms-overflow-style:none}
 .dsham_moveSubmenuEmpty{padding:8px 10px;font-size:12px;color:var(--dsw-alias-label-tertiary,#888)}`;
@@ -2859,7 +2864,7 @@ export function startArchiveClient(require: HostRequire) {
 		/** 二级菜单未测量前的宽度兜底值，与 CSS min/max 区间中位对齐 */
 		const DEFAULT_SUBMENU_WIDTH = 220;
 
-		function computeSubmenuPosition({ triggerRect, viewport, itemCount, measuredHeight, measuredWidth }: SubmenuPositionOptions): { top: number; left: number; maxHeight: number } {
+		function computeSubmenuPosition({ triggerRect, viewport, itemCount, measuredHeight, measuredWidth }: SubmenuPositionOptions): { top: number; left: number; maxHeight: number; side: "right" | "left" } {
 			const winWidth = viewport.width;
 			const winHeight = viewport.height;
 			const menuWidth = typeof measuredWidth === "number" && measuredWidth > 0
@@ -2873,10 +2878,12 @@ export function startArchiveClient(require: HostRequire) {
 			const estimatedHeight = itemCount === 0 ? 44 : 34 * itemCount + 8;
 			const actualHeight = Math.min(targetMaxHeight, Math.max(20, typeof measuredHeight === "number" && measuredHeight > 0 ? measuredHeight : estimatedHeight));
 
-			// 水平位置：优先右侧，右侧空间不足时翻转到左侧
+			// 水平位置：优先右侧，右侧空间不足时翻转到左侧（side 供悬停桥接条镜像定位）
 			let left = triggerRect.right + 2;
+			let side: "right" | "left" = "right";
 			if (left + menuWidth > winWidth - 10) {
 				left = Math.max(10, triggerRect.left - menuWidth - 4);
+				side = "left";
 			}
 
 			// 垂直位置：
@@ -2894,16 +2901,34 @@ export function startArchiveClient(require: HostRequire) {
 			}
 			if (top < 10) top = 10;
 
-			return { top, left, maxHeight: targetMaxHeight };
+			// maxHeight 必须服从 top 之后真正剩下的空间，否则极矮窗口里元素底部会越界
+			const maxHeight = Math.min(targetMaxHeight, Math.max(60, winHeight - 10 - top));
+
+			return { top, left, maxHeight, side };
+		}
+		/**
+		 * 记住二级菜单的实测尺寸：悬停、滚动、窗口变化后的重算必须沿用真实值，
+		 * 一旦退回估算宽度，靠右边缘的菜单会从「翻到左侧」跳回「右侧溢出」。
+		 */
+		function mergeSubmenuMeasurement(
+			previous: { height?: number; width?: number },
+			height?: number,
+			width?: number
+		): { height?: number; width?: number } {
+			return {
+				height: typeof height === "number" && height > 0 ? height : previous.height,
+				width: typeof width === "number" && width > 0 ? width : previous.width
+			};
 		}
 		/**
 		 * 移动会话二级子菜单：容器直接使用宿主 MenuSurface 原语，行优先使用宿主 MenuItemButton。
 		 * 材质、毛玻璃、锚点与 macOS 底衬全部交给宿主维护，插件只负责定位、滚动与交互回调，
 		 * 这样宿主或主题（如 Codex UI）升级时二级菜单会自动跟随一级菜单，不需要克隆父级 DOM。
 		 */
-		function MoveSubmenu({ surfaceRef, pos, workspaces, moving, t, onSelect, onEnter, onLeave }: {
+		function MoveSubmenu({ surfaceRef, submenuId, pos, workspaces, moving, t, onSelect, onEnter, onLeave }: {
 			surfaceRef: { current: HTMLDivElement | null };
-			pos: { top: number; left: number; maxHeight: number };
+			submenuId: string;
+			pos: { top: number; left: number; maxHeight: number; side: "right" | "left" };
 			workspaces: readonly { workspaceId: string; title?: string | null; path?: string | null }[];
 			moving: boolean;
 			t: Translate;
@@ -2935,10 +2960,12 @@ export function startArchiveClient(require: HostRequire) {
 
 			return (0, react_jsx_runtime.jsx)(Surface, {
 				ref: surfaceRef,
+				id: submenuId,
 				className: "dsham_moveSubmenu",
 				role: "menu",
 				"aria-label": t("menu.moveSession"),
 				"data-dsham-move-submenu": "true",
+				"data-dsham-side": pos.side,
 				onPointerDown: (e: { stopPropagation(): void }) => {
 					e.stopPropagation();
 				},
@@ -3219,26 +3246,33 @@ export function startArchiveClient(require: HostRequire) {
 
 			function MoveSessionMenuItem({ sessionId, displayTitle: title, useMenuOpenState, t }: { sessionId: string; displayTitle: string; useMenuOpenState: () => readonly [boolean, (open: boolean) => void]; t: Translate }) {
 				const [, setMenuOpen] = useMenuOpenState();
+				const submenuId = react.useId();
 				const [subOpen, setSubOpen] = react.useState(false);
-				const [subPos, setSubPos] = react.useState<{ top: number; left: number; maxHeight: number } | null>(null);
+				const [subPos, setSubPos] = react.useState<{ top: number; left: number; maxHeight: number; side: "right" | "left" } | null>(null);
 				const [moving, setMoving] = react.useState(false);
 				const rowRef = react.useRef<HTMLDivElement>(null);
 				const subMenuRef = react.useRef<HTMLDivElement>(null);
 				const leaveTimerRef = react.useRef<ReturnType<typeof setTimeout> | null>(null);
+				// 实测尺寸跨重算保留：悬停/滚动触发的位置重算不能退回估算值
+				const measuredSizeRef = react.useRef<{ height?: number; width?: number }>({});
 
-				const workspaces = ctx.workspaces.list?.getSnapshot?.()?.items ?? [];
+				// 会话当前所在的工作区不算可移动目标，选中它只会是空操作
+				const workspaces = movableWorkspaces(ctx.workspaces.list?.getSnapshot?.()?.items ?? [], sessionId);
 				const Item = _deepseek_ai_dsh_client_ui_primitives.MenuItemButton;
 
-				// 宿主 MenuItemButton 不透传 aria-haspopup/aria-expanded；这里按宿主数据行的等价行为补齐，让读屏能感知二级菜单
+				// 宿主 MenuItemButton 不透传 aria-haspopup/aria-expanded/aria-controls；这里按宿主数据行的等价行为补齐
 				react.useEffect(() => {
 					const trigger = rowRef.current?.querySelector<HTMLButtonElement>(':scope > div > button[role="menuitem"], :scope > button[role="menuitem"]');
 					if (!trigger) return;
 					trigger.setAttribute("aria-haspopup", "menu");
 					trigger.setAttribute("aria-expanded", subOpen ? "true" : "false");
-				}, [subOpen]);
+					if (subOpen) trigger.setAttribute("aria-controls", submenuId);
+					else trigger.removeAttribute("aria-controls");
+				}, [subOpen, submenuId]);
 
 				const updatePosition = (measuredHeight?: number, measuredWidth?: number) => {
 					if (!rowRef.current) return;
+					measuredSizeRef.current = mergeSubmenuMeasurement(measuredSizeRef.current, measuredHeight, measuredWidth);
 					const rect = rowRef.current.getBoundingClientRect();
 					const winWidth = typeof window !== "undefined" ? window.innerWidth : 1024;
 					const winHeight = typeof window !== "undefined" ? window.innerHeight : 768;
@@ -3246,11 +3280,11 @@ export function startArchiveClient(require: HostRequire) {
 						triggerRect: rect,
 						viewport: { width: winWidth, height: winHeight },
 						itemCount: workspaces.length,
-						measuredHeight,
-						measuredWidth
+						measuredHeight: measuredSizeRef.current.height,
+						measuredWidth: measuredSizeRef.current.width
 					});
 					setSubPos((prev) => {
-						if (prev && prev.top === nextPos.top && prev.left === nextPos.left && prev.maxHeight === nextPos.maxHeight) {
+						if (prev && prev.top === nextPos.top && prev.left === nextPos.left && prev.maxHeight === nextPos.maxHeight && prev.side === nextPos.side) {
 							return prev;
 						}
 						return nextPos;
@@ -3271,6 +3305,23 @@ export function startArchiveClient(require: HostRequire) {
 						updatePosition(surface.offsetHeight, surface.offsetWidth);
 					}
 				}, [subOpen, workspaces.length]);
+
+				// 二级菜单是 fixed 定位，父菜单内部滚动或窗口缩放时不会自动跟随触发项，需要主动重算
+				react.useEffect(() => {
+					if (!subOpen || typeof window === "undefined") return;
+					const reposition = () => updatePosition();
+					window.addEventListener("resize", reposition);
+					window.addEventListener("scroll", reposition, true);
+					return () => {
+						window.removeEventListener("resize", reposition);
+						window.removeEventListener("scroll", reposition, true);
+					};
+				}, [subOpen, workspaces.length]);
+
+				// 菜单被宿主关闭时组件会卸载：清掉待触发的关闭定时器，避免已经销毁还在 setState
+				react.useEffect(() => () => {
+					if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
+				}, []);
 
 				const handleMouseLeave = () => {
 					leaveTimerRef.current = setTimeout(() => {
@@ -3337,6 +3388,7 @@ export function startArchiveClient(require: HostRequire) {
 						itemButton,
 						subOpen && subPos && (0, react_jsx_runtime.jsx)(MoveSubmenu, {
 							surfaceRef: subMenuRef,
+							submenuId,
 							pos: subPos,
 							workspaces,
 							moving,
@@ -4569,6 +4621,8 @@ export function startArchiveClient(require: HostRequire) {
         }
         exports.__test = {
             computeSubmenuPosition,
+            mergeSubmenuMeasurement,
+            movableWorkspaces,
             MoveSubmenu,
             forkWithFeedback,
             hasNativeContextMenuService,
