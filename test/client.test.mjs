@@ -442,7 +442,7 @@ test("manifest keeps one DSH peer range; obsolete client-store and client-runtim
 		assert.equal(semver.satisfies(version, dshPeerRanges[0], { includePrerelease: true }), false, `不接纳超出 0.2 代际版本 ${version}`);
 	}
 	assert.ok(dshDevelopmentVersions.length > 0);
-	assert.deepEqual([...new Set(dshDevelopmentVersions)], ["0.2.1-rc.3"]);
+	assert.deepEqual([...new Set(dshDevelopmentVersions)], ["0.2.2-rc.1"]);
 	assert.equal(PACKAGE_MANIFEST.peerDependencies?.["@deepseek-ai/dsh-client-store"], undefined);
 	assert.equal(PACKAGE_MANIFEST.peerDependenciesMeta?.["@deepseek-ai/dsh-client-store"], undefined);
 	assert.equal(PACKAGE_MANIFEST.peerDependenciesMeta?.["@deepseek-ai/dsh-client-runtime"], undefined);
@@ -686,7 +686,7 @@ test("未归档列表排除已归档、子代理和空白占位，保留跨项�
 	assert.deepEqual(t.unarchivedSessionIds(byId, ["old"]), ["a", "b", "loose"]);
 });
 
-test("DSH 0.2.2-alpha.3 上下文菜单体系：会话菜单插槽就绪判定与工作区原生注册", async () => {
+test("DSH 0.2.2-rc.1 上下文菜单体系：会话菜单插槽就绪判定与工作区原生注册", async () => {
 	const sessionMenuSlot = "sidebar.workspaces.session.menu.item";
 	const injectedSlots = [];
 	const registeredSlots = [];
@@ -734,7 +734,7 @@ test("DSH 0.2.2-alpha.3 上下文菜单体系：会话菜单插槽就绪判定�
 					return [{ children: { [sessionMenuSlot]: { kind: "list" } } }];
 				}
 				if (name === "sidebar.workspaces") {
-					return [{ children: {} }]; // 0.2.2-alpha.3 中 sidebar.workspaces 不含该 slot
+					return [{ children: {} }]; // 0.2.2-rc.1 中 sidebar.workspaces 不含该 slot
 				}
 				return [];
 			}
@@ -755,8 +755,8 @@ test("DSH 0.2.2-alpha.3 上下文菜单体系：会话菜单插槽就绪判定�
 
 	await bundle.apply(fakeContext);
 
-	// 1. 验证会话菜单与弹窗在 0.2.2-alpha.3 contextMenu 架构下正常 inject 并 register
-	assert.ok(injectedSlots.includes(sessionMenuSlot), "0.2.2-alpha.3 下会话菜单插槽必须被成功 inject");
+	// 1. 验证会话菜单与弹窗在 0.2.2-rc.1 contextMenu 架构下正常 inject 并 register
+	assert.ok(injectedSlots.includes(sessionMenuSlot), "0.2.2-rc.1 下会话菜单插槽必须被成功 inject");
 	assert.ok(registeredSlots.some(s => s.name === sessionMenuSlot && s.id === "archive-manager.delete-session"), "删除会话项必须注册");
 	assert.ok(registeredSlots.some(s => s.name === sessionMenuSlot && s.id === "archive-manager.favorite"), "收藏会话项必须注册");
 	assert.ok(registeredSlots.some(s => s.name === sessionMenuSlot && s.id === "archive-manager.move-session"), "移动工作区项必须注册");
@@ -788,7 +788,7 @@ test("DSH 0.2.2-alpha.3 上下文菜单体系：会话菜单插槽就绪判定�
 	assert.deepEqual(menuEntries[2].icon, { key: "archive-manager.workspace-archive" });
 });
 
-test("DSH 0.2.2-alpha.3 上下文菜单：宿主仅声明原生 contextMenus 与未嵌套插槽时的就绪判定", async () => {
+test("DSH 0.2.2-rc.1 上下文菜单：宿主仅声明原生 contextMenus 与未嵌套插槽时的就绪判定", async () => {
 	const sessionMenuSlot = "sidebar.workspaces.session.menu.item";
 	const registeredSlots = [];
 	const injectedSlots = [];
@@ -830,7 +830,7 @@ test("DSH 0.2.2-alpha.3 上下文菜单：宿主仅声明原生 contextMenus 与
 	assert.ok(injectedSlots.includes(sessionMenuSlot), "基于 contextMenus 与 contextMenu.content 判定就绪");
 });
 
-test("DSH 0.2.2-alpha.3 上下文菜单：content 插槽存在但为空时不得放行会话菜单", async () => {
+test("DSH 0.2.2-rc.1 上下文菜单：content 插槽存在但为空时不得放行会话菜单", async () => {
 	const sessionMenuSlot = "sidebar.workspaces.session.menu.item";
 	const registeredSlots = [];
 	const injectedSlots = [];

@@ -17,7 +17,7 @@ const profiles = [
 	{ version: "0.2.1-rc.3", cordis: "4.0.5", schemastery: "3.18.5", latest: true },
 	{ version: "0.2.1-rc.4", cordis: "4.0.5", schemastery: "3.18.5", latest: true },
 	{ version: "0.2.1-rc.5", cordis: "4.0.5", schemastery: "3.18.5", latest: true },
-	{ version: "0.2.2-alpha.3", cordis: "4.0.6-alpha.2", schemastery: "3.18.6-alpha.2", latest: true },
+	{ version: "0.2.2-rc.1", cordis: "4.0.6-alpha.2", schemastery: "3.18.6-alpha.2", latest: true },
 ];
 const cordisPlugins = {
 	"4.0.4": {
