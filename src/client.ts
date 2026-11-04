@@ -40,6 +40,16 @@ export function startArchiveClient(require: HostRequire) {
 				return false;
 			}
 		}
+		/**
+		 * 移动会话菜单依赖宿主 MenuSurface 与 MenuItemButton。
+		 * MenuSurface 是 forwardRef 组件（运行时是对象而不是函数），所以只判空、不做 typeof。
+		 * 宿主拿不到这些原语时整条菜单不显示，不提供自绘降级。
+		 */
+		function hasMoveMenuPrimitives(): boolean {
+			// 按“宿主可能没有导出”的形状取用，避免类型声明把判空短路掉
+			const primitives = _deepseek_ai_dsh_client_ui_primitives as { MenuSurface?: unknown; MenuItemButton?: unknown } | undefined;
+			return Boolean(primitives?.MenuSurface && primitives?.MenuItemButton);
+		}
 		function SettingsModal({ open, onClose, title, description, footer, children, className, width, portalToBody = false, closeLabel, t }: { open: boolean; onClose(): void; title: ReactNode; description?: ReactNode; footer?: ReactNode; children?: ReactNode; className?: string; width?: number; portalToBody?: boolean; closeLabel?: string; t: Translate }) {
 			const anchor = react.useRef<HTMLSpanElement>(null);
 			// 设置壳会把 body 下的外部分支标成 inert。宿主 Modal 固定挂到 body，
@@ -409,11 +419,7 @@ export function startArchiveClient(require: HostRequire) {
 .dsham_moveSubmenu::before{content:'';position:absolute;top:0;bottom:0;left:-6px;width:8px}
 .dsham_moveSubmenu::-webkit-scrollbar{width:0px;height:0px;display:none}
 .dsham_moveSubmenu{scrollbar-width:none;-ms-overflow-style:none}
-.dsham_moveSubmenuEmpty{padding:8px 10px;font-size:12px;color:var(--dsw-alias-label-tertiary,#888)}
-.dsham_moveSubmenuBtn{display:flex;align-items:center;gap:6px;width:100%;min-height:34px;padding:6px 8px;border:none;border-radius:var(--dsw-radius-md,8px);background:transparent;color:inherit;font:inherit;font-size:13px;line-height:20px;text-align:left;cursor:pointer}
-.dsham_moveSubmenuBtn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,0.08))}
-.dsham_moveSubmenuBtn:focus-visible:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,0.08));outline:none}
-.dsham_moveSubmenuBtn:disabled{opacity:.4;cursor:default}`;
+.dsham_moveSubmenuEmpty{padding:8px 10px;font-size:12px;color:var(--dsw-alias-label-tertiary,#888)}`;
 		ensurePluginStyle("dsh-archive-manager/MoveSubmenu.css", MOVE_SUBMENU_CSS);
 		/** 工作区右键菜单：归档工作区与官方删除工作区紧贴在同一区域，消除两者之间的分割线 */
 		const WORKSPACE_MENU_GROUP_CSS = "div:has([data-dsham-archive-icon]) + div[role=\"separator\"],div:has([data-dsham-archive-icon]) + div[class*=\"separator\"],div:has(svg[data-dsham-archive-icon]) + div[role=\"separator\"],div:has(svg[data-dsham-archive-icon]) + [class*=\"separator\"]{display:none!important}";
@@ -2907,6 +2913,8 @@ export function startArchiveClient(require: HostRequire) {
 		}) {
 			const Surface = _deepseek_ai_dsh_client_ui_primitives.MenuSurface;
 			const Item = _deepseek_ai_dsh_client_ui_primitives.MenuItemButton;
+			// 宿主原语缺失时整条菜单不显示，不做自绘降级
+			if (!hasMoveMenuPrimitives()) return null;
 			const rows = workspaces.length === 0
 				? (0, react_jsx_runtime.jsx)("div", { className: "dsham_moveSubmenuEmpty", children: t("moveSession.noOtherWorkspaces") })
 				: workspaces.map((ws) => {
@@ -2917,30 +2925,11 @@ export function startArchiveClient(require: HostRequire) {
 						children: wsTitle
 					});
 
-					if (typeof Item === "function") {
-						return (0, react_jsx_runtime.jsx)(Item, {
-							icon: wsIcon,
-							disabled: moving,
-							onSelect: () => onSelect(ws.workspaceId, wsTitle),
-							children: wsLabel
-						}, ws.workspaceId);
-					}
-
-					// 无 MenuItemButton 的宿主兜底：类名、行高与 hover/focus 反馈对齐宿主菜单行
-					return (0, react_jsx_runtime.jsxs)("button", {
-						type: "button",
-						role: "menuitem",
-						className: "dsham_moveSubmenuBtn",
+					return (0, react_jsx_runtime.jsx)(Item, {
+						icon: wsIcon,
 						disabled: moving,
-						onClick: (e) => {
-							e.preventDefault();
-							e.stopPropagation();
-							onSelect(ws.workspaceId, wsTitle);
-						},
-						children: [
-							(0, react_jsx_runtime.jsx)("span", { "aria-hidden": true, style: { display: "inline-flex", flex: "none" }, children: wsIcon }),
-							wsLabel
-						]
+						onSelect: () => onSelect(ws.workspaceId, wsTitle),
+						children: wsLabel
 					}, ws.workspaceId);
 				});
 
@@ -3330,19 +3319,14 @@ export function startArchiveClient(require: HostRequire) {
 					]
 				});
 
-				const itemButton = typeof Item === "function"
-					? (0, react_jsx_runtime.jsx)(Item, {
-						icon,
-						onSelect: () => handleMouseEnter(),
-						children: rowContent
-					})
-					: (0, react_jsx_runtime.jsxs)("button", {
-						type: "button",
-						role: "menuitem",
-						onClick: () => handleMouseEnter(),
-						style: { display: "flex", alignItems: "center", gap: 6, width: "100%", padding: "6px 8px", background: "transparent", border: "none", cursor: "pointer", color: "inherit", textAlign: "left" },
-						children: [icon, rowContent]
-					});
+				// 宿主原语缺失时连入口行都不渲染，避免降级出与宿主不一致的菜单项
+				if (!hasMoveMenuPrimitives()) return null;
+
+				const itemButton = (0, react_jsx_runtime.jsx)(Item, {
+					icon,
+					onSelect: () => handleMouseEnter(),
+					children: rowContent
+				});
 
 				return (0, react_jsx_runtime.jsxs)("div", {
 					ref: rowRef,
@@ -4158,13 +4142,16 @@ export function startArchiveClient(require: HostRequire) {
 						locale: NS,
 						inject: () => ({ favoriteRow: favoriteRowStore })
 					}, FavoriteMenuItem));
-				disposeMoveMenu ??= ctx.slots.inject(sessionMenuSlot, () => ctx.slots.register({
+				// 移动会话菜单完全依赖宿主原语；拿不到就不注册，避免出现自绘样式的菜单项
+				if (hasMoveMenuPrimitives()) {
+					disposeMoveMenu ??= ctx.slots.inject(sessionMenuSlot, () => ctx.slots.register({
 						name: sessionMenuSlot,
 						id: "archive-manager.move-session",
 						order: 480,
 						locale: NS,
 						inject: () => ({})
 					}, MoveSessionMenuItem));
+				}
 				disposeDialog ??= ctx.slots.inject("shell.overlay", () => ctx.slots.register({
 						name: "shell.overlay",
 						id: "archive-manager.delete-session",

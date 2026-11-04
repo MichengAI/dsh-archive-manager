@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
-import { createElement } from "react";
+import { createElement, forwardRef } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 const requireFallback = createRequire(import.meta.url);
@@ -38,11 +38,13 @@ globalThis.document = {
 	body: headStub,
 	querySelector: () => null,
 	querySelectorAll: () => [],
+	getElementById: () => null,
 	createElement: () => styleStub,
 	addEventListener: () => {},
 	removeEventListener: () => {}
 };
 globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
+globalThis.MutationObserver = class { observe() {} disconnect() {} takeRecords() { return []; } };
 
 const factories = new Map();
 window.__ModuleLoader__ = { load: (handoff) => { factories.set(handoff.id, handoff.factory); } };
@@ -65,13 +67,19 @@ function materialize(id, options = {}) {
 }
 
 /** 用可观测的宿主原语替身物化 bundle，用来断言组件到底调用了哪个原语 */
-function loadWithPrimitives({ withMenuItemButton = true } = {}) {
+function loadWithPrimitives({ withMenuItemButton = true, withSurface = true } = {}) {
 	const surfaceProps = [];
 	const itemProps = [];
 	const primitives = {
-		MenuSurface: (props) => {
+		IconFolderCloseMedium: () => createElement("span", { "data-testid": "folder-icon" })
+	};
+	if (withSurface) {
+		// 与宿主保持一致：MenuSurface 是 forwardRef 组件，运行时是对象而不是函数，
+		// 用对象形态才能证明实现没有误用 typeof === "function" 判断而降级。
+		primitives.MenuSurface = forwardRef((props, ref) => {
 			surfaceProps.push(props);
 			return createElement("div", {
+				ref,
 				"data-testid": "surface",
 				className: props.className,
 				role: props.role,
@@ -79,9 +87,8 @@ function loadWithPrimitives({ withMenuItemButton = true } = {}) {
 				"data-menu-material": props["data-menu-material"],
 				style: props.style
 			}, props.children);
-		},
-		IconFolderCloseMedium: () => createElement("span", { "data-testid": "folder-icon" })
-	};
+		});
+	}
 	if (withMenuItemButton) {
 		primitives.MenuItemButton = (props) => {
 			itemProps.push(props);
@@ -99,7 +106,7 @@ function loadWithPrimitives({ withMenuItemButton = true } = {}) {
 			"@deepseek-ai/dsh-client-ui-primitives": primitives
 		}
 	});
-	return { MoveSubmenu: bundle.__test.MoveSubmenu, computeSubmenuPosition: bundle.__test.computeSubmenuPosition, surfaceProps, itemProps };
+	return { bundle, MoveSubmenu: bundle.__test.MoveSubmenu, computeSubmenuPosition: bundle.__test.computeSubmenuPosition, surfaceProps, itemProps };
 }
 
 const ws = (id, title) => ({ workspaceId: id, title, path: `D:\\repo\\${id}`, sessionIds: [] });
@@ -160,18 +167,52 @@ test("移动进行中时所有行禁用，空工作区给出空提示", () => {
 	assert.match(html, /moveSession\.noOtherWorkspaces/, "空状态要有提示文案");
 });
 
-test("无 MenuItemButton 的宿主回退为可点击 menuitem，并保留样式钩子", () => {
-	const { MoveSubmenu } = loadWithPrimitives({ withMenuItemButton: false });
-	const selected = [];
-	// 回退分支不得依赖 portal：Node 环境能静态渲染出完整结构即为证明
-	const html = renderToStaticMarkup(createElement(MoveSubmenu, baseProps({
-		onSelect: (workspaceId, title) => selected.push([workspaceId, title])
-	})));
+test("宿主缺少 MenuSurface 或 MenuItemButton 时不渲染任何菜单内容（无降级 UI）", () => {
+	const noSurface = loadWithPrimitives({ withSurface: false });
+	assert.equal(noSurface.MoveSubmenu(baseProps()), null, "没有 MenuSurface 时不得自绘材质层，直接不显示");
 
-	assert.match(html, /class="dsham_moveSubmenuBtn"/, "回退行必须保留 hover/focus 样式钩子");
-	assert.match(html, /role="menuitem"/);
-	assert.equal((html.match(/role="menuitem"/g) ?? []).length, 2);
-	assert.ok(selected.length === 0, "静态渲染阶段不应触发选择");
+	const noItem = loadWithPrimitives({ withMenuItemButton: false });
+	assert.equal(noItem.MoveSubmenu(baseProps()), null, "没有 MenuItemButton 时不得回退成自绘按钮，直接不显示");
+});
+
+test("宿主缺少原语时移动会话入口根本不注册，其余会话菜单项不受影响", async () => {
+	const { bundle } = loadWithPrimitives({ withSurface: false });
+	const registered = [];
+	const disposers = [];
+	const fakeContext = {
+		workspaces: {
+			list: { getSnapshot: () => ({ items: [{ workspaceId: "ws-1", title: "WS1", path: "/p", sessionIds: [] }], archivedSessionIds: [] }) }
+		},
+		sessions: { list: { getSnapshot: () => ({ byId: {} }) } },
+		locale: { register: () => {}, bind: () => (k) => k },
+		slots: {
+			inject: (_, eff) => { eff?.(); return () => {}; },
+			register: (spec) => { registered.push(spec.id); return () => {}; },
+			entries: () => [{ children: { "sidebar.workspaces.session.menu.item": {} } }]
+		},
+		// 收集并执行清理：apply 里挂了收藏重试定时器，不清理会拖住测试进程
+		effect: (fn) => {
+			const dispose = fn();
+			if (typeof dispose === "function") disposers.push(dispose);
+			return dispose;
+		},
+		get: () => undefined
+	};
+
+	try {
+		await bundle.apply(fakeContext);
+
+		assert.ok(registered.includes("archive-manager.delete-session"), "删除会话菜单项仍要注册");
+		assert.ok(registered.includes("archive-manager.favorite"), "收藏菜单项仍要注册");
+		assert.ok(
+			!registered.includes("archive-manager.move-session"),
+			"拿不到宿主原语时移动会话入口不得注册，避免自绘菜单项"
+		);
+	} finally {
+		for (const dispose of disposers) {
+			try { dispose(); } catch {}
+		}
+	}
 });
 
 test("水平定位使用实测宽度：仅当实测宽度放不下时才翻转", () => {
@@ -189,13 +230,16 @@ test("水平定位使用实测宽度：仅当实测宽度放不下时才翻转",
 	assert.equal(clamped.left, 10, "超过 CSS max-width 的测量值先夹到 280 再判断");
 });
 
-test("源码防回归：不得重新引入一级菜单 DOM 克隆或自绘材质层", async () => {
+test("源码防回归：不得重新引入一级菜单 DOM 克隆、自绘材质层或降级按钮", async () => {
 	const source = await readFile(new URL("../src/client.ts", import.meta.url), "utf8");
 	assert.match(source, /MenuSurface/, "二级菜单必须使用宿主 MenuSurface 原语");
+	assert.match(source, /hasMoveMenuPrimitives/, "必须集中判断宿主原语是否可用");
 	const submenuRegion = source.slice(source.indexOf("function MoveSubmenu("), source.indexOf("async function apply("));
 	assert.ok(submenuRegion.length > 0, "必须存在 MoveSubmenu 组件");
 	assert.doesNotMatch(submenuRegion, /cloneNode\(/, "二级菜单不得克隆一级菜单 DOM 节点");
+	assert.doesNotMatch(submenuRegion, /typeof Item === "function"/, "不得保留自绘行按钮的降级分支");
 	assert.doesNotMatch(source, /closest<HTMLElement>\('\[role="menu"\]'\)/, "不得回到「从父级菜单同步 class」的写法");
 	assert.doesNotMatch(source, /dsham_moveSubmenuMaterial/, "不得自绘材质层");
+	assert.doesNotMatch(source, /dsham_moveSubmenuBtn/, "不得保留自绘行按钮样式");
 	assert.doesNotMatch(source, /data-menu-material": "translucent"/, "不得硬编码宿主材质标记");
 });
