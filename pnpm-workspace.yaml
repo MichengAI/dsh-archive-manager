@@ -1,7 +1,7 @@
 allowBuilds:
   esbuild: true
 autoInstallPeers: false
-minimumReleaseAge: 1440
+minimumReleaseAge: 0
 minimumReleaseAgeExclude:
   # 插槽生命周期回归使用与当前宿主一致的官方渲染器。
   - '@deepseek-ai/dsh-client-ui-renderer@0.1.5-rc.2 || 0.2.2-rc.1'
