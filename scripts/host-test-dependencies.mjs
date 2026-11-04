@@ -1,16 +1,15 @@
 // 同代宿主的依赖范围允许后续版本；隔离验收固定传递依赖，避免宿主混版。
 // 只覆盖仍支持的 0.2.x。0.1.x 已退出 peer。
 export function hostTestOverrides(version) {
+	// 支持范围：0.2.x 的全部 RC + 最新一个 alpha；中间 alpha 不纳入支持矩阵。
 	const supported = [
 		"0.2.0-rc.1",
 		"0.2.0-rc.2",
-		"0.2.1-alpha.1", "0.2.1-alpha.2", "0.2.1-alpha.3", "0.2.1-alpha.4", "0.2.1-alpha.5",
 		"0.2.1-rc.1",
 		"0.2.1-rc.2",
 		"0.2.1-rc.3",
 		"0.2.1-rc.4",
 		"0.2.1-rc.5",
-		"0.2.2-alpha.2",
 		"0.2.2-alpha.3",
 	];
 	if (!supported.includes(version)) return {};

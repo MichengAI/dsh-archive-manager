@@ -8,20 +8,15 @@ import { hostTestOverrides } from "./host-test-dependencies.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
+// 支持范围：0.2.x 的全部 RC + 最新一个 alpha；中间的 alpha 不纳入支持矩阵。
 const profiles = [
 	{ version: "0.2.0-rc.1", cordis: "4.0.4", schemastery: "3.18.4", latest: true },
 	{ version: "0.2.0-rc.2", cordis: "4.0.4", schemastery: "3.18.4", latest: true },
-	{ version: "0.2.1-alpha.1", cordis: "4.0.5-alpha.1", schemastery: "3.18.5-alpha.1", latest: true },
-	{ version: "0.2.1-alpha.2", cordis: "4.0.5-alpha.1", schemastery: "3.18.5-alpha.1", latest: true },
-	{ version: "0.2.1-alpha.3", cordis: "4.0.5-alpha.2", schemastery: "3.18.5-alpha.2", latest: true },
-	{ version: "0.2.1-alpha.4", cordis: "4.0.5-alpha.2", schemastery: "3.18.5-alpha.2", latest: true },
-	{ version: "0.2.1-alpha.5", cordis: "4.0.5-alpha.2", schemastery: "3.18.5-alpha.2", latest: true },
 	{ version: "0.2.1-rc.1", cordis: "4.0.5", schemastery: "3.18.5", latest: true },
 	{ version: "0.2.1-rc.2", cordis: "4.0.5", schemastery: "3.18.5", latest: true },
 	{ version: "0.2.1-rc.3", cordis: "4.0.5", schemastery: "3.18.5", latest: true },
 	{ version: "0.2.1-rc.4", cordis: "4.0.5", schemastery: "3.18.5", latest: true },
 	{ version: "0.2.1-rc.5", cordis: "4.0.5", schemastery: "3.18.5", latest: true },
-	{ version: "0.2.2-alpha.2", cordis: "4.0.6-alpha.1", schemastery: "3.18.6-alpha.1", latest: true },
 	{ version: "0.2.2-alpha.3", cordis: "4.0.6-alpha.2", schemastery: "3.18.6-alpha.2", latest: true },
 ];
 const cordisPlugins = {
