@@ -401,8 +401,13 @@ export function startArchiveClient(require: HostRequire) {
 		/** 侧边栏行内就地确认卡片样式：完全对齐官方原生 MenuSurface 材质与无箭头悬浮设计 */
 		const SIDEBAR_POPOVER_CSS = ".dsham_sidebarCardRoot{position:fixed;inset:0;z-index:1200;pointer-events:none}.dsham_sidebarCardBackdrop{position:fixed;inset:0;pointer-events:auto;background:transparent}.dsham_sidebarCard{position:fixed;pointer-events:auto;box-sizing:border-box;width:290px;max-height:calc(100vh - 32px);overflow-y:auto;padding:16px 18px 14px;border-radius:var(--dsw-radius-lg,14px);background:var(--dsw-menu-surface-fill);backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));-webkit-backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));border:none;box-shadow:var(--dsw-elevation-prominent);color:var(--dsw-alias-label-primary);display:flex;flex-direction:column;gap:8px}.dsham_sidebarCardTitle{margin:0;font-size:14px;font-weight:600;line-height:20px;color:var(--dsw-alias-label-primary)}.dsham_sidebarCardDesc{margin:0;font-size:13px;line-height:18px;color:var(--dsw-alias-label-secondary)}.dsham_sidebarCardError{margin-top:2px;font-size:12px;line-height:16px;color:var(--dsw-alias-state-error-primary,#ef7272);white-space:pre-line}.dsham_sidebarCardFooter{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:10px}.dsham_sidebarCardBtn{border:none;background:transparent;padding:5px 12px;border-radius:var(--dsw-radius-sm,6px);font:inherit;font-size:13px;font-weight:500;line-height:18px;cursor:pointer;transition:background-color .15s ease,opacity .15s ease}.dsham_sidebarCardBtnCancel{color:var(--dsw-alias-label-primary)}.dsham_sidebarCardBtnCancel:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}.dsham_sidebarCardBtnDanger{color:var(--dsw-alias-state-error-primary,#ef7272)}.dsham_sidebarCardBtnDanger:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover-danger,#f25a5a26)}.dsham_sidebarCardBtn:disabled{opacity:.4;cursor:default}";
 		ensurePluginStyle("dsh-archive-manager/SidebarPopover.css", SIDEBAR_POPOVER_CSS);
-		/** 移动会话二级悬浮菜单样式 */
-		const MOVE_SUBMENU_CSS = ".dsham_moveSessionWrap{position:relative}.dsham_moveSubmenu{position:fixed;z-index:99999;min-width:160px;max-width:260px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.25) transparent;background:var(--dsw-menu-surface-fill,var(--dsw-alias-surface-overlay,#1e1e22));backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));-webkit-backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));border:1px solid var(--dsw-alias-border-l1,rgba(255,255,255,0.12));border-radius:var(--dsw-radius-md,8px);box-shadow:var(--dsw-elevation-prominent,0 6px 20px rgba(0,0,0,0.45));padding:4px;display:flex;flex-direction:column;gap:2px}.dsham_moveSubmenu::-webkit-scrollbar{width:6px}.dsham_moveSubmenu::-webkit-scrollbar-track{background:transparent}.dsham_moveSubmenu::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.2);border-radius:3px}.dsham_moveSubmenu::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.35)}.dsham_moveSubmenuBtn{display:flex;align-items:center;width:100%;padding:6px 10px;border:none;border-radius:var(--dsw-radius-sm,6px);background:transparent;color:var(--dsw-alias-label-primary,#ededed);font:inherit;font-size:13px;line-height:20px;text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background-color .12s ease}.dsham_moveSubmenuBtn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,0.08))}.dsham_moveSubmenuBtn:focus-visible:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,0.08));outline:none}";
+		/** 移动会话二级悬浮菜单样式：100% 对齐宿主原生一级 MenuSurface 材质与无边框磨砂层，杜绝自绘死黑边框与突兀滚动条 */
+		const MOVE_SUBMENU_CSS = `.dsham_moveSessionWrap{position:relative}
+.dsham_moveSubmenu{position:fixed;z-index:1000;min-width:160px;max-width:280px;box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain;padding:4px;display:flex;flex-direction:column;gap:0;border:none;border-radius:var(--dsw-radius-lg,14px);box-shadow:var(--dsw-elevation-prominent,0 6px 20px rgba(0,0,0,.45));color:var(--dsw-alias-label-primary,#ededed);isolation:isolate}
+.dsham_moveSubmenu > .dsham_moveSubmenuMaterial{position:absolute;inset:0;z-index:-1;border-radius:inherit;background:var(--dsw-menu-surface-fill,var(--dsw-alias-surface-overlay,#1e1e22));backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));-webkit-backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));pointer-events:none}
+.dsham_moveSubmenu::before{content:'';position:absolute;top:0;bottom:0;left:-6px;width:8px}
+.dsham_moveSubmenu::-webkit-scrollbar{width:0px;height:0px;display:none}
+.dsham_moveSubmenu{scrollbar-width:none;-ms-overflow-style:none}`;
 		ensurePluginStyle("dsh-archive-manager/MoveSubmenu.css", MOVE_SUBMENU_CSS);
 		/** 工作区右键菜单：归档工作区与官方删除工作区紧贴在同一区域，消除两者之间的分割线 */
 		const WORKSPACE_MENU_GROUP_CSS = "div:has([data-dsham-archive-icon]) + div[role=\"separator\"],div:has([data-dsham-archive-icon]) + div[class*=\"separator\"],div:has(svg[data-dsham-archive-icon]) + div[role=\"separator\"],div:has(svg[data-dsham-archive-icon]) + [class*=\"separator\"]{display:none!important}";
@@ -2842,8 +2847,8 @@ export function startArchiveClient(require: HostRequire) {
 			const winHeight = viewport.height;
 			const menuWidth = 220;
 
-			const maxAvailableHeight = Math.max(140, winHeight - 20);
-			const targetMaxHeight = Math.min(360, maxAvailableHeight);
+			const maxAvailableHeight = Math.max(200, winHeight - 24);
+			const targetMaxHeight = Math.min(520, maxAvailableHeight);
 
 			// 预估高度：无项时空提示约 44px；有项时每项 32px + 2px 间距，加上 10px 内边距与边框
 			const estimatedHeight = itemCount === 0 ? 44 : 34 * itemCount + 8;
@@ -3149,6 +3154,45 @@ export function startArchiveClient(require: HostRequire) {
 				const workspaces = ctx.workspaces.list?.getSnapshot?.()?.items ?? [];
 				const Item = _deepseek_ai_dsh_client_ui_primitives.MenuItemButton;
 
+				// 只要二级子菜单打开，就自动同步一级菜单的真实 DOM 结构（完全克隆/继承宿主与 Codex UI 的 class、材质层与行结构）
+				react.useLayoutEffect(() => {
+					if (!subOpen || !subMenuRef.current || !rowRef.current) return;
+					const container = subMenuRef.current;
+					const parentMenu = rowRef.current.closest<HTMLElement>('[role="menu"]');
+					if (!parentMenu) return;
+
+					// 1. 完全继承一级菜单的所有 class（如 surface, list 等），并同步 data-menu-material
+					for (const cls of Array.from(parentMenu.classList)) {
+						if (!cls.includes("dsham_")) container.classList.add(cls);
+					}
+					if (parentMenu.hasAttribute("data-menu-material")) {
+						container.setAttribute("data-menu-material", parentMenu.getAttribute("data-menu-material")!);
+					}
+
+					// 2. 克隆宿主一级的 material 材质层（Codex UI 的毛玻璃挂在这层）
+					const parentMaterial = parentMenu.querySelector<HTMLElement>('[class*="material"]');
+					if (parentMaterial && !container.querySelector('[class*="material"]')) {
+						const clonedMaterial = parentMaterial.cloneNode(true) as HTMLElement;
+						container.insertBefore(clonedMaterial, container.firstChild);
+					}
+
+					// 3. 克隆一级菜单真实行结构与类名给每一项，让二级菜单的项与一级完全同构
+					const sampleRow = parentMenu.querySelector<HTMLElement>('[class*="itemWrap"]');
+					const sampleBtn = parentMenu.querySelector<HTMLButtonElement>('button[role="menuitem"]');
+					if (sampleBtn) {
+						const sampleBtnClasses = Array.from(sampleBtn.classList).filter(c => !c.includes("danger") && !c.includes("selected"));
+						container.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]').forEach((btn) => {
+							for (const c of sampleBtnClasses) btn.classList.add(c);
+						});
+					}
+					if (sampleRow) {
+						const sampleRowClasses = Array.from(sampleRow.classList);
+						container.querySelectorAll<HTMLElement>(':scope > div[class*="itemWrap"], :scope > div > div[class*="itemWrap"]').forEach((wrap) => {
+							for (const c of sampleRowClasses) wrap.classList.add(c);
+						});
+					}
+				}, [subOpen]);
+
 				const updatePosition = (measuredHeight?: number) => {
 					if (!rowRef.current) return;
 					const rect = rowRef.current.getBoundingClientRect();
@@ -3250,64 +3294,71 @@ export function startArchiveClient(require: HostRequire) {
 					onMouseLeave: handleMouseLeave,
 					children: [
 						itemButton,
-						subOpen && subPos && typeof document !== "undefined" && typeof react_dom?.createPortal === "function" && (0, react_dom.createPortal)(
-							(0, react_jsx_runtime.jsxs)("div", {
-								ref: subMenuRef,
-								className: "dsham_moveSubmenu",
-								role: "menu",
-								onPointerDown: (e) => {
-									e.stopPropagation();
-								},
-								onMouseDown: (e) => {
-									e.stopPropagation();
-								},
-								onMouseEnter: handleMouseEnter,
-								onMouseLeave: handleMouseLeave,
-								style: {
-									top: subPos.top,
-									left: subPos.left,
-									maxHeight: subPos.maxHeight
-								},
-								children: [
-									(0, react_jsx_runtime.jsx)("div", {
-										style: { position: "absolute", top: 0, bottom: 0, left: -6, width: 8 },
-										"aria-hidden": true
-									}),
-									workspaces.length === 0
-										? (0, react_jsx_runtime.jsx)("div", {
+						subOpen && subPos && (0, react_jsx_runtime.jsxs)("div", {
+							ref: subMenuRef,
+							className: "dsham_moveSubmenu",
+							role: "menu",
+							"data-menu-material": "translucent",
+							onPointerDown: (e) => {
+								e.stopPropagation();
+							},
+							onMouseDown: (e) => {
+								e.stopPropagation();
+							},
+							onMouseEnter: handleMouseEnter,
+							onMouseLeave: handleMouseLeave,
+							style: {
+								top: subPos.top,
+								left: subPos.left,
+								maxHeight: subPos.maxHeight
+							},
+							children: [
+								(0, react_jsx_runtime.jsx)("div", {
+									className: "dsham_moveSubmenuMaterial",
+									"aria-hidden": "true"
+								}),
+								workspaces.length === 0
+									? (0, react_jsx_runtime.jsx)("div", {
 											style: { padding: "8px 10px", fontSize: "12px", color: "var(--dsw-alias-label-tertiary, #888)" },
 											children: t("moveSession.noOtherWorkspaces")
 										})
-										: workspaces.map((ws) => {
+									: workspaces.map((ws) => {
 											const wsTitle = ws.title || ws.path || ws.workspaceId;
+											const wsIcon = (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderCloseMedium, { size: 14, "aria-hidden": true });
+											const wsLabel = (0, react_jsx_runtime.jsx)("span", {
+												style: { overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 },
+												children: wsTitle
+											});
+
+											if (typeof Item === "function") {
+												return (0, react_jsx_runtime.jsx)(Item, {
+													icon: wsIcon,
+													disabled: moving,
+													onSelect: () => {
+														void handleSelectWorkspace(ws.workspaceId, wsTitle);
+													},
+													children: wsLabel
+												}, ws.workspaceId);
+											}
+
 											return (0, react_jsx_runtime.jsxs)("button", {
 												type: "button",
 												role: "menuitem",
-												className: "dsham_moveSubmenuBtn",
 												disabled: moving,
-												onPointerDown: (e) => {
-													e.preventDefault();
-													e.stopPropagation();
-													void handleSelectWorkspace(ws.workspaceId, wsTitle);
-												},
 												onClick: (e) => {
 													e.preventDefault();
 													e.stopPropagation();
 													void handleSelectWorkspace(ws.workspaceId, wsTitle);
 												},
+												style: { display: "flex", alignItems: "center", gap: 6, width: "100%", padding: "6px 8px", background: "transparent", border: "none", cursor: "pointer", color: "inherit", textAlign: "left" },
 												children: [
-													(0, react_jsx_runtime.jsx)("span", { "aria-hidden": true, style: { display: "inline-flex", flex: "none", marginRight: 8 }, children: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderCloseMedium, { size: 14 }) }),
-													(0, react_jsx_runtime.jsx)("span", {
-														style: { overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 },
-														children: wsTitle
-													})
+													(0, react_jsx_runtime.jsx)("span", { "aria-hidden": true, style: { display: "inline-flex", flex: "none", marginRight: 8 }, children: wsIcon }),
+													wsLabel
 												]
 											}, ws.workspaceId);
 										})
-								]
-							}),
-							document.body
-						)
+							]
+						})
 					]
 				});
 			}

@@ -891,10 +891,18 @@ test("双模会话菜单组件行为级测试：原生环境渲染 null，旧宿
 	const sessionMenuSlot = "sidebar.workspaces.session.menu.item";
 	let deleteComp = null;
 	let favoriteComp = null;
+	let moveComp = null;
 	let hasNative = true;
 
 	const fakeContext = {
-		workspaces: { list: { getSnapshot: () => ({ items: [], archivedSessionIds: [] }) } },
+		workspaces: {
+			list: {
+				getSnapshot: () => ({
+					items: [{ workspaceId: "ws-1", title: "WS1", path: "/path/1", sessionIds: [] }],
+					archivedSessionIds: []
+				})
+			}
+		},
 		sessions: { list: { getSnapshot: () => ({ byId: {} }) } },
 		locale: { register: () => {}, bind: () => (k) => k },
 		slots: {
@@ -902,6 +910,7 @@ test("双模会话菜单组件行为级测试：原生环境渲染 null，旧宿
 			register: (spec, comp) => {
 				if (spec.name === sessionMenuSlot && spec.id === "archive-manager.delete-session") deleteComp = comp;
 				if (spec.name === sessionMenuSlot && spec.id === "archive-manager.favorite") favoriteComp = comp;
+				if (spec.name === sessionMenuSlot && spec.id === "archive-manager.move-session") moveComp = comp;
 				return () => {};
 			},
 			entries: () => [{ children: { [sessionMenuSlot]: {} } }]
@@ -914,6 +923,7 @@ test("双模会话菜单组件行为级测试：原生环境渲染 null，旧宿
 
 	assert.ok(deleteComp, "DeleteSessionMenuItem 必须被传入 register");
 	assert.ok(favoriteComp, "FavoriteMenuItem 必须被传入 register");
+	assert.ok(moveComp, "MoveSessionMenuItem 必须被传入 register");
 
 	// 1. 原生环境生效时，两个 slot 组件都必须返回 null（只漏一处就会出现同一操作两条菜单）
 	hasNative = true;
