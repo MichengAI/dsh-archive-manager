@@ -27,7 +27,6 @@ export function startArchiveClient(require: HostRequire) {
 		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 		let react_jsx_runtime = require("react/jsx-runtime");
 		let react = require("react");
-		let react_dom = require("react-dom");
 		let _deepseek_ai_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
 		/**
 		 * 宿主是否提供原生上下文菜单服务：提供时 slot 版会话菜单项让位给原生注册，避免同一操作出现两次。
@@ -401,13 +400,20 @@ export function startArchiveClient(require: HostRequire) {
 		/** 侧边栏行内就地确认卡片样式：完全对齐官方原生 MenuSurface 材质与无箭头悬浮设计 */
 		const SIDEBAR_POPOVER_CSS = ".dsham_sidebarCardRoot{position:fixed;inset:0;z-index:1200;pointer-events:none}.dsham_sidebarCardBackdrop{position:fixed;inset:0;pointer-events:auto;background:transparent}.dsham_sidebarCard{position:fixed;pointer-events:auto;box-sizing:border-box;width:290px;max-height:calc(100vh - 32px);overflow-y:auto;padding:16px 18px 14px;border-radius:var(--dsw-radius-lg,14px);background:var(--dsw-menu-surface-fill);backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));-webkit-backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));border:none;box-shadow:var(--dsw-elevation-prominent);color:var(--dsw-alias-label-primary);display:flex;flex-direction:column;gap:8px}.dsham_sidebarCardTitle{margin:0;font-size:14px;font-weight:600;line-height:20px;color:var(--dsw-alias-label-primary)}.dsham_sidebarCardDesc{margin:0;font-size:13px;line-height:18px;color:var(--dsw-alias-label-secondary)}.dsham_sidebarCardError{margin-top:2px;font-size:12px;line-height:16px;color:var(--dsw-alias-state-error-primary,#ef7272);white-space:pre-line}.dsham_sidebarCardFooter{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:10px}.dsham_sidebarCardBtn{border:none;background:transparent;padding:5px 12px;border-radius:var(--dsw-radius-sm,6px);font:inherit;font-size:13px;font-weight:500;line-height:18px;cursor:pointer;transition:background-color .15s ease,opacity .15s ease}.dsham_sidebarCardBtnCancel{color:var(--dsw-alias-label-primary)}.dsham_sidebarCardBtnCancel:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}.dsham_sidebarCardBtnDanger{color:var(--dsw-alias-state-error-primary,#ef7272)}.dsham_sidebarCardBtnDanger:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover-danger,#f25a5a26)}.dsham_sidebarCardBtn:disabled{opacity:.4;cursor:default}";
 		ensurePluginStyle("dsh-archive-manager/SidebarPopover.css", SIDEBAR_POPOVER_CSS);
-		/** 移动会话二级悬浮菜单样式：100% 对齐宿主原生一级 MenuSurface 材质与无边框磨砂层，杜绝自绘死黑边框与突兀滚动条 */
+		/**
+		 * 移动会话二级悬浮菜单样式：容器本身交给宿主 MenuSurface 原语（材质、毛玻璃、锚点与 macOS 底衬都由宿主负责），
+		 * 这里只补定位、滚动方式与无 MenuItemButton 时的回退按钮样式，避免自绘材质与宿主主题脱节。
+		 */
 		const MOVE_SUBMENU_CSS = `.dsham_moveSessionWrap{position:relative}
-.dsham_moveSubmenu{position:fixed;z-index:1000;min-width:160px;max-width:280px;box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain;padding:4px;display:flex;flex-direction:column;gap:0;border:none;border-radius:var(--dsw-radius-lg,14px);box-shadow:var(--dsw-elevation-prominent,0 6px 20px rgba(0,0,0,.45));color:var(--dsw-alias-label-primary,#ededed);isolation:isolate}
-.dsham_moveSubmenu > .dsham_moveSubmenuMaterial{position:absolute;inset:0;z-index:-1;border-radius:inherit;background:var(--dsw-menu-surface-fill,var(--dsw-alias-surface-overlay,#1e1e22));backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));-webkit-backdrop-filter:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));pointer-events:none}
+.dsham_moveSubmenu{position:fixed;z-index:1100;min-width:160px;max-width:280px;box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain;padding:4px;display:flex;flex-direction:column;gap:0;border:none;border-radius:var(--dsw-radius-lg,14px);box-shadow:var(--dsw-elevation-prominent,0 6px 20px rgba(0,0,0,.45));color:var(--dsw-alias-label-primary,#ededed);isolation:isolate}
 .dsham_moveSubmenu::before{content:'';position:absolute;top:0;bottom:0;left:-6px;width:8px}
 .dsham_moveSubmenu::-webkit-scrollbar{width:0px;height:0px;display:none}
-.dsham_moveSubmenu{scrollbar-width:none;-ms-overflow-style:none}`;
+.dsham_moveSubmenu{scrollbar-width:none;-ms-overflow-style:none}
+.dsham_moveSubmenuEmpty{padding:8px 10px;font-size:12px;color:var(--dsw-alias-label-tertiary,#888)}
+.dsham_moveSubmenuBtn{display:flex;align-items:center;gap:6px;width:100%;min-height:34px;padding:6px 8px;border:none;border-radius:var(--dsw-radius-md,8px);background:transparent;color:inherit;font:inherit;font-size:13px;line-height:20px;text-align:left;cursor:pointer}
+.dsham_moveSubmenuBtn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,0.08))}
+.dsham_moveSubmenuBtn:focus-visible:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,0.08));outline:none}
+.dsham_moveSubmenuBtn:disabled{opacity:.4;cursor:default}`;
 		ensurePluginStyle("dsh-archive-manager/MoveSubmenu.css", MOVE_SUBMENU_CSS);
 		/** 工作区右键菜单：归档工作区与官方删除工作区紧贴在同一区域，消除两者之间的分割线 */
 		const WORKSPACE_MENU_GROUP_CSS = "div:has([data-dsham-archive-icon]) + div[role=\"separator\"],div:has([data-dsham-archive-icon]) + div[class*=\"separator\"],div:has(svg[data-dsham-archive-icon]) + div[role=\"separator\"],div:has(svg[data-dsham-archive-icon]) + [class*=\"separator\"]{display:none!important}";
@@ -2840,17 +2846,24 @@ export function startArchiveClient(require: HostRequire) {
 			viewport: { width: number; height: number };
 			itemCount: number;
 			measuredHeight?: number;
+			/** DOM 实测宽度：二级菜单宽度随内容变化（CSS 160~280px），水平翻转必须用实测值 */
+			measuredWidth?: number;
 		}
 
-		function computeSubmenuPosition({ triggerRect, viewport, itemCount, measuredHeight }: SubmenuPositionOptions): { top: number; left: number; maxHeight: number } {
+		/** 二级菜单未测量前的宽度兜底值，与 CSS min/max 区间中位对齐 */
+		const DEFAULT_SUBMENU_WIDTH = 220;
+
+		function computeSubmenuPosition({ triggerRect, viewport, itemCount, measuredHeight, measuredWidth }: SubmenuPositionOptions): { top: number; left: number; maxHeight: number } {
 			const winWidth = viewport.width;
 			const winHeight = viewport.height;
-			const menuWidth = 220;
+			const menuWidth = typeof measuredWidth === "number" && measuredWidth > 0
+				? Math.min(280, Math.max(160, measuredWidth))
+				: DEFAULT_SUBMENU_WIDTH;
 
 			const maxAvailableHeight = Math.max(200, winHeight - 24);
 			const targetMaxHeight = Math.min(520, maxAvailableHeight);
 
-			// 预估高度：无项时空提示约 44px；有项时每项 32px + 2px 间距，加上 10px 内边距与边框
+			// 预估高度：无项时空提示约 44px；有项时宿主原生行高 34px（menu .item min-height:34px、gap:0、上下内边距各 4px）
 			const estimatedHeight = itemCount === 0 ? 44 : 34 * itemCount + 8;
 			const actualHeight = Math.min(targetMaxHeight, Math.max(20, typeof measuredHeight === "number" && measuredHeight > 0 ? measuredHeight : estimatedHeight));
 
@@ -2877,6 +2890,79 @@ export function startArchiveClient(require: HostRequire) {
 
 			return { top, left, maxHeight: targetMaxHeight };
 		}
+		/**
+		 * 移动会话二级子菜单：容器直接使用宿主 MenuSurface 原语，行优先使用宿主 MenuItemButton。
+		 * 材质、毛玻璃、锚点与 macOS 底衬全部交给宿主维护，插件只负责定位、滚动与交互回调，
+		 * 这样宿主或主题（如 Codex UI）升级时二级菜单会自动跟随一级菜单，不需要克隆父级 DOM。
+		 */
+		function MoveSubmenu({ surfaceRef, pos, workspaces, moving, t, onSelect, onEnter, onLeave }: {
+			surfaceRef: { current: HTMLDivElement | null };
+			pos: { top: number; left: number; maxHeight: number };
+			workspaces: readonly { workspaceId: string; title?: string | null; path?: string | null }[];
+			moving: boolean;
+			t: Translate;
+			onSelect(workspaceId: string, title: string): void;
+			onEnter(): void;
+			onLeave(): void;
+		}) {
+			const Surface = _deepseek_ai_dsh_client_ui_primitives.MenuSurface;
+			const Item = _deepseek_ai_dsh_client_ui_primitives.MenuItemButton;
+			const rows = workspaces.length === 0
+				? (0, react_jsx_runtime.jsx)("div", { className: "dsham_moveSubmenuEmpty", children: t("moveSession.noOtherWorkspaces") })
+				: workspaces.map((ws) => {
+					const wsTitle = ws.title || ws.path || ws.workspaceId;
+					const wsIcon = (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderCloseMedium, { size: 14, "aria-hidden": true });
+					const wsLabel = (0, react_jsx_runtime.jsx)("span", {
+						style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 },
+						children: wsTitle
+					});
+
+					if (typeof Item === "function") {
+						return (0, react_jsx_runtime.jsx)(Item, {
+							icon: wsIcon,
+							disabled: moving,
+							onSelect: () => onSelect(ws.workspaceId, wsTitle),
+							children: wsLabel
+						}, ws.workspaceId);
+					}
+
+					// 无 MenuItemButton 的宿主兜底：类名、行高与 hover/focus 反馈对齐宿主菜单行
+					return (0, react_jsx_runtime.jsxs)("button", {
+						type: "button",
+						role: "menuitem",
+						className: "dsham_moveSubmenuBtn",
+						disabled: moving,
+						onClick: (e) => {
+							e.preventDefault();
+							e.stopPropagation();
+							onSelect(ws.workspaceId, wsTitle);
+						},
+						children: [
+							(0, react_jsx_runtime.jsx)("span", { "aria-hidden": true, style: { display: "inline-flex", flex: "none" }, children: wsIcon }),
+							wsLabel
+						]
+					}, ws.workspaceId);
+				});
+
+			return (0, react_jsx_runtime.jsx)(Surface, {
+				ref: surfaceRef,
+				className: "dsham_moveSubmenu",
+				role: "menu",
+				"aria-label": t("menu.moveSession"),
+				"data-dsham-move-submenu": "true",
+				onPointerDown: (e: { stopPropagation(): void }) => {
+					e.stopPropagation();
+				},
+				onMouseDown: (e: { stopPropagation(): void }) => {
+					e.stopPropagation();
+				},
+				onMouseEnter: onEnter,
+				onMouseLeave: onLeave,
+				style: { top: pos.top, left: pos.left, maxHeight: pos.maxHeight },
+				children: rows
+			});
+		}
+
 		async function apply(ctx: ClientContext) {
 			// 先挂侧栏和设置页，再等 Remote；否则官方侧栏会一直占着，菜单里没有删除。
 			applyWorkspaceBrowser(ctx);
@@ -3154,46 +3240,15 @@ export function startArchiveClient(require: HostRequire) {
 				const workspaces = ctx.workspaces.list?.getSnapshot?.()?.items ?? [];
 				const Item = _deepseek_ai_dsh_client_ui_primitives.MenuItemButton;
 
-				// 只要二级子菜单打开，就自动同步一级菜单的真实 DOM 结构（完全克隆/继承宿主与 Codex UI 的 class、材质层与行结构）
-				react.useLayoutEffect(() => {
-					if (!subOpen || !subMenuRef.current || !rowRef.current) return;
-					const container = subMenuRef.current;
-					const parentMenu = rowRef.current.closest<HTMLElement>('[role="menu"]');
-					if (!parentMenu) return;
-
-					// 1. 完全继承一级菜单的所有 class（如 surface, list 等），并同步 data-menu-material
-					for (const cls of Array.from(parentMenu.classList)) {
-						if (!cls.includes("dsham_")) container.classList.add(cls);
-					}
-					if (parentMenu.hasAttribute("data-menu-material")) {
-						container.setAttribute("data-menu-material", parentMenu.getAttribute("data-menu-material")!);
-					}
-
-					// 2. 克隆宿主一级的 material 材质层（Codex UI 的毛玻璃挂在这层）
-					const parentMaterial = parentMenu.querySelector<HTMLElement>('[class*="material"]');
-					if (parentMaterial && !container.querySelector('[class*="material"]')) {
-						const clonedMaterial = parentMaterial.cloneNode(true) as HTMLElement;
-						container.insertBefore(clonedMaterial, container.firstChild);
-					}
-
-					// 3. 克隆一级菜单真实行结构与类名给每一项，让二级菜单的项与一级完全同构
-					const sampleRow = parentMenu.querySelector<HTMLElement>('[class*="itemWrap"]');
-					const sampleBtn = parentMenu.querySelector<HTMLButtonElement>('button[role="menuitem"]');
-					if (sampleBtn) {
-						const sampleBtnClasses = Array.from(sampleBtn.classList).filter(c => !c.includes("danger") && !c.includes("selected"));
-						container.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]').forEach((btn) => {
-							for (const c of sampleBtnClasses) btn.classList.add(c);
-						});
-					}
-					if (sampleRow) {
-						const sampleRowClasses = Array.from(sampleRow.classList);
-						container.querySelectorAll<HTMLElement>(':scope > div[class*="itemWrap"], :scope > div > div[class*="itemWrap"]').forEach((wrap) => {
-							for (const c of sampleRowClasses) wrap.classList.add(c);
-						});
-					}
+				// 宿主 MenuItemButton 不透传 aria-haspopup/aria-expanded；这里按宿主数据行的等价行为补齐，让读屏能感知二级菜单
+				react.useEffect(() => {
+					const trigger = rowRef.current?.querySelector<HTMLButtonElement>(':scope > div > button[role="menuitem"], :scope > button[role="menuitem"]');
+					if (!trigger) return;
+					trigger.setAttribute("aria-haspopup", "menu");
+					trigger.setAttribute("aria-expanded", subOpen ? "true" : "false");
 				}, [subOpen]);
 
-				const updatePosition = (measuredHeight?: number) => {
+				const updatePosition = (measuredHeight?: number, measuredWidth?: number) => {
 					if (!rowRef.current) return;
 					const rect = rowRef.current.getBoundingClientRect();
 					const winWidth = typeof window !== "undefined" ? window.innerWidth : 1024;
@@ -3202,7 +3257,8 @@ export function startArchiveClient(require: HostRequire) {
 						triggerRect: rect,
 						viewport: { width: winWidth, height: winHeight },
 						itemCount: workspaces.length,
-						measuredHeight
+						measuredHeight,
+						measuredWidth
 					});
 					setSubPos((prev) => {
 						if (prev && prev.top === nextPos.top && prev.left === nextPos.left && prev.maxHeight === nextPos.maxHeight) {
@@ -3220,9 +3276,10 @@ export function startArchiveClient(require: HostRequire) {
 
 				react.useLayoutEffect(() => {
 					if (!subOpen || !subMenuRef.current) return;
-					const measured = subMenuRef.current.offsetHeight;
-					if (measured > 0) {
-						updatePosition(measured);
+					const surface = subMenuRef.current;
+					if (surface.offsetHeight > 0) {
+						// 高度与宽度都按 DOM 实测回填：宽度由内容决定，固定常量会导致水平翻转判断失准
+						updatePosition(surface.offsetHeight, surface.offsetWidth);
 					}
 				}, [subOpen, workspaces.length]);
 
@@ -3294,70 +3351,17 @@ export function startArchiveClient(require: HostRequire) {
 					onMouseLeave: handleMouseLeave,
 					children: [
 						itemButton,
-						subOpen && subPos && (0, react_jsx_runtime.jsxs)("div", {
-							ref: subMenuRef,
-							className: "dsham_moveSubmenu",
-							role: "menu",
-							"data-menu-material": "translucent",
-							onPointerDown: (e) => {
-								e.stopPropagation();
+						subOpen && subPos && (0, react_jsx_runtime.jsx)(MoveSubmenu, {
+							surfaceRef: subMenuRef,
+							pos: subPos,
+							workspaces,
+							moving,
+							t,
+							onSelect: (targetWsId: string, targetTitle: string) => {
+								void handleSelectWorkspace(targetWsId, targetTitle);
 							},
-							onMouseDown: (e) => {
-								e.stopPropagation();
-							},
-							onMouseEnter: handleMouseEnter,
-							onMouseLeave: handleMouseLeave,
-							style: {
-								top: subPos.top,
-								left: subPos.left,
-								maxHeight: subPos.maxHeight
-							},
-							children: [
-								(0, react_jsx_runtime.jsx)("div", {
-									className: "dsham_moveSubmenuMaterial",
-									"aria-hidden": "true"
-								}),
-								workspaces.length === 0
-									? (0, react_jsx_runtime.jsx)("div", {
-											style: { padding: "8px 10px", fontSize: "12px", color: "var(--dsw-alias-label-tertiary, #888)" },
-											children: t("moveSession.noOtherWorkspaces")
-										})
-									: workspaces.map((ws) => {
-											const wsTitle = ws.title || ws.path || ws.workspaceId;
-											const wsIcon = (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconFolderCloseMedium, { size: 14, "aria-hidden": true });
-											const wsLabel = (0, react_jsx_runtime.jsx)("span", {
-												style: { overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 },
-												children: wsTitle
-											});
-
-											if (typeof Item === "function") {
-												return (0, react_jsx_runtime.jsx)(Item, {
-													icon: wsIcon,
-													disabled: moving,
-													onSelect: () => {
-														void handleSelectWorkspace(ws.workspaceId, wsTitle);
-													},
-													children: wsLabel
-												}, ws.workspaceId);
-											}
-
-											return (0, react_jsx_runtime.jsxs)("button", {
-												type: "button",
-												role: "menuitem",
-												disabled: moving,
-												onClick: (e) => {
-													e.preventDefault();
-													e.stopPropagation();
-													void handleSelectWorkspace(ws.workspaceId, wsTitle);
-												},
-												style: { display: "flex", alignItems: "center", gap: 6, width: "100%", padding: "6px 8px", background: "transparent", border: "none", cursor: "pointer", color: "inherit", textAlign: "left" },
-												children: [
-													(0, react_jsx_runtime.jsx)("span", { "aria-hidden": true, style: { display: "inline-flex", flex: "none", marginRight: 8 }, children: wsIcon }),
-													wsLabel
-												]
-											}, ws.workspaceId);
-										})
-							]
+							onEnter: handleMouseEnter,
+							onLeave: handleMouseLeave
 						})
 					]
 				});
@@ -4578,6 +4582,7 @@ export function startArchiveClient(require: HostRequire) {
         }
         exports.__test = {
             computeSubmenuPosition,
+            MoveSubmenu,
             forkWithFeedback,
             hasNativeContextMenuService,
 			favoritesOnlyVisibility,
