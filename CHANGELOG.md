@@ -4,6 +4,16 @@
 
 Published release notes are retained below; new versions are added without removing earlier entries.
 
+## 1.2.6 - 2026-11-04
+
+- **"Move to workspace" submenu now matches the host menu**:
+  - The submenu is built from the host's own menu surface and rows, so its material, corner radius and theme (third-party themes included) match the first-level menu; the hand-drawn dark border and the stray scrollbar are gone.
+  - Long workspace lists scroll inside the submenu, and on short windows its height now stays inside the screen instead of running past the bottom edge.
+  - It stays attached to its menu row while the menu scrolls or the window is resized, and no longer jumps to the other side when workspace names are long.
+  - The workspace a session already belongs to is no longer offered as a move target.
+  - "Move to workspace" is hidden on hosts that cannot provide the official menu building blocks, instead of being drawn with plugin styling.
+  - Screen readers are told that the row opens a menu and which element it controls.
+
 ## 1.2.5 - 2026-11-04
 
 - **Workspace and Session Context Menu Polish**:
