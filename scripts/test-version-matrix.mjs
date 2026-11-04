@@ -17,7 +17,7 @@ const profiles = [
 	{ version: "0.2.1-rc.3", cordis: "4.0.5", schemastery: "3.18.5", latest: true },
 	{ version: "0.2.1-rc.4", cordis: "4.0.5", schemastery: "3.18.5", latest: true },
 	{ version: "0.2.1-rc.5", cordis: "4.0.5", schemastery: "3.18.5", latest: true },
-	{ version: "0.2.2-rc.1", cordis: "4.0.6-alpha.2", schemastery: "3.18.6-alpha.2", latest: true },
+	{ version: "0.2.2-rc.1", cordis: "4.1.0", schemastery: "3.19.0", latest: true },
 ];
 const cordisPlugins = {
 	"4.0.4": {
@@ -33,6 +33,13 @@ const cordisPlugins = {
 		"@deepseek-ai/cordis-plugin-include": "1.0.10",
 		"@deepseek-ai/cordis-plugin-loader": "1.0.6",
 		"@deepseek-ai/cordis-plugin-timer": "1.1.7",
+	},
+	"4.1.0": {
+		"@deepseek-ai/cordis-plugin-group": "1.0.6",
+		"@deepseek-ai/cordis-plugin-hmr": "1.0.21",
+		"@deepseek-ai/cordis-plugin-include": "1.1.0",
+		"@deepseek-ai/cordis-plugin-loader": "1.1.0",
+		"@deepseek-ai/cordis-plugin-timer": "1.2.0",
 	},
 	"4.0.6-alpha.1": {
 		"@deepseek-ai/cordis-plugin-group": "1.0.6-alpha.1",
