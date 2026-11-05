@@ -1,5 +1,9 @@
 # Changelog
-## [1.2.7] - 2026-11-04
+## [1.2.7] - 2026-11-05
+
+### Fixes & Enhancements
+
+- Fix an issue where "Delete session" and "Favorite" could be missing from the session context menu in some desktop environments, ensuring all session actions remain consistently available across hosts.
 
 ### Compatibility & Dependencies
 

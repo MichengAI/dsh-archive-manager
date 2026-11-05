@@ -955,3 +955,43 @@ test("双模会话菜单组件行为级测试：原生环境渲染 null，旧宿
 	assert.notEqual(delResLegacy, null, "旧宿主环境 DeleteSessionMenuItem 必须返回菜单元素");
 	assert.equal(typeof delResLegacy, "object");
 });
+
+test("双模防御：原生注册未挂载时，即使宿主存在 contextMenus，slot 组件也坚决兜底不返回 null", async () => {
+	const sessionMenuSlot = "sidebar.workspaces.session.menu.item";
+	let deleteComp = null;
+	let favoriteComp = null;
+	let hasNative = false;
+
+	const fakeContext = {
+		workspaces: {
+			list: {
+				getSnapshot: () => ({
+					items: [],
+					archivedSessionIds: []
+				})
+			}
+		},
+		sessions: { list: { getSnapshot: () => ({ byId: {} }) } },
+		locale: { register: () => {}, bind: () => (k) => k },
+		slots: {
+			inject: (_, eff) => { eff?.(); return () => {}; },
+			register: (spec, comp) => {
+				if (spec.name === sessionMenuSlot && spec.id === "archive-manager.delete-session") deleteComp = comp;
+				if (spec.name === sessionMenuSlot && spec.id === "archive-manager.favorite") favoriteComp = comp;
+				return () => {};
+			},
+			entries: () => [{ children: { [sessionMenuSlot]: {} } }]
+		},
+		effect: (fn) => fn(),
+		get: (name) => (hasNative && name === "contextMenus" ? { register: () => () => {} } : undefined),
+	};
+
+	await bundle.apply(fakeContext);
+
+	assert.ok(deleteComp, "DeleteSessionMenuItem 必须被注册");
+
+	// 运行时宿主延迟出现了 contextMenus 服务，但原生注册并未挂载
+	hasNative = true;
+	const delRes = deleteComp({ sessionId: "s1", displayTitle: "S1", useMenuOpenState: () => [false, () => {}], t: (k) => k });
+	assert.notEqual(delRes, null, "原生注册未就绪时，slot 组件必须兜底渲染删除项，不得返回 null 导致两头落空");
+});

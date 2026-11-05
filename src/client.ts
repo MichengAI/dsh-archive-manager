@@ -3154,12 +3154,20 @@ export function startArchiveClient(require: HostRequire) {
 				);
 			}
 			/**
-			 * 两个会话菜单项共用同一份判定：只要宿主提供原生命令菜单，slot 版条目就让位，
-			 * 避免同一操作在原生菜单与插槽菜单里各出现一次。
+			 * 两个会话菜单项共用同一份判定：只有当原生上下文菜单真正成功挂载就绪时，
+			 * slot 版条目才让位给原生注册，彻底避免「原生因时序未挂载、slot 盲目 return null」导致操作蒸发。
 			 */
-			const hasNativeContextMenus = () => hasNativeContextMenuService((name) => ctx.get(name));
+			let isNativeSessionMenuMounted = false;
+			const hasNativeContextMenus = () => hasNativeContextMenuService((name) => {
+				try {
+					return (ctx.get?.(name) as unknown) ?? (ctx as unknown as Record<string, unknown>)[name];
+				} catch {
+					return undefined;
+				}
+			});
+			const shouldSlotYieldToNative = () => isNativeSessionMenuMounted && hasNativeContextMenus();
 			function DeleteSessionMenuItem({ sessionId, displayTitle: title, useMenuOpenState, t }: { sessionId: string; displayTitle: string; useMenuOpenState: () => readonly [boolean, (open: boolean) => void]; t: Translate }) {
-				if (hasNativeContextMenus()) return null;
+				if (shouldSlotYieldToNative()) return null;
 				const [, setMenuOpen] = useMenuOpenState();
 				const Item = _deepseek_ai_dsh_client_ui_primitives.MenuItemButton;
 				const icon = (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconTrashOutlineRegular, { size: 14 });
@@ -3175,7 +3183,7 @@ export function startArchiveClient(require: HostRequire) {
 			 * 读写走同一份 favoriteRow 存储，和标题左侧的星完全同步。
 			 */
 			function FavoriteMenuItem({ sessionId, favoriteRow, useMenuOpenState, t }: { sessionId: string; favoriteRow: FavoriteRowStore; useMenuOpenState: () => readonly [boolean, (open: boolean) => void]; t: Translate }) {
-				if (hasNativeContextMenus()) return null;
+				if (shouldSlotYieldToNative()) return null;
 				const [, setMenuOpen] = useMenuOpenState();
 				const state = (0, react.useSyncExternalStore)(favoriteRow.subscribe, favoriteRow.getSnapshot);
 				const favorited = state.ready && state.ids.has(sessionId);
@@ -4224,215 +4232,250 @@ export function startArchiveClient(require: HostRequire) {
 					}, GlobalToastOverlay));
 			};
 			reconcileSidebar();
-			const nativeContextMenus = (() => {
-				try {
-					return ctx.get("contextMenus");
-				} catch {
-					return undefined;
-				}
-			})();
-			if (nativeContextMenus && typeof nativeContextMenus.register === "function") {
-				ctx.effect(() => {
-					let unregIcon: (() => void) | undefined;
-					let unregStarFill: (() => void) | undefined;
-					let unregStarOutline: (() => void) | undefined;
-					let unregArchiveIcon: (() => void) | undefined;
-					try {
-						unregIcon = (ctx.slots.register as unknown as (spec: object, comp: unknown) => () => void)({
-							name: "contextMenu.icon",
-							key: "archive-manager.explorer",
-						}, () => (0, react_jsx_runtime.jsx)("svg", {
-							width: 14,
-							height: 14,
-							viewBox: "0 0 16 16",
-							fill: "none",
-							stroke: "currentColor",
-							strokeWidth: 1.3,
-							strokeLinecap: "round",
-							strokeLinejoin: "round",
-							children: [
-								(0, react_jsx_runtime.jsx)("path", { d: "M1.5 3.5C1.5 2.94772 1.94772 2.5 2.5 2.5H6.5L8 4.5H13.5C14.0523 4.5 14.5 4.94772 14.5 5.5V12.5C14.5 13.0523 14.0523 13.5 13.5 13.5H2.5C1.94772 13.5 1.5 13.0523 1.5 12.5V3.5Z" }),
-								(0, react_jsx_runtime.jsx)("path", { d: "M10 8.5L12 10.5L10 12.5" }),
-								(0, react_jsx_runtime.jsx)("path", { d: "M6.5 10.5H12" }),
-							],
-						}));
-						unregStarFill = (ctx.slots.register as unknown as (spec: object, comp: unknown) => () => void)({
-							name: "contextMenu.icon",
-							key: "archive-manager.star-fill",
-						}, () => (0, react_jsx_runtime.jsx)("svg", {
-							width: 14,
-							height: 14,
-							viewBox: "0 0 16 16",
-							fill: "#e8b931",
-							stroke: "#e8b931",
-							strokeWidth: 1.2,
-							strokeLinejoin: "round",
-							children: (0, react_jsx_runtime.jsx)("path", { d: STAR_PATH }),
-						}));
-						unregStarOutline = (ctx.slots.register as unknown as (spec: object, comp: unknown) => () => void)({
-							name: "contextMenu.icon",
-							key: "archive-manager.star-outline",
-						}, () => (0, react_jsx_runtime.jsx)("svg", {
-							width: 14,
-							height: 14,
-							viewBox: "0 0 16 16",
-							fill: "none",
-							stroke: "currentColor",
-							strokeWidth: 1.3,
-							strokeLinejoin: "round",
-							children: (0, react_jsx_runtime.jsx)("path", { d: STAR_PATH }),
-						}));
-						unregArchiveIcon = (ctx.slots.register as unknown as (spec: object, comp: unknown) => () => void)({
-							name: "contextMenu.icon",
-							key: "archive-manager.workspace-archive",
-						}, () => (0, react_jsx_runtime.jsx)("svg", {
-							"data-dsham-archive-icon": "true",
-							width: 14,
-							height: 14,
-							viewBox: "0 0 16 16",
-							fill: "none",
-							stroke: "currentColor",
-							strokeWidth: 1.3,
-							strokeLinecap: "round",
-							strokeLinejoin: "round",
-							children: [
-								(0, react_jsx_runtime.jsx)("path", { d: "M13.5 2.5H2.5C1.94772 2.5 1.5 2.94772 1.5 3.5V4.5C1.5 5.05228 1.94772 5.5 2.5 5.5H13.5C14.0523 5.5 14.5 4.94772 14.5 4.5V3.5C14.5 2.94772 14.0523 2.5 13.5 2.5Z" }),
-								(0, react_jsx_runtime.jsx)("path", { d: "M2.5 5.5V13.5C2.5 13.7652 2.60536 14.0196 2.79289 14.2071C2.98043 14.3946 3.23478 14.5 3.5 14.5H12.5C12.7652 14.5 13.0196 14.3946 13.2071 14.2071C13.3946 14.0196 13.5 13.7652 13.5 13.5V5.5" }),
-								(0, react_jsx_runtime.jsx)("path", { d: "M6.5 9.5H9.5" }),
-							],
-						}));
-					} catch {
-						// contextMenu.icon 插槽在部分宿主或隔离测试夹具中未声明时安全降级
-					}
-					const unregSessionFav = nativeContextMenus.register({
-						id: "archive-manager.session-favorite",
-						target: "session",
-						order: 1,
-						observe: () => [favoriteRowStore, ctx.locale],
-						resolve: ({ sessionId }: { sessionId: string }) => {
-							const state = favoriteRowStore.getSnapshot();
-							const favorited = state.ready && state.ids.has(sessionId);
-							const t = ctx.locale.bind(NS);
-							return [{
-								id: "favorite",
-								label: t(favorited ? "organizer.unfavorite" : "organizer.favorite"),
-								icon: { key: favorited ? "archive-manager.star-fill" : "archive-manager.star-outline" },
-								run: () => {
-									void favoriteRowStore.toggle(sessionId);
-								},
-							}];
-						},
-					});
-					const unregSessionDel = nativeContextMenus.register({
-						id: "archive-manager.session-delete",
-						target: "session",
-						order: 9999,
-						observe: () => [ctx.locale],
-						resolve: ({ sessionId, displayTitle }: { sessionId: string; displayTitle?: string }) => {
-							const t = ctx.locale.bind(NS);
-							return [{
-								id: "delete-session",
-								label: t("menu.deleteSession"),
-								icon: { key: "workspace.delete" },
-								danger: true,
-								afterContent: true,
-								run: () => {
-									publishDeleteTarget({ sessionId, title: displayTitle || sessionId });
-								},
-							}];
-						},
-					});
-					const unregMenu = nativeContextMenus.register({
-						id: "archive-manager.workspace-actions",
-						target: "workspace",
-						order: 250,
-						observe: () => [ctx.workspaces.list, ctx.sessions.list, ctx.locale],
-						resolve: ({ workspaceId, path, displayTitle }) => {
-							const items = ctx.workspaces.list?.getSnapshot?.()?.items ?? [];
-							const workspace = items.find((item) => item.workspaceId === workspaceId);
-							const sessionMap = ctx.sessions.list?.getSnapshot?.()?.byId ?? {};
-							const archived = new Set(ctx.workspaces.list?.getSnapshot?.()?.archivedSessionIds ?? []);
-							const candidateIds = workspace ? workspace.sessionIds.filter((id) => isWorkspaceTaskCandidate(id, sessionMap, archived)) : [];
-							const count = candidateIds.length;
-							const t = ctx.locale.bind(NS);
-							const wsPath = path ?? workspace?.path ?? workspace?.cwd;
+			let disposeNativeContextMenus: (() => void) | undefined;
+			let disposeWorkspaceMenuInjector: (() => void) | undefined;
 
-							const result = [];
-							if (wsPath) {
-								result.push({
-									id: "copy-workspace-path",
-									label: t("menu.copyWorkspacePath"),
-									icon: { key: "workspace.copy" },
-									run: () => {
-										void copySessionText(wsPath).catch(() => {});
-									},
-								});
-								result.push({
-									id: "open-in-explorer",
-									label: t("menu.openInExplorer"),
-									icon: { key: "archive-manager.explorer" },
-									run: () => {
-										void (async () => {
-											try {
-												const res = await fetch(resolveApiUrl("/open-in-app/open"), {
-													method: "POST",
-													headers: { "content-type": "application/json" },
-													body: JSON.stringify({ app: "explorer", path: wsPath }),
-												}).catch(() => null);
-												if (res && res.ok) return;
-											} catch {}
-											try {
-												await callSettingsApi("/open-in-explorer", {
-													method: "POST",
-													body: JSON.stringify({ path: wsPath, workspaceId }),
-												});
-											} catch (err) {
-												console.warn("archive-manager: open in explorer failed", err);
-											}
-										})();
-									},
-								});
-							}
+			const getTranslator = () => {
+				try {
+					return typeof ctx.locale?.bind === "function" ? ctx.locale.bind(NS) : ((k: string) => k);
+				} catch {
+					return (k: string) => k;
+				}
+			};
+
+			function mountNativeContextMenus(service: { register: (definition: unknown) => () => void }): () => void {
+				let unregIcon: (() => void) | undefined;
+				let unregStarFill: (() => void) | undefined;
+				let unregStarOutline: (() => void) | undefined;
+				let unregArchiveIcon: (() => void) | undefined;
+				try {
+					unregIcon = (ctx.slots.register as unknown as (spec: object, comp: unknown) => () => void)({
+						name: "contextMenu.icon",
+						key: "archive-manager.explorer",
+					}, () => (0, react_jsx_runtime.jsx)("svg", {
+						width: 14,
+						height: 14,
+						viewBox: "0 0 16 16",
+						fill: "none",
+						stroke: "currentColor",
+						strokeWidth: 1.3,
+						strokeLinecap: "round",
+						strokeLinejoin: "round",
+						children: [
+							(0, react_jsx_runtime.jsx)("path", { d: "M1.5 3.5C1.5 2.94772 1.94772 2.5 2.5 2.5H6.5L8 4.5H13.5C14.0523 4.5 14.5 4.94772 14.5 5.5V12.5C14.5 13.0523 14.0523 13.5 13.5 13.5H2.5C1.94772 13.5 1.5 13.0523 1.5 12.5V3.5Z" }),
+							(0, react_jsx_runtime.jsx)("path", { d: "M10 8.5L12 10.5L10 12.5" }),
+							(0, react_jsx_runtime.jsx)("path", { d: "M6.5 10.5H12" }),
+						],
+					}));
+					unregStarFill = (ctx.slots.register as unknown as (spec: object, comp: unknown) => () => void)({
+						name: "contextMenu.icon",
+						key: "archive-manager.star-fill",
+					}, () => (0, react_jsx_runtime.jsx)("svg", {
+						width: 14,
+						height: 14,
+						viewBox: "0 0 16 16",
+						fill: "#e8b931",
+						stroke: "#e8b931",
+						strokeWidth: 1.2,
+						strokeLinejoin: "round",
+						children: (0, react_jsx_runtime.jsx)("path", { d: STAR_PATH }),
+					}));
+					unregStarOutline = (ctx.slots.register as unknown as (spec: object, comp: unknown) => () => void)({
+						name: "contextMenu.icon",
+						key: "archive-manager.star-outline",
+					}, () => (0, react_jsx_runtime.jsx)("svg", {
+						width: 14,
+						height: 14,
+						viewBox: "0 0 16 16",
+						fill: "none",
+						stroke: "currentColor",
+						strokeWidth: 1.3,
+						strokeLinejoin: "round",
+						children: (0, react_jsx_runtime.jsx)("path", { d: STAR_PATH }),
+					}));
+					unregArchiveIcon = (ctx.slots.register as unknown as (spec: object, comp: unknown) => () => void)({
+						name: "contextMenu.icon",
+						key: "archive-manager.workspace-archive",
+					}, () => (0, react_jsx_runtime.jsx)("svg", {
+						"data-dsham-archive-icon": "true",
+						width: 14,
+						height: 14,
+						viewBox: "0 0 16 16",
+						fill: "none",
+						stroke: "currentColor",
+						strokeWidth: 1.3,
+						strokeLinecap: "round",
+						strokeLinejoin: "round",
+						children: [
+							(0, react_jsx_runtime.jsx)("path", { d: "M13.5 2.5H2.5C1.94772 2.5 1.5 2.94772 1.5 3.5V4.5C1.5 5.05228 1.94772 5.5 2.5 5.5H13.5C14.0523 5.5 14.5 5.05228 14.5 4.5V3.5C14.5 2.94772 14.0523 2.5 13.5 2.5Z" }),
+							(0, react_jsx_runtime.jsx)("path", { d: "M2.5 5.5V13.5C2.5 13.7652 2.60536 14.0196 2.79289 14.2071C2.98043 14.3946 3.23478 14.5 3.5 14.5H12.5C12.7652 14.5 13.0196 14.3946 13.2071 14.2071C13.3946 14.0196 13.5 13.7652 13.5 13.5V5.5" }),
+							(0, react_jsx_runtime.jsx)("path", { d: "M6.5 9.5H9.5" }),
+						],
+					}));
+				} catch {
+					// contextMenu.icon 插槽在部分宿主或隔离测试夹具中未声明时安全降级
+				}
+				const unregSessionFav = service.register({
+					id: "archive-manager.session-favorite",
+					target: "session",
+					order: 1,
+					observe: () => [favoriteRowStore, ctx.locale],
+					resolve: ({ sessionId }: { sessionId: string }) => {
+						const state = favoriteRowStore.getSnapshot();
+						const favorited = state.ready && state.ids.has(sessionId);
+						const t = getTranslator();
+						return [{
+							id: "favorite",
+							label: t(favorited ? "organizer.unfavorite" : "organizer.favorite"),
+							icon: { key: favorited ? "archive-manager.star-fill" : "archive-manager.star-outline" },
+							run: () => {
+								void favoriteRowStore.toggle(sessionId);
+							},
+						}];
+					},
+				});
+				const unregSessionDel = service.register({
+					id: "archive-manager.session-delete",
+					target: "session",
+					order: 9999,
+					observe: () => [ctx.locale],
+					resolve: ({ sessionId, displayTitle }: { sessionId: string; displayTitle?: string }) => {
+						const t = getTranslator();
+						return [{
+							id: "delete-session",
+							label: t("menu.deleteSession"),
+							icon: { key: "workspace.delete" },
+							danger: true,
+							separatorBefore: true,
+							afterContent: true,
+							run: () => {
+								publishDeleteTarget({ sessionId, title: displayTitle || sessionId });
+							},
+						}];
+					},
+				});
+				const unregMenu = service.register({
+					id: "archive-manager.workspace-actions",
+					target: "workspace",
+					order: 250,
+					observe: () => [ctx.workspaces.list, ctx.sessions.list, ctx.locale],
+					resolve: ({ workspaceId, path, displayTitle }: { workspaceId: string; path?: string; displayTitle?: string }) => {
+						const items = ctx.workspaces.list?.getSnapshot?.()?.items ?? [];
+						const workspace = items.find((item) => item.workspaceId === workspaceId);
+						const sessionMap = ctx.sessions.list?.getSnapshot?.()?.byId ?? {};
+						const archived = new Set(ctx.workspaces.list?.getSnapshot?.()?.archivedSessionIds ?? []);
+						const candidateIds = workspace ? workspace.sessionIds.filter((id) => isWorkspaceTaskCandidate(id, sessionMap, archived)) : [];
+						const count = candidateIds.length;
+						const t = getTranslator();
+						const wsPath = path ?? workspace?.path ?? workspace?.cwd;
+
+						const result = [];
+						if (wsPath) {
 							result.push({
-								id: "archive-workspace",
-								label: t("menu.archiveWorkspace"),
-								icon: { key: "archive-manager.workspace-archive" },
-								disabled: count === 0,
-								separatorBefore: true,
+								id: "copy-workspace-path",
+								label: t("menu.copyWorkspacePath"),
+								icon: { key: "workspace.copy" },
 								run: () => {
-									if (count === 0) return;
-									publishArchiveWsTarget({
-										workspaceId,
-										title: displayTitle || workspaceId,
-										count,
-									});
+									void copySessionText(wsPath).catch(() => {});
 								},
 							});
-							return result;
-						},
-					});
-					return () => {
-						unregSessionFav?.();
-						unregSessionDel?.();
-						unregMenu?.();
-						unregIcon?.();
-						unregStarFill?.();
-						unregStarOutline?.();
-						unregArchiveIcon?.();
-					};
-				}, "archive-manager: native workspace context menu");
-			} else {
-				ctx.effect(() => setupWorkspaceMenuInjector(ctx.locale.bind(NS)), "archive-manager: workspace menu injector");
+							result.push({
+								id: "open-in-explorer",
+								label: t("menu.openInExplorer"),
+								icon: { key: "archive-manager.explorer" },
+								run: () => {
+									void (async () => {
+										try {
+											const res = await fetch(resolveApiUrl("/open-in-app/open"), {
+												method: "POST",
+												headers: { "content-type": "application/json" },
+												body: JSON.stringify({ app: "explorer", path: wsPath }),
+											}).catch(() => null);
+											if (res && res.ok) return;
+										} catch {}
+										try {
+											await callSettingsApi("/open-in-explorer", {
+												method: "POST",
+												body: JSON.stringify({ path: wsPath, workspaceId }),
+											});
+										} catch (err) {
+											console.warn("archive-manager: open in explorer failed", err);
+										}
+									})();
+								},
+							});
+						}
+						result.push({
+							id: "archive-workspace",
+							label: t("menu.archiveWorkspace"),
+							icon: { key: "archive-manager.workspace-archive" },
+							disabled: count === 0,
+							separatorBefore: true,
+							run: () => {
+								if (count === 0) return;
+								publishArchiveWsTarget({
+									workspaceId,
+									title: displayTitle || workspaceId,
+									count,
+								});
+							},
+						});
+						return result;
+					},
+				});
+				isNativeSessionMenuMounted = true;
+				return () => {
+					isNativeSessionMenuMounted = false;
+					unregSessionFav?.();
+					unregSessionDel?.();
+					unregMenu?.();
+					unregIcon?.();
+					unregStarFill?.();
+					unregStarOutline?.();
+					unregArchiveIcon?.();
+				};
 			}
+
+			const reconcileNativeContextMenu = () => {
+				const nativeContextMenus = (() => {
+					try {
+						return (ctx.get?.("contextMenus") as { register?: (definition: unknown) => () => void } | undefined) ??
+							(ctx as unknown as { contextMenus?: { register?: (definition: unknown) => () => void } }).contextMenus;
+					} catch {
+						return undefined;
+					}
+				})();
+				if (nativeContextMenus && typeof nativeContextMenus.register === "function") {
+					if (!disposeNativeContextMenus) {
+						if (disposeWorkspaceMenuInjector) {
+							try { disposeWorkspaceMenuInjector(); } catch {}
+							disposeWorkspaceMenuInjector = undefined;
+						}
+						disposeNativeContextMenus = mountNativeContextMenus(nativeContextMenus as { register: (definition: unknown) => () => void });
+					}
+				} else if (!disposeNativeContextMenus && !disposeWorkspaceMenuInjector) {
+					disposeWorkspaceMenuInjector = setupWorkspaceMenuInjector(getTranslator());
+				}
+			};
+
+			reconcileNativeContextMenu();
+			void Promise.resolve().then(() => {
+				try { reconcileNativeContextMenu(); } catch {}
+			});
 			ctx.effect(() => setupSidebarRowContextMenu(), "archive-manager: sidebar row contextmenu trigger");
 			installSettingsNavIcon(ctx);
 			const unsubscribeSidebar = typeof ctx.on === "function" ? ctx.on("slots/changed", (key: string) => {
-				if (key !== "sidebar.workspaces" && key !== "contextMenu.content") return;
-				try { reconcileSidebar(); }
+				if (key !== "sidebar.workspaces" && key !== "contextMenu.content" && key !== "contextMenu") return;
+				try {
+					reconcileSidebar();
+					reconcileNativeContextMenu();
+				}
 				catch (error) { console.warn("archive-manager: sidebar mode switch failed", error); }
 			}) : undefined;
 			ctx.effect(() => () => {
 				unsubscribeSidebar?.();
+				disposeNativeContextMenus?.();
+				disposeWorkspaceMenuInjector?.();
 				disposeMenu?.();
 				disposeFavoriteMenu?.();
 				disposeMoveMenu?.();
