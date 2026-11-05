@@ -995,3 +995,82 @@ test("双模防御：原生注册未挂载时，即使宿主存在 contextMenus�
 	const delRes = deleteComp({ sessionId: "s1", displayTitle: "S1", useMenuOpenState: () => [false, () => {}], t: (k) => k });
 	assert.notEqual(delRes, null, "原生注册未就绪时，slot 组件必须兜底渲染删除项，不得返回 null 导致两头落空");
 });
+
+test("原生会话菜单注册契约守护：删除会话与归档会话合并同栏，绝不能带有 separatorBefore", async () => {
+	const capturedDefinitions = [];
+	const fakeContext = {
+		workspaces: { list: { getSnapshot: () => ({ items: [], archivedSessionIds: [] }) } },
+		sessions: { list: { getSnapshot: () => ({ byId: {} }) } },
+		locale: { register: () => {}, bind: () => (k) => k },
+		slots: {
+			inject: (_, eff) => { eff?.(); return () => {}; },
+			register: () => () => {},
+			entries: () => []
+		},
+		effect: (fn) => fn(),
+		get: (name) => (name === "contextMenus" ? {
+			register: (def) => {
+				capturedDefinitions.push(def);
+				return () => {};
+			}
+		} : undefined),
+	};
+
+	await bundle.apply(fakeContext);
+
+	const deleteDef = capturedDefinitions.find((d) => d.id === "archive-manager.session-delete");
+	assert.ok(deleteDef, "原生删除会话必须注册");
+	assert.equal(deleteDef.target, "session");
+	const items = deleteDef.resolve({ sessionId: "test-s1", displayTitle: "Test Session" });
+	assert.equal(items.length, 1);
+	const item = items[0];
+	assert.equal(item.id, "delete-session");
+	assert.equal(item.danger, true);
+	assert.equal(item.afterContent, true);
+	assert.equal(item.separatorBefore, undefined, "删除会话与归档会话必须处于同一操作栏内，绝不能带有 separatorBefore");
+});
+
+test("HMR/Provider重载防御：contextMenus 服务实例发生替换时自动清理旧注册并挂载新实例", async () => {
+	let unregCallCount = 0;
+	let newRegisterCount = 0;
+
+	const serviceA = {
+		register: () => () => { unregCallCount += 1; }
+	};
+	const serviceB = {
+		register: () => {
+			newRegisterCount += 1;
+			return () => {};
+		}
+	};
+
+	let currentService = serviceA;
+	let slotChangedCallback = null;
+
+	const fakeContext = {
+		workspaces: { list: { getSnapshot: () => ({ items: [], archivedSessionIds: [] }) } },
+		sessions: { list: { getSnapshot: () => ({ byId: {} }) } },
+		locale: { register: () => {}, bind: () => (k) => k },
+		slots: {
+			inject: (_, eff) => { eff?.(); return () => {}; },
+			register: () => () => {},
+			entries: () => []
+		},
+		effect: (fn) => fn(),
+		get: (name) => (name === "contextMenus" ? currentService : undefined),
+		on: (event, cb) => {
+			if (event === "slots/changed") slotChangedCallback = cb;
+			return () => {};
+		}
+	};
+
+	await bundle.apply(fakeContext);
+	assert.equal(newRegisterCount, 0); // 首轮挂载走的是 serviceA
+
+	// 模拟宿主 HMR 或热替换 provider：服务对象变为 serviceB，并触发 slots/changed 事件
+	currentService = serviceB;
+	slotChangedCallback?.("contextMenu");
+
+	assert.ok(unregCallCount > 0, "旧服务的注册必须被成功注销");
+	assert.ok(newRegisterCount > 0, "新服务上必须成功重新挂载原生菜单项");
+});
