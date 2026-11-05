@@ -4346,7 +4346,6 @@ export function startArchiveClient(require: HostRequire) {
 							label: t("menu.deleteSession"),
 							icon: { key: "workspace.delete" },
 							danger: true,
-							separatorBefore: true,
 							afterContent: true,
 							run: () => {
 								publishDeleteTarget({ sessionId, title: displayTitle || sessionId });
