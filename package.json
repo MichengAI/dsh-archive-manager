@@ -24,6 +24,7 @@
     "locale",
     "cordis.patch.yml",
     "README.md",
+    "README.en.md",
     "README.ru.md",
     "README.zh-CN.md",
     "LICENSE",

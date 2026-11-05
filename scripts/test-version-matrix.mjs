@@ -102,7 +102,7 @@ for (const profile of profiles) {
 			await cp(join(root, directory), join(isolated, directory), { recursive: true, filter: (source) => basename(source) !== "node_modules" });
 		}
 		// 安装清单只用于装载宿主；测试仍审查真实插件清单，不伪造发布依赖。
-		for (const file of ["package.json", "tsconfig.json", ".gitattributes", "README.md", "README.zh-CN.md", "CHANGELOG.md", "CHANGELOG.zh-CN.md", "LICENSE", "cordis.patch.yml"]) {
+		for (const file of ["package.json", "tsconfig.json", ".gitattributes", "README.md", "README.zh-CN.md", "README.en.md", "CHANGELOG.md", "CHANGELOG.zh-CN.md", "LICENSE", "cordis.patch.yml"]) {
 			await cp(join(root, file), join(isolated, file));
 		}
 		const output = await run(process.execPath, ["--import", "tsx", "--test", "--test-reporter=spec", ...testNames.map((name) => join("test", name)), join("test", "fixtures", "latest-host.mjs"), join("test", "fixtures", "projcache-json.mjs"), join("test", "fixtures", "issue88-native.mjs"), join("test", "fixtures", "session-refresh-host.mjs")], isolated, { ...process.env, DSH_ARCHIVE_TEST_HOST_VERSION: profile.version });

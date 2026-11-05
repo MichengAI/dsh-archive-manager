@@ -30,6 +30,7 @@ const required = [
   "README.md",
   "README.ru.md",
   "README.zh-CN.md",
+    "README.en.md",
   "CHANGELOG.md",
   "CHANGELOG.zh-CN.md"
 ];
