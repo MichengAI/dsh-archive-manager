@@ -447,7 +447,7 @@ export function startArchiveClient(require: HostRequire) {
 		const ROW_FAVORITE_HOVER_CSS = "[data-row-key^='session:']:hover .dsham_starSlot{display:inline-flex;pointer-events:auto}"
 			+ "[data-row-key^='session:']:hover>span:first-child:not(:has([data-state])){opacity:0}";
 		const ROW_FAVORITE_CSS = ROW_FAVORITE_BASE_CSS + ROW_FAVORITE_HOVER_CSS;
-		ensurePluginStyle("dsh-archive-manager/RowFavorite.css", ROW_FAVORITE_CSS);
+		ensurePluginStyle("dsh-archive-manager/RowFavorite.css", ROW_FAVORITE_BASE_CSS);
 		/**
 		 * 主界面「只看收藏」筛选：官方视图选项菜单是一份普通数组、没有插槽，
 		 * 所以沿用本插件既有的 DOM 做法——按文案找到「仅显示已归档」那一行后克隆它，
@@ -606,12 +606,14 @@ export function startArchiveClient(require: HostRequire) {
 					const key = row.getAttribute("data-row-key") ?? "";
 					if (!key.startsWith("session:")) continue;
 					const sessionId = key.slice("session:".length);
+					let holder = Array.from(row.children).find((child): child is HTMLElement => child.classList.contains(ROW_STAR_SLOT_CLASS)) ?? null;
 					const cell = Array.from(row.children).find((child) => child.tagName === "SPAN" && Array.from(child.classList).some((name) => name === "slot" || name.endsWith("_slot"))) ?? null;
 					if (cell === null) {
+						holder?.remove();
+						row.removeAttribute("data-dsham-favorited");
 						row.removeAttribute("data-dsham-has-status");
 						continue;
 					}
-					let holder = Array.from(row.children).find((child): child is HTMLElement => child.classList.contains(ROW_STAR_SLOT_CLASS)) ?? null;
 					if (!snapshot.ready) {
 						holder?.remove();
 						row.removeAttribute("data-dsham-favorited");
@@ -5259,7 +5261,7 @@ export function startArchiveClient(require: HostRequire) {
 					if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("dsham-favorite-star-toggle", { detail: { mode, enabled: mode !== "none" } }));
 				},
 				onSidebarFavoriteStarChange: (enabled: boolean) => {
-					if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("dsham-favorite-star-toggle", { detail: { mode: enabled ? "all" : "none", enabled } }));
+					if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("dsham-favorite-star-toggle", { detail: { enabled } }));
 				},
 				onLocationChange: () => {
 					syncSettingsSection();

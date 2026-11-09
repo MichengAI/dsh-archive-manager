@@ -388,8 +388,7 @@ export function setupSidebarEntry(
     notify();
     if (typeof options.onSidebarFavoriteStarModeChange === "function") {
       try { options.onSidebarFavoriteStarModeChange(next); } catch {}
-    }
-    if (typeof options.onSidebarFavoriteStarChange === "function") {
+    } else if (typeof options.onSidebarFavoriteStarChange === "function") {
       try { options.onSidebarFavoriteStarChange(next !== "none"); } catch {}
     }
     try {
@@ -405,8 +404,7 @@ export function setupSidebarEntry(
         notify();
         if (typeof options.onSidebarFavoriteStarModeChange === "function") {
           try { options.onSidebarFavoriteStarModeChange(previous); } catch {}
-        }
-        if (typeof options.onSidebarFavoriteStarChange === "function") {
+        } else if (typeof options.onSidebarFavoriteStarChange === "function") {
           try { options.onSidebarFavoriteStarChange(previous !== "none"); } catch {}
         }
       }
@@ -449,8 +447,7 @@ export function setupSidebarEntry(
         notify();
         if (typeof options.onSidebarFavoriteStarModeChange === "function") {
           try { options.onSidebarFavoriteStarModeChange(sidebarFavoriteStarMode); } catch {}
-        }
-        if (typeof options.onSidebarFavoriteStarChange === "function") {
+        } else if (typeof options.onSidebarFavoriteStarChange === "function") {
           try { options.onSidebarFavoriteStarChange(sidebarFavoriteStarMode !== "none"); } catch {}
         }
       }

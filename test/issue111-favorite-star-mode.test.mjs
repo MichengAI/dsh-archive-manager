@@ -197,6 +197,7 @@ test('Issue 111: setupSidebarEntry 控制器支持 FavoriteStarMode 三档及设
 
   let serverStarMode = 'all'
   const modeChanges = []
+  const boolChanges = []
   const controller = setupSidebarEntry(mockCtx, {
     callApi: async (path, options) => {
       if (path === '/sidebar-favorite-star') {
@@ -215,18 +216,22 @@ test('Issue 111: setupSidebarEntry 控制器支持 FavoriteStarMode 三档及设
     onSidebarFavoriteStarModeChange: (val) => {
       modeChanges.push(val)
     },
+    onSidebarFavoriteStarChange: (val) => {
+      boolChanges.push(val)
+    },
   })
 
   // 1. 默认状态为 "all"
   assert.equal(controller.getSidebarFavoriteStarMode(), 'all')
   assert.equal(controller.isSidebarFavoriteStarEnabled(), true)
 
-  // 2. 切换为 "favorites"
+  // 2. 切换为 "favorites"（优先触发 mode 回调，不得被布尔回调冲掉）
   await controller.setSidebarFavoriteStarMode('favorites')
   assert.equal(controller.getSidebarFavoriteStarMode(), 'favorites')
   assert.equal(controller.isSidebarFavoriteStarEnabled(), true)
   assert.equal(serverStarMode, 'favorites')
   assert.deepEqual(modeChanges, ['favorites'])
+  assert.equal(boolChanges.length, 0, '提供 mode 回调时不应调用布尔回调')
 
   // 3. 切换为 "none"
   await controller.setSidebarFavoriteStarMode('none')
@@ -386,17 +391,40 @@ test('Issue 111: DOM 行为：favorites 模式下仅已收藏行保留星标且�
     }
 
     const favoritesOnly = setupWorkspaceFavoritesOnly(mockCtx, favoriteStore, () => (k) => k)
+
+    // 创建测试会话行
+    const favRow = fakeDocument.createElement('div')
+    favRow.setAttribute('data-row-key', 'session:fav-1')
+    const favSlot = fakeDocument.createElement('span')
+    favSlot.classList.add('dsh_slot')
+    favRow.appendChild(favSlot)
+
+    const unfavRow = fakeDocument.createElement('div')
+    unfavRow.setAttribute('data-row-key', 'session:unfav-2')
+    const unfavSlot = fakeDocument.createElement('span')
+    unfavSlot.classList.add('dsh_slot')
+    unfavRow.appendChild(unfavSlot)
+
+    fakeDocument.querySelectorAll = (sel) => {
+      if (sel === '[data-row-key]') return [favRow, unfavRow]
+      return []
+    }
+
     // 1. 默认模式为 all：RowFavorite.css 包含 :hover 规则
     const allStyle = styles.get('dsh-archive-manager/RowFavorite.css')
     assert.ok(allStyle)
     assert.ok(allStyle.textContent.includes(':hover .dsham_starSlot'), 'all 模式必须包含 hover 样式')
 
-    // 2. 切换至 favorites 模式：样式保留但去除 :hover 规则
+    // 2. 切换至 favorites 模式：样式保留但去除 :hover 规则，且未收藏行绝无 starSlot
     favoritesOnly.setFavoriteStarMode('favorites')
     const favStyle = styles.get('dsh-archive-manager/RowFavorite.css')
     assert.ok(favStyle)
     assert.equal(favStyle.textContent.includes(':hover .dsham_starSlot'), false, 'favorites 模式下绝不能包含 hover 样式')
     assert.ok(favStyle.textContent.includes(".dsham_starSlot[data-favorited='true']"), 'favorites 模式保留已收藏样式')
+
+    // 验证未收藏行在 favorites 模式下无 starSlot
+    const unfavStar = unfavRow.querySelector('.dsham_starSlot')
+    assert.equal(unfavStar, null, 'favorites 模式下未收藏会话行绝不能存在 starSlot 容器')
 
     // 3. 切换至 none 模式：样式彻底卸载
     favoritesOnly.setFavoriteStarMode('none')
