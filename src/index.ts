@@ -8,7 +8,8 @@ import type { Context } from "@deepseek-ai/cordis";
  * 不再另插一条可以单独停用的 host 行。浏览器端由 package.json 的
  * `dsh.client` 声明发现，对应同一个插件入口。
  */
-import { getEntryLocation, getOnlineUpdate, getSidebarFavoriteStar, setEntryLocation, setOnlineUpdate, setSidebarFavoriteStar } from "./plugin-settings.js";
+import { getEntryLocation, getOnlineUpdate, getSidebarFavoriteStar, getSidebarFavoriteStarMode, setEntryLocation, setOnlineUpdate, setSidebarFavoriteStar, setSidebarFavoriteStarMode } from "./plugin-settings.js";
+import type { FavoriteStarMode } from "./plugin-settings.js";
 import { isTrustedUpdateRequest, rawService, registerPluginUpdater, releaseUpdateRoute } from "./plugin-updater.js";
 import { apply as installHost, inject as hostInject } from "./host-install.js";
 import { authorizeExplorerPath } from "./explorer-path-policy.js";
@@ -107,8 +108,8 @@ function registerSettingsRoutes(ctx: Context, hostUpdateDisabled: boolean): () =
 		path: SIDEBAR_FAVORITE_STAR_ENDPOINT,
 		handler: async (request: IncomingMessage, response: ServerResponse) => {
 			if (request.method === "GET" || request.method === "HEAD") {
-				const enabled = await getSidebarFavoriteStar();
-				sendJson(response, 200, { ok: true, enabled });
+				const mode = await getSidebarFavoriteStarMode();
+				sendJson(response, 200, { ok: true, mode, enabled: mode !== "none" });
 				return;
 			}
 			if (request.method === "POST") {
@@ -117,12 +118,25 @@ function registerSettingsRoutes(ctx: Context, hostUpdateDisabled: boolean): () =
 					return;
 				}
 				const body = await readJsonBody(request);
-				if (!body || typeof body.enabled !== "boolean") {
-					sendJson(response, 400, { ok: false, error: "enabled 必须是布尔值" });
+				if (!body) {
+					sendJson(response, 400, { ok: false, error: "请求体不能为空" });
 					return;
 				}
-				const enabled = await setSidebarFavoriteStar(body.enabled);
-				sendJson(response, 200, { ok: true, enabled });
+				let targetMode: FavoriteStarMode | undefined;
+				if (typeof body.mode === "string") {
+					if (body.mode !== "all" && body.mode !== "favorites" && body.mode !== "none") {
+						sendJson(response, 400, { ok: false, error: "mode 必须是 all、favorites 或 none" });
+						return;
+					}
+					targetMode = body.mode;
+				} else if (typeof body.enabled === "boolean") {
+					targetMode = body.enabled ? "all" : "none";
+				} else {
+					sendJson(response, 400, { ok: false, error: "缺少合法的 mode 或 enabled 参数" });
+					return;
+				}
+				const mode = await setSidebarFavoriteStarMode(targetMode);
+				sendJson(response, 200, { ok: true, mode, enabled: mode !== "none" });
 				return;
 			}
 			response.writeHead(405, { allow: "GET, HEAD, POST" });

@@ -5,12 +5,19 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 export type EntryLocation = "both" | "sidebar" | "settings";
+export type FavoriteStarMode = "all" | "favorites" | "none";
 
 export interface ArchiveManagerSettings {
   entryLocation?: EntryLocation;
   sidebarEntry?: boolean;
   onlineUpdate?: boolean;
-  sidebarFavoriteStar?: boolean;
+  sidebarFavoriteStar?: boolean | FavoriteStarMode;
+}
+
+export function normalizeFavoriteStarMode(value: unknown): FavoriteStarMode {
+  if (value === "all" || value === "favorites" || value === "none") return value;
+  if (value === false) return "none";
+  return "all";
 }
 
 function resolveDshHome(): string {
@@ -70,7 +77,7 @@ export async function readSettings(): Promise<ArchiveManagerSettings> {
     entryLocation: "settings",
     sidebarEntry: false,
     onlineUpdate: true,
-    sidebarFavoriteStar: true,
+    sidebarFavoriteStar: "all",
   };
   if (!existsSync(path)) {
     return defaultSettings;
@@ -95,7 +102,7 @@ export async function readSettings(): Promise<ArchiveManagerSettings> {
       entryLocation,
       sidebarEntry: entryLocation !== "settings",
       onlineUpdate: typeof item.onlineUpdate === "boolean" ? item.onlineUpdate : true,
-      sidebarFavoriteStar: typeof item.sidebarFavoriteStar === "boolean" ? item.sidebarFavoriteStar : true,
+      sidebarFavoriteStar: normalizeFavoriteStarMode(item.sidebarFavoriteStar),
     };
   } catch {
     return defaultSettings;
@@ -109,7 +116,7 @@ export async function writeSettings(next: ArchiveManagerSettings): Promise<void>
     entryLocation: location,
     sidebarEntry: location !== "settings",
     onlineUpdate: next.onlineUpdate !== false,
-    sidebarFavoriteStar: next.sidebarFavoriteStar !== false,
+    sidebarFavoriteStar: normalizeFavoriteStarMode(next.sidebarFavoriteStar),
   };
   const serialized = `${JSON.stringify(normalized, null, 2)}\n`;
   await replaceTextFile(path, serialized);
@@ -169,19 +176,36 @@ export async function setOnlineUpdate(enabled: boolean): Promise<boolean> {
   });
 }
 
-export async function getSidebarFavoriteStar(): Promise<boolean> {
+export async function getSidebarFavoriteStarMode(): Promise<FavoriteStarMode> {
   const current = await readSettings();
-  return current.sidebarFavoriteStar !== false;
+  return normalizeFavoriteStarMode(current.sidebarFavoriteStar);
 }
 
-export async function setSidebarFavoriteStar(enabled: boolean): Promise<boolean> {
-  if (typeof enabled !== "boolean") {
-    throw new TypeError("sidebarFavoriteStar must be a boolean");
+export async function setSidebarFavoriteStarMode(mode: FavoriteStarMode): Promise<FavoriteStarMode> {
+  if (mode !== "all" && mode !== "favorites" && mode !== "none") {
+    throw new TypeError("sidebarFavoriteStar mode must be 'all', 'favorites', or 'none'");
   }
   return enqueueWrite(async () => {
     const current = await readSettings();
-    current.sidebarFavoriteStar = enabled;
+    current.sidebarFavoriteStar = mode;
     await writeSettings(current);
-    return enabled;
+    return mode;
   });
+}
+
+export async function getSidebarFavoriteStar(): Promise<boolean> {
+  const mode = await getSidebarFavoriteStarMode();
+  return mode !== "none";
+}
+
+export async function setSidebarFavoriteStar(value: FavoriteStarMode | boolean): Promise<boolean | FavoriteStarMode> {
+  if (typeof value !== "boolean" && value !== "all" && value !== "favorites" && value !== "none") {
+    throw new TypeError("sidebarFavoriteStar must be 'all', 'favorites', 'none', or a boolean");
+  }
+  if (typeof value === "boolean") {
+    const mode: FavoriteStarMode = value ? "all" : "none";
+    await setSidebarFavoriteStarMode(mode);
+    return value;
+  }
+  return setSidebarFavoriteStarMode(value);
 }

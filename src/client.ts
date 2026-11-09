@@ -14,6 +14,7 @@ import { createCacheRebuildController } from "./cache-rebuild-client.js";
 import type { CacheRepairState } from "./cache-rebuild-client.js";
 import { allowArchivedNavigation, openArchivedConversation, formatArchiveNavigationError, ArchiveNavigationError, currentSessionId } from "./archive-experience.js";
 import { setupSidebarEntry, ArchiveBundleConfigCard, ArchiveBundleConfigCardWrapper } from "./sidebar-entry.js";
+import type { FavoriteStarMode } from "./plugin-settings.js";
 import { resolveApiUrl } from "./api-base.js";
 import { favoriteInvocations, idleArchiveCandidate, createSessionOrganizer, runSessionBatch } from "./archive-organizer.js";
 import { createOrganizerPanel, organizerZh, organizerEn, organizerRu, organizerJa, organizerEs, organizerFr, organizerDe, organizerPt } from "./archive-organizer-ui.js";
@@ -363,7 +364,12 @@ export function startArchiveClient(require: HostRequire) {
 		 * @param css - 样式文本。
 		 */
 		function ensurePluginStyle(name: string, css: string) {
-			if (typeof document === "undefined" || document.querySelector("style[data-plugin-css=" + JSON.stringify(name) + "]") !== null) return;
+			if (typeof document === "undefined") return;
+			const existing = document.querySelector<HTMLStyleElement>("style[data-plugin-css=" + JSON.stringify(name) + "]");
+			if (existing !== null) {
+				if (existing.textContent !== css) existing.textContent = css;
+				return;
+			}
 			const tag = document.createElement("style");
 			tag.dataset.plugin = "@michengai/dsh-archive-manager";
 			tag.dataset.pluginCss = name;
@@ -427,10 +433,10 @@ export function startArchiveClient(require: HostRequire) {
 		function resolveRowHasStatus(cell: Element | null): boolean {
 			return Boolean(cell?.querySelector("[data-state]"));
 		}
-		const ROW_FAVORITE_CSS = "[data-row-key^='session:']{position:relative}"
+		const ROW_FAVORITE_BASE_CSS = "[data-row-key^='session:']{position:relative}"
 			+ ".dsham_starSlot{display:none;position:absolute;left:calc(8px + var(--dsh-workspace-indent,0px));inset-inline-start:calc(8px + var(--dsh-workspace-indent,0px));top:50%;transform:translateY(-50%);align-items:center;justify-content:center;box-sizing:border-box;width:16px;height:20px;z-index:1;pointer-events:none}"
-			+ "[data-row-key^='session:']:hover .dsham_starSlot,.dsham_starSlot[data-favorited='true']{display:inline-flex;pointer-events:auto}"
-			+ "[data-row-key^='session:']:hover>span:first-child:not(:has([data-state])),[data-row-key^='session:'][data-dsham-favorited='true']:not([data-dsham-has-status='true'])>span:first-child:not(:has([data-state])){opacity:0}"
+			+ ".dsham_starSlot[data-favorited='true']{display:inline-flex;pointer-events:auto}"
+			+ "[data-row-key^='session:'][data-dsham-favorited='true']:not([data-dsham-has-status='true'])>span:first-child:not(:has([data-state])){opacity:0}"
 			+ "[data-row-key^='session:'][data-dsham-has-status='true']>span:first-child,[data-row-key^='session:']>span:first-child:has([data-state]){opacity:1}"
 			+ "[data-row-key^='session:'][data-dsham-has-status='true'] .dsham_starSlot,[data-row-key^='session:']:has(>span:first-child [data-state]) .dsham_starSlot{width:10px;height:10px;top:auto;bottom:3px;left:calc(15px + var(--dsh-workspace-indent,0px));inset-inline-start:calc(15px + var(--dsh-workspace-indent,0px));transform:none}"
 			+ "[data-row-key^='session:'][data-dsham-has-status='true'] .dsham_rowStar,[data-row-key^='session:']:has(>span:first-child [data-state]) .dsham_rowStar{width:10px;height:10px}"
@@ -438,6 +444,9 @@ export function startArchiveClient(require: HostRequire) {
 			+ ".dsham_rowStar{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:16px;height:16px;padding:0;border:0;background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer;flex:none;border-radius:var(--dsw-radius-xs,4px)}"
 			+ ".dsham_starSlot[data-favorited='true'] .dsham_rowStar{color:#e8b931}"
 			+ ".dsham_rowStar svg{display:block;width:16px;height:16px;flex:none}";
+		const ROW_FAVORITE_HOVER_CSS = "[data-row-key^='session:']:hover .dsham_starSlot{display:inline-flex;pointer-events:auto}"
+			+ "[data-row-key^='session:']:hover>span:first-child:not(:has([data-state])){opacity:0}";
+		const ROW_FAVORITE_CSS = ROW_FAVORITE_BASE_CSS + ROW_FAVORITE_HOVER_CSS;
 		ensurePluginStyle("dsh-archive-manager/RowFavorite.css", ROW_FAVORITE_CSS);
 		/**
 		 * 主界面「只看收藏」筛选：官方视图选项菜单是一份普通数组、没有插槽，
@@ -528,27 +537,42 @@ export function startArchiveClient(require: HostRequire) {
 		 * @param t - 本插件命名空间的文案。
 		 * @returns 开关状态、订阅与销毁句柄。
 		 */
-		function setupWorkspaceFavoritesOnly(ctx: ClientContext, favoriteRow: FavoriteRowStore, translate: () => Translate, getStarEnabled?: () => boolean) {
-			const noop = { dispose: () => {}, setFavoriteStarEnabled: (_: boolean) => {}, isFavoriteStarEnabled: () => true };
+		function setupWorkspaceFavoritesOnly(ctx: ClientContext, favoriteRow: FavoriteRowStore, translate: () => Translate, getStarMode?: () => FavoriteStarMode | boolean) {
+			const noop = {
+				dispose: () => {},
+				setFavoriteStarEnabled: (_: boolean) => {},
+				isFavoriteStarEnabled: () => true,
+				setFavoriteStarMode: (_: FavoriteStarMode) => {},
+				getFavoriteStarMode: () => "all" as FavoriteStarMode,
+			};
 			if (typeof document === "undefined" || typeof document.addEventListener !== "function" || typeof MutationObserver === "undefined") return noop;
 			let enabled = readWorkspaceFavoritesOnly();
-			let starEnabled = typeof getStarEnabled === "function" ? getStarEnabled() : true;
+			const resolveStarMode = (val: unknown): FavoriteStarMode => {
+				if (val === "all" || val === "favorites" || val === "none") return val;
+				if (val === false) return "none";
+				return "all";
+			};
+			let starMode: FavoriteStarMode = typeof getStarMode === "function" ? resolveStarMode(getStarMode()) : "all";
 			let disposed = false;
 			let passQueued = false;
 			const updateStarStyle = () => {
-				if (starEnabled) {
-					ensurePluginStyle("dsh-archive-manager/RowFavorite.css", ROW_FAVORITE_CSS);
+				if (starMode === "all") {
+					ensurePluginStyle("dsh-archive-manager/RowFavorite.css", ROW_FAVORITE_BASE_CSS + ROW_FAVORITE_HOVER_CSS);
+				} else if (starMode === "favorites") {
+					ensurePluginStyle("dsh-archive-manager/RowFavorite.css", ROW_FAVORITE_BASE_CSS);
 				} else {
 					removePluginStyle("dsh-archive-manager/RowFavorite.css");
 				}
 			};
 			updateStarStyle();
 			const onStarToggle = (event: Event) => {
-				const custom = event as CustomEvent<{ enabled?: boolean }>;
-				if (typeof custom?.detail?.enabled === "boolean") {
-					starEnabled = custom.detail.enabled;
-				} else if (typeof getStarEnabled === "function") {
-					starEnabled = getStarEnabled();
+				const custom = event as CustomEvent<{ mode?: FavoriteStarMode; enabled?: boolean }>;
+				if (custom?.detail?.mode === "all" || custom?.detail?.mode === "favorites" || custom?.detail?.mode === "none") {
+					starMode = custom.detail.mode;
+				} else if (typeof custom?.detail?.enabled === "boolean") {
+					starMode = custom.detail.enabled ? "all" : "none";
+				} else if (typeof getStarMode === "function") {
+					starMode = resolveStarMode(getStarMode());
 				}
 				updateStarStyle();
 				schedulePass();
@@ -568,7 +592,7 @@ export function startArchiveClient(require: HostRequire) {
 			 * 已收藏或悬停本行时容器出现，星在里面常驻，尺寸始终一致。
 			 */
 			const ensureRowStars = (rows: readonly HTMLElement[]) => {
-				if (!starEnabled) {
+				if (starMode === "none") {
 					for (const row of rows) {
 						const holder = Array.from(row.children).find((child): child is HTMLElement => child.classList.contains(ROW_STAR_SLOT_CLASS));
 						holder?.remove();
@@ -589,6 +613,13 @@ export function startArchiveClient(require: HostRequire) {
 					}
 					let holder = Array.from(row.children).find((child): child is HTMLElement => child.classList.contains(ROW_STAR_SLOT_CLASS)) ?? null;
 					if (!snapshot.ready) {
+						holder?.remove();
+						row.removeAttribute("data-dsham-favorited");
+						row.removeAttribute("data-dsham-has-status");
+						continue;
+					}
+					const favorited = snapshot.ids.has(sessionId);
+					if (starMode === "favorites" && !favorited) {
 						holder?.remove();
 						row.removeAttribute("data-dsham-favorited");
 						row.removeAttribute("data-dsham-has-status");
@@ -618,7 +649,6 @@ export function startArchiveClient(require: HostRequire) {
 						});
 						holder.appendChild(star);
 					}
-					const favorited = snapshot.ids.has(sessionId);
 					if (favorited) row.setAttribute("data-dsham-favorited", "true");
 					else row.removeAttribute("data-dsham-favorited");
 					if (holder.dataset.favorited === String(favorited)) continue;
@@ -722,20 +752,24 @@ export function startArchiveClient(require: HostRequire) {
 					if (row !== null) wrap.parentElement?.insertBefore(row, wrap.nextSibling);
 				}
 			};
+			let passTimer: ReturnType<typeof setTimeout> | null = null;
+			let passRaf: number | null = null;
 			const schedulePass = () => {
 				if (passQueued || disposed) return;
 				passQueued = true;
 				const run = () => {
 					passQueued = false;
-					if (disposed) return;
+					passTimer = null;
+					passRaf = null;
+					if (disposed || typeof document === "undefined") return;
 					const rows = Array.from(document.querySelectorAll<HTMLElement>("[data-row-key]"));
 					injectMenuRows();
 					ensureRowStars(rows);
 					applyVisibility(rows);
 					if (!favoriteRow.getSnapshot().ready) scheduleRetry();
 				};
-				if (typeof requestAnimationFrame === "function") requestAnimationFrame(run);
-				else setTimeout(run, 16);
+				if (typeof requestAnimationFrame === "function") passRaf = requestAnimationFrame(run);
+				else passTimer = setTimeout(run, 16);
 			};
 			const toggle = () => {
 				enabled = !enabled;
@@ -783,14 +817,22 @@ export function startArchiveClient(require: HostRequire) {
 					for (const star of Array.from(document.querySelectorAll<HTMLElement>("." + ROW_STAR_SLOT_CLASS))) star.remove();
 					for (const row of Array.from(document.querySelectorAll<HTMLElement>("[data-dsham-favorited]"))) row.removeAttribute("data-dsham-favorited");
 					for (const row of Array.from(document.querySelectorAll<HTMLElement>("[data-dsham-has-status]"))) row.removeAttribute("data-dsham-has-status");
+					if (passTimer !== null) { clearTimeout(passTimer); passTimer = null; }
+					if (passRaf !== null && typeof cancelAnimationFrame === "function") { cancelAnimationFrame(passRaf); passRaf = null; }
 					if (retryTimer !== null) { clearTimeout(retryTimer); retryTimer = null; }
 				},
 				setFavoriteStarEnabled(next: boolean) {
-					starEnabled = next;
+					starMode = next ? "all" : "none";
 					updateStarStyle();
 					schedulePass();
 				},
-				isFavoriteStarEnabled: () => starEnabled,
+				isFavoriteStarEnabled: () => starMode !== "none",
+				setFavoriteStarMode(next: FavoriteStarMode) {
+					starMode = next;
+					updateStarStyle();
+					schedulePass();
+				},
+				getFavoriteStarMode: () => starMode,
 			};
 		}
 		/** 收藏集合在客户端只保留一份：主界面星标、归档面板和批量操作读的是同一份状态。 */
@@ -2413,8 +2455,11 @@ export function startArchiveClient(require: HostRequire) {
             "entry.location.settings": "仅设置",
             "entry.location.saveFailed": "保存入口设置失败，请检查网络或重启宿主进程",
             "sidebar.favoriteStar.title": "侧栏收藏星标",
-			"sidebar.favoriteStar.desc": "在会话列表行前显示收藏星标。关闭后不显示图标，仍可通过菜单收藏和筛选。",
+			"sidebar.favoriteStar.desc": "选择侧栏会话收藏星标的展示模式。隐藏后仍可通过右键菜单收藏和筛选。",
 			"sidebar.favoriteStar.toggle": "切换侧栏收藏星标",
+			"sidebar.favoriteStar.all": "全部显示",
+			"sidebar.favoriteStar.favorites": "仅已收藏",
+			"sidebar.favoriteStar.none": "完全隐藏",
 			"archives.archiveProject": "归档该项目的全部聊天",
 			"archives.archiveUngrouped": "归档全部未分组聊天",
 			"archives.archiveProjectDesc": "将“{name}”中全部 {n} 条未归档会话归档，不受当前搜索筛选影响。之后可在“已归档”中恢复。",
@@ -2530,8 +2575,11 @@ export function startArchiveClient(require: HostRequire) {
             "entry.location.settings": "Settings only",
             "entry.location.saveFailed": "Failed to save entry location. Please check your network or restart the host.",
             "sidebar.favoriteStar.title": "Sidebar favorite star",
-			"sidebar.favoriteStar.desc": "Show favorite star on session rows in the sidebar. When disabled, the star is hidden while menu actions and filters stay available.",
+			"sidebar.favoriteStar.desc": "Choose how favorite stars are displayed on sidebar session rows. When hidden, stars can still be toggled via context menu.",
 			"sidebar.favoriteStar.toggle": "Toggle sidebar favorite star",
+			"sidebar.favoriteStar.all": "Show all",
+			"sidebar.favoriteStar.favorites": "Favorites only",
+			"sidebar.favoriteStar.none": "Hide all",
 			"archives.moreActions": "More actions",
 			"archives.archiveProject": "Archive all chats in this project",
 			"archives.archiveUngrouped": "Archive all ungrouped chats",
@@ -2646,8 +2694,11 @@ export function startArchiveClient(require: HostRequire) {
             "entry.location.settings": "Только настройки",
             "entry.location.saveFailed": "Не удалось сохранить расположение пункта. Проверьте сеть или перезапустите хост.",
             "sidebar.favoriteStar.title": "Звезда избранного в боковой панели",
-			"sidebar.favoriteStar.desc": "Отображать звезду избранного у строк сессий в боковой панели. При отключении значок скрывается, а добавление через меню и фильтрация остаются доступными.",
+			"sidebar.favoriteStar.desc": "Выберите режим отображения звезд избранного в боковой панели. При скрытии действия в меню остаются доступными.",
 			"sidebar.favoriteStar.toggle": "Переключить звезду избранного в боковой панели",
+			"sidebar.favoriteStar.all": "Показывать все",
+			"sidebar.favoriteStar.favorites": "Только избранные",
+			"sidebar.favoriteStar.none": "Скрыть все",
 			"archives.moreActions": "Дополнительно",
 			"archives.archiveProject": "Заархивировать все чаты этого проекта",
 			"archives.archiveUngrouped": "Заархивировать все несгруппированные чаты",
@@ -2763,8 +2814,11 @@ export function startArchiveClient(require: HostRequire) {
 			"entry.location.settings": "設定のみ",
 			"entry.location.saveFailed": "入口設定の保存に失敗しました。ネットワークを確認するか、ホストプロセスを再起動してください",
 			"sidebar.favoriteStar.title": "サイドバーのお気に入り星標",
-			"sidebar.favoriteStar.desc": "セッション行の先頭にお気に入り星標を表示します。無効にしてもアイコンが非表示になるだけで、メニュー操作や絞り込みは引き続き利用できます。",
+			"sidebar.favoriteStar.desc": "サイドバーセッション行でのお気に入り星標の表示モードを選択します。非表示時もコンテキストメニューから操作できます。",
 			"sidebar.favoriteStar.toggle": "サイドバーのお気に入り星標を切り替え",
+			"sidebar.favoriteStar.all": "すべて表示",
+			"sidebar.favoriteStar.favorites": "お気に入りのみ",
+			"sidebar.favoriteStar.none": "完全に非表示",
 			"archives.archiveProject": "このプロジェクトの全チャットをアーカイブ",
 			"archives.archiveUngrouped": "未分類チャットをすべてアーカイブ",
 			"archives.archiveProjectDesc": "現在の検索フィルターに関係なく、「{name}」内の未アーカイブセッション全 {n} 件をアーカイブします。後から「アーカイブ済み」で復元できます。",
@@ -2878,8 +2932,11 @@ export function startArchiveClient(require: HostRequire) {
 			"entry.location.settings": "Solo ajustes",
 			"entry.location.saveFailed": "Error al guardar la ubicación del acceso. Compruebe su red o reinicie el host.",
 			"sidebar.favoriteStar.title": "Estrella de favoritos en barra lateral",
-			"sidebar.favoriteStar.desc": "Muestra una estrella de favoritos en las filas de sesión en la barra lateral. Al desactivarla, se oculta el icono, pero las acciones del menú y filtros siguen disponibles.",
+			"sidebar.favoriteStar.desc": "Elija el modo de visualización de las estrellas de favoritos en la barra lateral. Si se ocultan, siguen disponibles en el menú contextual.",
 			"sidebar.favoriteStar.toggle": "Alternar estrella de favoritos en barra lateral",
+			"sidebar.favoriteStar.all": "Mostrar todo",
+			"sidebar.favoriteStar.favorites": "Solo favoritos",
+			"sidebar.favoriteStar.none": "Ocultar todo",
 			"archives.archiveProject": "Archivar todos los chats de este proyecto",
 			"archives.archiveUngrouped": "Archivar todos los chats no agrupados",
 			"archives.archiveProjectDesc": "Archiva todas las {n} sesiones no archivadas en “{name}”, independientemente del filtro actual. Puede restaurarlas en Archivados.",
@@ -2993,8 +3050,11 @@ export function startArchiveClient(require: HostRequire) {
 			"entry.location.settings": "Paramètres uniquement",
 			"entry.location.saveFailed": "Échec de l'enregistrement de l'emplacement de l'accès. Vérifiez votre réseau ou redémarrez l'hôte.",
 			"sidebar.favoriteStar.title": "Étoile de favori dans la barre latérale",
-			"sidebar.favoriteStar.desc": "Affiche une étoile de favori sur les lignes de session dans la barre latérale. Une fois désactivée, l'étoile est masquée mais les actions et filtres restent disponibles.",
+			"sidebar.favoriteStar.desc": "Choisissez le mode d'affichage des étoiles de favori dans la barre latérale. Une fois masquées, les actions restent accessibles via le menu contextuel.",
 			"sidebar.favoriteStar.toggle": "Basculer l'étoile de favori dans la barre latérale",
+			"sidebar.favoriteStar.all": "Tout afficher",
+			"sidebar.favoriteStar.favorites": "Favoris uniquement",
+			"sidebar.favoriteStar.none": "Tout masquer",
 			"archives.archiveProject": "Archiver toutes les discussions de ce projet",
 			"archives.archiveUngrouped": "Archiver toutes les discussions non groupées",
 			"archives.archiveProjectDesc": "Archive les {n} sessions non archivées de « {name} », quel que soit le filtre actuel. Vous pourrez les restaurer dans Archivées.",
@@ -3108,8 +3168,11 @@ export function startArchiveClient(require: HostRequire) {
 			"entry.location.settings": "Nur Einstellungen",
 			"entry.location.saveFailed": "Speichern der Einstiegsplatzierung fehlgeschlagen. Bitte Netzwerk prüfen oder Host-Prozess neu starten.",
 			"sidebar.favoriteStar.title": "Favoritenstern in der Seitenleiste",
-			"sidebar.favoriteStar.desc": "Favoritenstern in den Sitzungszeilen der Seitenleiste anzeigen. Bei Deaktivierung wird das Symbol ausgeblendet, Menüaktionen und Filter bleiben verfügbar.",
+			"sidebar.favoriteStar.desc": "Wählen Sie den Anzeigemodus für Favoritensterne in der Seitenleiste. Wenn ausgeblendet, bleiben Aktionen im Kontextmenü verfügbar.",
 			"sidebar.favoriteStar.toggle": "Favoritenstern in der Seitenleiste umschalten",
+			"sidebar.favoriteStar.all": "Alle anzeigen",
+			"sidebar.favoriteStar.favorites": "Nur Favoriten",
+			"sidebar.favoriteStar.none": "Vollständig ausblenden",
 			"archives.archiveProject": "Alle Chats in diesem Projekt archivieren",
 			"archives.archiveUngrouped": "Alle ungruppierten Chats archivieren",
 			"archives.archiveProjectDesc": "Archiviert alle {n} nicht archivierten Sitzungen in „{name}“ unabhängig vom aktuellen Filter. Sie können sie unter Archiviert wiederherstellen.",
@@ -3223,8 +3286,11 @@ export function startArchiveClient(require: HostRequire) {
 			"entry.location.settings": "Apenas configurações",
 			"entry.location.saveFailed": "Falha ao salvar a localização do acesso. Verifique sua rede ou reinicie o processo do host.",
 			"sidebar.favoriteStar.title": "Estrela de favoritos na barra lateral",
-			"sidebar.favoriteStar.desc": "Mostra a estrela de favoritos nas linhas de sessão na barra lateral. Quando desativada, o ícone é ocultado, mas as ações de menu e filtros continuam disponíveis.",
+			"sidebar.favoriteStar.desc": "Escolha o modo de exibição das estrelas de favoritos na barra lateral. Quando ocultadas, as ações continuam disponíveis no menu de contexto.",
 			"sidebar.favoriteStar.toggle": "Alternar estrela de favoritos na barra lateral",
+			"sidebar.favoriteStar.all": "Mostrar tudo",
+			"sidebar.favoriteStar.favorites": "Apenas favoritos",
+			"sidebar.favoriteStar.none": "Ocultar tudo",
 			"archives.archiveProject": "Arquivar todas as conversas deste projeto",
 			"archives.archiveUngrouped": "Arquivar todas as conversas não agrupadas",
 			"archives.archiveProjectDesc": "Arquiva todas as {n} sessões não arquivadas em “{name}”, independentemente do filtro atual. Você pode restaurá-las em Arquivadas.",
@@ -3644,7 +3710,7 @@ export function startArchiveClient(require: HostRequire) {
             favoriteRowStore.bind({ favoriteSessions, setSessionFavorite });
             let sidebarController: ReturnType<typeof setupSidebarEntry> | undefined;
             /** 视图选项里的「只看收藏」开关：状态存本地，可见性每次重算。 */
-            const favoritesOnly = setupWorkspaceFavoritesOnly(ctx, favoriteRowStore, () => ctx.locale.bind(NS), () => sidebarController?.isSidebarFavoriteStarEnabled() ?? true);
+            const favoritesOnly = setupWorkspaceFavoritesOnly(ctx, favoriteRowStore, () => ctx.locale.bind(NS), () => sidebarController?.getSidebarFavoriteStarMode?.() ?? (sidebarController?.isSidebarFavoriteStarEnabled() ?? true));
             ctx.effect(() => () => favoritesOnly.dispose(), "archive-manager: favorites only filter");
             const organizeBatch = createSessionOrganizer({
 				workspaces: ctx.workspaces.list, sessions: ctx.sessions.list,
@@ -5189,8 +5255,11 @@ export function startArchiveClient(require: HostRequire) {
 				renderPanel: (ownerProps) => (0, react_jsx_runtime.jsx)(ArchivedSessionsSection, Object.assign({}, buildArchivedSectionProps(), ownerProps)),
 				injectProps: buildArchivedSectionProps,
 				ns: NS,
+				onSidebarFavoriteStarModeChange: (mode: FavoriteStarMode) => {
+					if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("dsham-favorite-star-toggle", { detail: { mode, enabled: mode !== "none" } }));
+				},
 				onSidebarFavoriteStarChange: (enabled: boolean) => {
-					if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("dsham-favorite-star-toggle", { detail: { enabled } }));
+					if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("dsham-favorite-star-toggle", { detail: { mode: enabled ? "all" : "none", enabled } }));
 				},
 				onLocationChange: () => {
 					syncSettingsSection();

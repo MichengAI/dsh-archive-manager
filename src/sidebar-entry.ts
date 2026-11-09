@@ -2,7 +2,7 @@ import * as React from "react";
 import { IconArchiveOutlineMedium, SegmentedControl, Switch as PrimitiveSwitch } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { ClientContext } from "./client-compat.js";
 import type { Translate } from "./client-types.js";
-import type { EntryLocation } from "./plugin-settings.js";
+import type { EntryLocation, FavoriteStarMode } from "./plugin-settings.js";
 
 const h = React.createElement;
 
@@ -48,6 +48,8 @@ export function ArchiveBundleConfigCard(props: {
   sidebarFavoriteStarEnabled?: boolean;
   onToggleSidebarFavoriteStar?: (enabled: boolean) => void;
   sidebarFavoriteStarDisabled?: boolean;
+  sidebarFavoriteStarMode?: FavoriteStarMode;
+  onSidebarFavoriteStarModeChange?: (mode: FavoriteStarMode) => void;
 }) {
   ensureSidebarEntryStyle();
   const {
@@ -61,9 +63,13 @@ export function ArchiveBundleConfigCard(props: {
     sidebarFavoriteStarEnabled = true,
     onToggleSidebarFavoriteStar,
     sidebarFavoriteStarDisabled,
+    sidebarFavoriteStarMode: propStarMode,
+    onSidebarFavoriteStarModeChange,
   } = props;
 
   const effectiveLocation: EntryLocation = propLocation ?? (enabled ? "both" : "settings");
+  const effectiveStarMode: FavoriteStarMode =
+    propStarMode ?? (sidebarFavoriteStarEnabled === false ? "none" : "all");
 
   const handleLocationChange = (next: string) => {
     if (next === "both" || next === "sidebar" || next === "settings") {
@@ -71,6 +77,16 @@ export function ArchiveBundleConfigCard(props: {
         onLocationChange(next);
       } else if (typeof onToggle === "function") {
         onToggle(next !== "settings");
+      }
+    }
+  };
+
+  const handleStarModeChange = (next: string) => {
+    if (next === "all" || next === "favorites" || next === "none") {
+      if (typeof onSidebarFavoriteStarModeChange === "function") {
+        onSidebarFavoriteStarModeChange(next);
+      } else if (typeof onToggleSidebarFavoriteStar === "function") {
+        onToggleSidebarFavoriteStar(next !== "none");
       }
     }
   };
@@ -97,18 +113,24 @@ export function ArchiveBundleConfigCard(props: {
     ),
   ];
 
-  if (typeof onToggleSidebarFavoriteStar === "function") {
+  if (typeof onSidebarFavoriteStarModeChange === "function" || typeof onToggleSidebarFavoriteStar === "function") {
     rows.push(
       h("div", { key: "sidebar-favorite-star", className: "dsham_bundle_row" },
         h("div", { className: "dsham_bundle_label_box" },
           h("span", { className: "dsham_bundle_title" }, t("sidebar.favoriteStar.title")),
           h("span", { className: "dsham_bundle_desc" }, t("sidebar.favoriteStar.desc"))
         ),
-        h(PrimitiveSwitch, {
-          checked: sidebarFavoriteStarEnabled,
-          onChange: onToggleSidebarFavoriteStar,
-          label: t("sidebar.favoriteStar.toggle"),
-          disabled: sidebarFavoriteStarDisabled,
+        h(SegmentedControl, {
+          id: "dsham-bundle-favorite-star-mode",
+          value: effectiveStarMode,
+          onChange: handleStarModeChange,
+          label: t("sidebar.favoriteStar.title"),
+          disabled: sidebarFavoriteStarDisabled ?? disabled,
+          options: [
+            { value: "all", label: t("sidebar.favoriteStar.all") },
+            { value: "favorites", label: t("sidebar.favoriteStar.favorites") },
+            { value: "none", label: t("sidebar.favoriteStar.none") },
+          ],
         })
       )
     );
@@ -125,10 +147,17 @@ export function ArchiveBundleConfigCardWrapper(props: {
   setSidebar?: (next: boolean) => Promise<unknown>;
   getSidebarFavoriteStarEnabled?: () => boolean;
   setSidebarFavoriteStar?: (next: boolean) => Promise<unknown>;
+  getSidebarFavoriteStarMode?: () => FavoriteStarMode;
+  setSidebarFavoriteStarMode?: (next: FavoriteStarMode) => Promise<unknown>;
   subscribe: (fn: () => void) => () => void;
 }) {
   const [location, setLocation] = React.useState<EntryLocation>(props.getLocation);
-  const [sidebarFavoriteStarEnabled, setSidebarFavoriteStarEnabled] = React.useState(props.getSidebarFavoriteStarEnabled ? props.getSidebarFavoriteStarEnabled : () => true);
+  const resolveInitialStarMode = (): FavoriteStarMode => {
+    if (props.getSidebarFavoriteStarMode) return props.getSidebarFavoriteStarMode();
+    if (props.getSidebarFavoriteStarEnabled) return props.getSidebarFavoriteStarEnabled() ? "all" : "none";
+    return "all";
+  };
+  const [sidebarFavoriteStarMode, setSidebarFavoriteStarMode] = React.useState<FavoriteStarMode>(resolveInitialStarMode);
   const [saveError, setSaveError] = React.useState<string | null>(null);
   const [savingLocation, setSavingLocation] = React.useState(false);
   const [savingFavoriteStar, setSavingFavoriteStar] = React.useState(false);
@@ -137,8 +166,10 @@ export function ArchiveBundleConfigCardWrapper(props: {
     const syncState = () => {
       setLocation(props.getLocation());
       setSaveError(null);
-      if (props.getSidebarFavoriteStarEnabled) {
-        setSidebarFavoriteStarEnabled(props.getSidebarFavoriteStarEnabled());
+      if (props.getSidebarFavoriteStarMode) {
+        setSidebarFavoriteStarMode(props.getSidebarFavoriteStarMode());
+      } else if (props.getSidebarFavoriteStarEnabled) {
+        setSidebarFavoriteStarMode(props.getSidebarFavoriteStarEnabled() ? "all" : "none");
       }
     };
     syncState();
@@ -158,13 +189,14 @@ export function ArchiveBundleConfigCardWrapper(props: {
     });
   };
 
-  const onToggleSidebarFavoriteStar = props.setSidebarFavoriteStar ? (next: boolean) => {
+  const onSidebarFavoriteStarModeChange = (props.setSidebarFavoriteStarMode || props.setSidebarFavoriteStar) ? (next: FavoriteStarMode) => {
     setSavingFavoriteStar(true);
-    setSidebarFavoriteStarEnabled(next);
-    props.setSidebarFavoriteStar!(next).catch(() => {
-      if (props.getSidebarFavoriteStarEnabled) {
-        setSidebarFavoriteStarEnabled(props.getSidebarFavoriteStarEnabled());
-      }
+    setSidebarFavoriteStarMode(next);
+    const savePromise = props.setSidebarFavoriteStarMode
+      ? props.setSidebarFavoriteStarMode(next)
+      : props.setSidebarFavoriteStar!(next !== "none");
+    savePromise.catch(() => {
+      setSidebarFavoriteStarMode(resolveInitialStarMode());
     }).finally(() => {
       setSavingFavoriteStar(false);
     });
@@ -176,18 +208,21 @@ export function ArchiveBundleConfigCardWrapper(props: {
     errorMessage: saveError,
     disabled: savingLocation,
     onLocationChange,
-    sidebarFavoriteStarEnabled,
+    sidebarFavoriteStarMode,
+    sidebarFavoriteStarEnabled: sidebarFavoriteStarMode !== "none",
     sidebarFavoriteStarDisabled: savingFavoriteStar,
-    onToggleSidebarFavoriteStar,
+    onSidebarFavoriteStarModeChange,
+    onToggleSidebarFavoriteStar: onSidebarFavoriteStarModeChange ? ((enabled) => onSidebarFavoriteStarModeChange(enabled ? "all" : "none")) : undefined,
   });
 }
 
 export interface SetupSidebarEntryOptions {
-  callApi: (path: "/sidebar-entry" | "/sidebar-favorite-star", options?: RequestInit) => Promise<{ location?: EntryLocation; enabled?: boolean; locked?: boolean }>;
+  callApi: (path: "/sidebar-entry" | "/sidebar-favorite-star", options?: RequestInit) => Promise<{ location?: EntryLocation; enabled?: boolean; locked?: boolean; mode?: FavoriteStarMode }>;
   renderPanel: (ownerProps?: Record<string, unknown>) => React.ReactNode;
   injectProps?: () => Record<string, unknown>;
   ns: string;
   onSidebarFavoriteStarChange?: (enabled: boolean) => void;
+  onSidebarFavoriteStarModeChange?: (mode: FavoriteStarMode) => void;
   onLocationChange?: (location: EntryLocation) => void;
 }
 
@@ -200,6 +235,8 @@ export interface SidebarEntryController {
   setEnabled(enabled: boolean): Promise<boolean>;
   isSidebarFavoriteStarEnabled(): boolean;
   setSidebarFavoriteStar(enabled: boolean): Promise<boolean>;
+  getSidebarFavoriteStarMode(): FavoriteStarMode;
+  setSidebarFavoriteStarMode(mode: FavoriteStarMode): Promise<FavoriteStarMode>;
   destroy(): void;
 }
 
@@ -218,6 +255,8 @@ export function setupSidebarEntry(
       setEnabled: async () => false,
       isSidebarFavoriteStarEnabled: () => true,
       setSidebarFavoriteStar: async () => false,
+      getSidebarFavoriteStarMode: () => "all",
+      setSidebarFavoriteStarMode: async () => "all",
       destroy: () => {},
     };
   }
@@ -338,34 +377,46 @@ export function setupSidebarEntry(
     return isSidebarEnabled();
   };
 
-  let sidebarFavoriteStarEnabled = true;
+  let sidebarFavoriteStarMode: FavoriteStarMode = "all";
   let favoriteStarEpoch = 0;
 
-  const setSidebarFavoriteStar = async (next: boolean): Promise<boolean> => {
-    if (destroyed) return sidebarFavoriteStarEnabled;
+  const setSidebarFavoriteStarMode = async (next: FavoriteStarMode): Promise<FavoriteStarMode> => {
+    if (destroyed) return sidebarFavoriteStarMode;
     const currentEpoch = ++favoriteStarEpoch;
-    sidebarFavoriteStarEnabled = next;
+    const previous = sidebarFavoriteStarMode;
+    sidebarFavoriteStarMode = next;
     notify();
+    if (typeof options.onSidebarFavoriteStarModeChange === "function") {
+      try { options.onSidebarFavoriteStarModeChange(next); } catch {}
+    }
     if (typeof options.onSidebarFavoriteStarChange === "function") {
-      try { options.onSidebarFavoriteStarChange(next); } catch {}
+      try { options.onSidebarFavoriteStarChange(next !== "none"); } catch {}
     }
     try {
       await callApi("/sidebar-favorite-star", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ enabled: next }),
+        body: JSON.stringify({ mode: next, enabled: next !== "none" }),
       });
       return next;
     } catch (err) {
       if (currentEpoch === favoriteStarEpoch) {
-        sidebarFavoriteStarEnabled = !next;
+        sidebarFavoriteStarMode = previous;
         notify();
+        if (typeof options.onSidebarFavoriteStarModeChange === "function") {
+          try { options.onSidebarFavoriteStarModeChange(previous); } catch {}
+        }
         if (typeof options.onSidebarFavoriteStarChange === "function") {
-          try { options.onSidebarFavoriteStarChange(!next); } catch {}
+          try { options.onSidebarFavoriteStarChange(previous !== "none"); } catch {}
         }
       }
       throw err;
     }
+  };
+
+  const setSidebarFavoriteStar = async (next: boolean): Promise<boolean> => {
+    const res = await setSidebarFavoriteStarMode(next ? "all" : "none");
+    return res !== "none";
   };
 
   const loadEpoch = epoch;
@@ -389,11 +440,18 @@ export function setupSidebarEntry(
   const loadFavoriteStarEpoch = favoriteStarEpoch;
   callApi("/sidebar-favorite-star")
     .then((res) => {
-      if (!destroyed && favoriteStarEpoch === loadFavoriteStarEpoch && res && typeof res.enabled === "boolean") {
-        sidebarFavoriteStarEnabled = res.enabled;
+      if (!destroyed && favoriteStarEpoch === loadFavoriteStarEpoch && res) {
+        if (res.mode === "all" || res.mode === "favorites" || res.mode === "none") {
+          sidebarFavoriteStarMode = res.mode;
+        } else if (typeof res.enabled === "boolean") {
+          sidebarFavoriteStarMode = res.enabled ? "all" : "none";
+        }
         notify();
+        if (typeof options.onSidebarFavoriteStarModeChange === "function") {
+          try { options.onSidebarFavoriteStarModeChange(sidebarFavoriteStarMode); } catch {}
+        }
         if (typeof options.onSidebarFavoriteStarChange === "function") {
-          try { options.onSidebarFavoriteStarChange(sidebarFavoriteStarEnabled); } catch {}
+          try { options.onSidebarFavoriteStarChange(sidebarFavoriteStarMode !== "none"); } catch {}
         }
       }
     })
@@ -443,8 +501,10 @@ export function setupSidebarEntry(
         setLocation: setLocation,
         getEnabled: () => isSidebarEnabled(),
         setSidebar: setEnabled,
-        getSidebarFavoriteStarEnabled: () => sidebarFavoriteStarEnabled,
+        getSidebarFavoriteStarEnabled: () => sidebarFavoriteStarMode !== "none",
         setSidebarFavoriteStar: setSidebarFavoriteStar,
+        getSidebarFavoriteStarMode: () => sidebarFavoriteStarMode,
+        setSidebarFavoriteStarMode: setSidebarFavoriteStarMode,
         subscribe: (fn) => {
           listeners.add(fn);
           return () => { listeners.delete(fn); };
@@ -460,8 +520,10 @@ export function setupSidebarEntry(
     isEnabled: () => isSidebarEnabled(),
     isSupported: () => sidebarSupported,
     setEnabled,
-    isSidebarFavoriteStarEnabled: () => sidebarFavoriteStarEnabled,
+    isSidebarFavoriteStarEnabled: () => sidebarFavoriteStarMode !== "none",
     setSidebarFavoriteStar,
+    getSidebarFavoriteStarMode: () => sidebarFavoriteStarMode,
+    setSidebarFavoriteStarMode,
     destroy: () => {
       if (destroyed) return;
       destroyed = true;
