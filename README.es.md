@@ -21,7 +21,7 @@
 
 > DSH Archive Manager es un complemento desarrollado por la comunidad para DeepSeek Harness (DSH), no es un producto oficial de DeepSeek AI.
 
-Este documento corresponde a la versión **1.3.0**. Consulte el [registro de cambios](CHANGELOG.md) para más detalles.
+Este documento corresponde a la versión **1.3.1**. Consulte el [registro de cambios](CHANGELOG.md) para más detalles.
 
 ## Resumen de características
 

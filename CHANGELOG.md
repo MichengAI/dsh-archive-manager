@@ -1,4 +1,14 @@
 # Changelog
+## [1.3.1] - 2026-11-10
+
+### Enhancements & User Experience
+
+- **Three-segment display control for sidebar favorite stars**: Upgraded the sidebar favorite star setting into a native three-segment control: **Show all**, **Favorites only**, and **Hide all** (#111).
+  - **Favorites only**: Hovering over unstarred sessions in the sidebar no longer displays an outline star, keeping the list clean and distraction-free, while starred sessions remain permanently highlighted with a solid golden star.
+  - **Hide all**: Completely hides all favorite stars from sidebar session rows.
+  - **Show all**: Keeps the default behavior where outline stars appear on hover.
+  - **Permanent context menu action**: Regardless of the chosen star display mode, the session right-click context menu always provides the "Favorite session / Unfavorite session" action, ensuring favorites can always be managed directly.
+
 ## [1.3.0] - 2026-11-09
 
 ### New Features & Localization
