@@ -358,7 +358,6 @@ export function setupSidebarEntry(
 
   let onlineUpdateEnabled = true;
   let onlineUpdateLocked = false;
-  let updateEpoch = 0;
 
   const setOnlineUpdate = async (next: boolean): Promise<boolean> => {
     if (destroyed || onlineUpdateLocked) return onlineUpdateEnabled;
@@ -504,7 +503,6 @@ export function setupSidebarEntry(
       if (destroyed) return;
       destroyed = true;
       epoch++;
-      updateEpoch++;
       favoriteStarEpoch++;
       layoutService = undefined;
       listeners.clear();

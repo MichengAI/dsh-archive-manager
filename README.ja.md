@@ -160,6 +160,56 @@ DSH Web を再起動し、ブラウザをスーパーリロード（`Ctrl+Shift+
 ### 他のアーカイブプラグインとの共存について
 本プラグインは設定セクション ID `archive-manager` を使用して登録されます。他のセッションアーカイブプラグインがインストールされていても独立して共存・動作します。
 
+## 検索 API の互換性（インテグレーター向け）
+
+正式な API は `workspaceRegistry.searchSessionContent({ sessionIds, query })` であり、アーカイブ済みと未アーカイブの両方のセッションを網羅します。1〜20 件のセッション ID と 1〜200 文字の空でないクエリを指定します。重複する ID は自動的に除外されます。戻り値の形式は `{ items: [{ sessionId, seq, snippet }], failures: [{ sessionId, message }] }` です。個別の読み取り失敗は `failures` に記録され、不正な入力はリクエスト自体が拒否されます。
+
+`searchArchivedContent` は従来のアーカイブ専用レガシーエントリとして引き続き利用可能です。いずれも既存のホスト Typert 接続と認証境界を使用し、追加の HTTP エンドポイントや認証設定は不要です。
+
+## 更新
+
+アクティブな DSH プロファイルで上記のインストールコマンドを再実行するだけで更新が完了します。企業のセキュリティポリシーなどで更新を制限したい環境では、Cordis 設定を介してアップデータを無効化できます。
+
+## ソースコードからのインストール
+
+<details>
+<summary>未リリースの改修や開発検証を行う場合は展開してください</summary>
+
+任意のディレクトリで以下のコマンドを実行します：
+
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+
+git clone https://github.com/MichengAI/dsh-archive-manager.git
+Set-Location .\dsh-archive-manager
+pnpm install --frozen-lockfile
+pnpm build
+dsh plugin --profile web add .
+```
+
+インストール後、DSH Web を再起動し、ブラウザをリフレッシュしてください。ソースコードは [src](src) 配下にあり、TypeScript Strict モードで管理されています。GitHub と npm の双方にビルド済みの `lib` が含まれています。
+
+</details>
+
+## DSH 製品エコシステム
+
+デスクトップ作業環境には [DSH Codex Desktop](https://github.com/MichengAI/dsh-codex-desktop/releases) をご利用ください。既存の [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 環境には、各プラグインの README に従って個別に追加できます：
+
+| プラグイン | 主な機能 |
+| --- | --- |
+| [Codex UI](https://github.com/MichengAI/dsh-codex-ui) | プロジェクトと会話の整理、タスク検索、メッセージナビゲーション |
+| [Agency Agents](https://github.com/MichengAI/dsh-agency-agents) | 各種専門家エージェントの選択と召喚 |
+| [Skills Manager](https://github.com/MichengAI/dsh-skills-manager) | ローカルスキルの検索、有効化、作成、インポート |
+| [Archive Manager](https://github.com/MichengAI/dsh-archive-manager) | アーカイブされた会話の検索、復元、物理クリーンアップ |
+| [IM Connect](https://github.com/MichengAI/dsh-im-connect) | 各種メッセージングアプリを介したタスクの送信と受信 |
+| [Automation](https://github.com/MichengAI/dsh-automation) | 定期タスクのスケジュール管理と実行結果の確認 |
+| [BTW](https://github.com/MichengAI/dsh-btw) | メインタスクを中断せずに横から質問できるサイドチャット |
+| [Simplify](https://github.com/MichengAI/dsh-simplify) | `/simplify` で Git の変更内容に基づきコードをリファクタリング |
+| [PUA](https://github.com/MichengAI/dsh-pua) | エージェントに失敗原因の調査と完了前検証を促す |
+| [Code Review](https://github.com/MichengAI/dsh-code-review) | `/review` で独立したコードレビューを依頼し、現在のチャットでレポートを受信 |
+| [Codex Pet](https://github.com/MichengAI/dsh-codex-pet) | デスクトップペットを通じて会話通知を確認し、ツールの承認や質問に応答 |
+
 ## ライセンス
 
 [Apache License 2.0](LICENSE) の下で提供されています。

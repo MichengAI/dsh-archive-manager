@@ -6,6 +6,7 @@
 - **Full support for all 8 official DeepSeek Harness languages**: Seamlessly localized into Chinese, English, Japanese, Spanish, French, German, Russian, and Portuguese (`zh`, `en`, `ja`, `es`, `fr`, `de`, `ru`, `pt`). All archive management workspaces, search and preview tools, cleanup panels, sidebar context menus, and date pickers adapt natively to the selected host language.
 - **Full multilingual support for sidebar "Favorites only" toggle**: The "Favorites only" filter option in the sidebar view menu now accurately displays across all 8 official languages, allowing quick filtering of starred sessions regardless of locale.
 - **Localized DateRange picker**: Calendar month headers and weekday labels now fully adapt to all 8 supported languages.
+- **Dedicated documentation in all 8 official languages**: Shipped comprehensive README documentation for all 8 official languages (`README.zh-CN.md`, `README.en.md`, `README.ja.md`, `README.es.md`, `README.fr.md`, `README.de.md`, `README.ru.md`, `README.pt.md`) featuring a unified top navigation switcher; plugin management detail views now automatically display the localized guide matching the user's active locale.
 
 ### Enhancements & Simplification
 

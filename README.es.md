@@ -59,6 +59,29 @@ Si una sesión principal se elimina externamente, los subagentes pueden quedar h
 - La vista previa muestra tablas, citas y bloques de código en formato Markdown con etiquetas de rol, o permite ver el texto original con resaltados.
 - La búsqueda procesa lotes de hasta 20 sesiones secuencialmente con un máximo de 200 caracteres de consulta. Se excluyen herramientas, adjuntos, razonamientos y mensajes del sistema.
 
+## Capturas de pantalla
+
+### 1. Gestión de sesiones archivadas (Tarjetas de acordeón y modo oscuro)
+Busque, marque como favorito, previsualice, restaure y limpie en **Configuración → Sesiones archivadas → Archivadas**:
+
+![Archivadas: filtros compartidos, favoritos y filas compactas](assets/screenshots/archived-sessions.webp)
+
+Cambie a **No archivadas** para obtener sugerencias de limpieza inteligente y archivar por proyecto:
+
+![No archivadas: limpieza inteligente y archivado por proyecto](assets/screenshots/unarchived-sessions.webp)
+
+### 2. Panel centralizado de 960 px en el espacio de trabajo principal
+Abra un panel completo de 960 px directamente desde la barra lateral principal:
+
+![Panel principal: acceso directo desde la barra lateral](assets/screenshots/main-view-panel.webp)
+
+### 3. Clic derecho en la barra lateral y submenú en cascada
+Haga clic derecho en cualquier fila de la barra lateral para abrir menús contextuales y mover sesiones entre proyectos:
+
+| Acciones de espacio de trabajo | Mover sesión entre proyectos |
+| :---: | :---: |
+| <img src="assets/screenshots/workspace-context-menu.webp" alt="Workspace Actions Menu" width="100%"> | <img src="assets/screenshots/session-move-menu.webp" alt="Move Session Menu" width="100%"> |
+
 ## Instalación
 
 Se requiere un entorno DeepSeek Harness funcional. Los ejemplos utilizan el perfil `web`:
@@ -130,6 +153,56 @@ Sí. [Codex UI](https://github.com/MichengAI/dsh-codex-ui) conserva su interfaz 
 
 ### Coexistencia con otros plugins de archivo
 El complemento se registra con el ID `archive-manager`, permitiendo convivir pacíficamente con otros complementos de sesiones archivadas.
+
+## Compatibilidad de la API de búsqueda (para integradores)
+
+La API canónica es `workspaceRegistry.searchSessionContent({ sessionIds, query })`, que abarca sesiones archivadas y no archivadas. Admite de 1 a 20 IDs de sesión y una consulta no vacía de 1 a 200 caracteres. La respuesta sigue la estructura `{ items: [{ sessionId, seq, snippet }], failures: [{ sessionId, message }] }`.
+
+`searchArchivedContent` sigue disponible como punto de entrada heredado solo para archivos. Ambos utilizan la conexión Typert del host existente y el límite de autorización.
+
+## Actualizaciones
+
+Vuelva a ejecutar el comando de instalación anterior en su perfil activo de DSH para actualizar el complemento. En entornos corporativos, las actualizaciones se pueden deshabilitar mediante la configuración de Cordis.
+
+## Instalación desde código fuente
+
+<details>
+<summary>Desplegar para desarrollo o pruebas de cambios no publicados</summary>
+
+Ejecute los siguientes comandos en el directorio que elija:
+
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+
+git clone https://github.com/MichengAI/dsh-archive-manager.git
+Set-Location .\dsh-archive-manager
+pnpm install --frozen-lockfile
+pnpm build
+dsh plugin --profile web add .
+```
+
+Tras la instalación, reinicie DSH Web y recargue el navegador. El código fuente en [src](src) utiliza TypeScript estricto. Tanto GitHub como npm contienen la carpeta `lib` compilada lista para ejecutarse.
+
+</details>
+
+## Ecosistema de productos DSH
+
+Para un entorno de escritorio completo, descargue [DSH Codex Desktop](https://github.com/MichengAI/dsh-codex-desktop/releases). En instalaciones existentes de [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), puede añadir los siguientes complementos según sus necesidades:
+
+| Complemento | Capacidades principales |
+| --- | --- |
+| [Codex UI](https://github.com/MichengAI/dsh-codex-ui) | Organización de proyectos, búsqueda de tareas y navegación por mensajes |
+| [Agency Agents](https://github.com/MichengAI/dsh-agency-agents) | Selección y activación de agentes especialistas |
+| [Skills Manager](https://github.com/MichengAI/dsh-skills-manager) | Búsqueda, activación, creación e importación de habilidades locales |
+| [Archive Manager](https://github.com/MichengAI/dsh-archive-manager) | Búsqueda, restauración y limpieza física de conversaciones archivadas |
+| [IM Connect](https://github.com/MichengAI/dsh-im-connect) | Envío y recepción de tareas mediante aplicaciones de mensajería |
+| [Automation](https://github.com/MichengAI/dsh-automation) | Programación de tareas recurrentes y revisión de ejecuciones |
+| [BTW](https://github.com/MichengAI/dsh-btw) | Preguntas paralelas sin interrumpir la tarea en curso |
+| [Simplify](https://github.com/MichengAI/dsh-simplify) | Uso de `/simplify` para mejorar el código de sus cambios en Git |
+| [PUA](https://github.com/MichengAI/dsh-pua) | Motivación al agente para diagnosticar causas de fallo y verificar antes de concluir |
+| [Code Review](https://github.com/MichengAI/dsh-code-review) | Revisión de código independiente con `/review` en la conversación actual |
+| [Codex Pet](https://github.com/MichengAI/dsh-codex-pet) | Notificaciones y aprobaciones de herramientas a través de una mascota de escritorio |
 
 ## Licencia
 

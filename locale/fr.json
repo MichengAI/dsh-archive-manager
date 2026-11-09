@@ -2,6 +2,6 @@
   "meta": {
     "title": "Archive Manager",
     "description": "Archiver, restaurer, ajouter aux favoris et supprimer définitivement des sessions, et diagnostiquer les journaux de session endommagés.",
-    "detail": "README.en.md"
+    "detail": "README.fr.md"
   }
 }
