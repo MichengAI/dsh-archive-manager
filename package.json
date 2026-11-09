@@ -15,6 +15,7 @@
     "./projcache": "./lib/projcache.js",
     "./host": "./lib/host-install.js",
     "./client": "./lib/client.js",
+    "./icon": "./assets/icon.svg",
     "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json"
   },
@@ -106,7 +107,9 @@
     "zustand": "4.4.7"
   },
   "license": "Apache-2.0",
+  "author": "MichengAI",
   "dsh": {
+    "manifestVersion": 1,
     "bundle": {
       "patch": "./cordis.patch.yml"
     },
@@ -136,6 +139,9 @@
     "dsh-plugin",
     "archive",
     "session-management",
+    "diagnose",
+    "favorites",
+    "restore",
     "cordis",
     "typert",
     "workspace",

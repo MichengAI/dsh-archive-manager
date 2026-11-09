@@ -105,28 +105,6 @@ export function ArchiveBundleConfigCard(props: {
     ),
   ];
 
-  if (typeof onToggleOnlineUpdate === "function") {
-    const updateDesc = onlineUpdateLocked
-      ? `${t("update.entry.desc")} (${t("update.entry.locked")})`
-      : t("update.entry.desc");
-
-    rows.push(
-      h("div", { key: "online-update", className: "dsham_bundle_row" },
-        h("div", { className: "dsham_bundle_label_box" },
-          h("span", { className: "dsham_bundle_title" }, t("update.entry.title")),
-          h("span", { className: "dsham_bundle_desc" }, updateDesc)
-        ),
-        h(PrimitiveSwitch, {
-          checked: onlineUpdateEnabled,
-          onChange: onToggleOnlineUpdate,
-          label: t("update.entry.toggle"),
-          disabled: onlineUpdateDisabled || onlineUpdateLocked,
-          title: onlineUpdateLocked ? t("update.entry.locked") : undefined,
-        })
-      )
-    );
-  }
-
   if (typeof onToggleSidebarFavoriteStar === "function") {
     rows.push(
       h("div", { key: "sidebar-favorite-star", className: "dsham_bundle_row" },
@@ -161,24 +139,15 @@ export function ArchiveBundleConfigCardWrapper(props: {
   subscribe: (fn: () => void) => () => void;
 }) {
   const [location, setLocation] = React.useState<EntryLocation>(props.getLocation);
-  const [onlineUpdateEnabled, setOnlineUpdateEnabled] = React.useState(props.getOnlineUpdateEnabled ? props.getOnlineUpdateEnabled : () => true);
-  const [onlineUpdateLocked, setOnlineUpdateLocked] = React.useState(props.getOnlineUpdateLocked ? props.getOnlineUpdateLocked : () => false);
   const [sidebarFavoriteStarEnabled, setSidebarFavoriteStarEnabled] = React.useState(props.getSidebarFavoriteStarEnabled ? props.getSidebarFavoriteStarEnabled : () => true);
   const [saveError, setSaveError] = React.useState<string | null>(null);
   const [savingLocation, setSavingLocation] = React.useState(false);
-  const [savingUpdate, setSavingUpdate] = React.useState(false);
   const [savingFavoriteStar, setSavingFavoriteStar] = React.useState(false);
 
   React.useEffect(() => {
     const syncState = () => {
       setLocation(props.getLocation());
       setSaveError(null);
-      if (props.getOnlineUpdateEnabled) {
-        setOnlineUpdateEnabled(props.getOnlineUpdateEnabled());
-      }
-      if (props.getOnlineUpdateLocked) {
-        setOnlineUpdateLocked(props.getOnlineUpdateLocked());
-      }
       if (props.getSidebarFavoriteStarEnabled) {
         setSidebarFavoriteStarEnabled(props.getSidebarFavoriteStarEnabled());
       }
@@ -200,19 +169,6 @@ export function ArchiveBundleConfigCardWrapper(props: {
     });
   };
 
-  const onToggleOnlineUpdate = props.setOnlineUpdate ? (next: boolean) => {
-    if (props.getOnlineUpdateLocked?.()) return;
-    setSavingUpdate(true);
-    setOnlineUpdateEnabled(next);
-    props.setOnlineUpdate!(next).catch(() => {
-      if (props.getOnlineUpdateEnabled) {
-        setOnlineUpdateEnabled(props.getOnlineUpdateEnabled());
-      }
-    }).finally(() => {
-      setSavingUpdate(false);
-    });
-  } : undefined;
-
   const onToggleSidebarFavoriteStar = props.setSidebarFavoriteStar ? (next: boolean) => {
     setSavingFavoriteStar(true);
     setSidebarFavoriteStarEnabled(next);
@@ -231,10 +187,6 @@ export function ArchiveBundleConfigCardWrapper(props: {
     errorMessage: saveError,
     disabled: savingLocation,
     onLocationChange,
-    onlineUpdateEnabled,
-    onlineUpdateDisabled: savingUpdate || onlineUpdateLocked,
-    onlineUpdateLocked,
-    onToggleOnlineUpdate,
     sidebarFavoriteStarEnabled,
     sidebarFavoriteStarDisabled: savingFavoriteStar,
     onToggleSidebarFavoriteStar,

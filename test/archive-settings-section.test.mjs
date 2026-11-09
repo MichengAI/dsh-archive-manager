@@ -53,7 +53,7 @@ test("归档设置页在标题区提供项目与反馈入口，不混入批量�
   assert.match(client, /FeedbackIcon/);
   assert.doesNotMatch(client, /IconDislikeOutline16/);
   assert.match(client, /"archives\.viewProject": "GitHub"/);
-  assert.equal((client.match(/"archives\.viewProject": "GitHub"/g) ?? []).length, 3);
+  assert.equal((client.match(/"archives\.viewProject": "GitHub"/g) ?? []).length, 8);
   assert.match(client, /"archives\.feedback": "问题反馈"/);
   assert.match(client, /"archives\.feedback": "Issues"/);
   assert.equal((client.match(/className: "dsham_settingsTitleRow"/g) ?? []).length, 1);

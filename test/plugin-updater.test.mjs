@@ -85,15 +85,12 @@ test('归档更新弹窗消费 ESC，避免继续关闭底层设置页', () => {
   assert.deepEqual(calls, ['prevent', 'stop', 'stopImmediate', 'close'])
 })
 
-test('归档客户端与 Host 绑定自身更新入口', async () => {
+test('归档客户端已移除设置页更新入口且 Host 维持更新能力', async () => {
   const client = await readFile(new URL('../src/client.ts', import.meta.url), 'utf8')
   const updateUi = await readFile(new URL('../src/plugin-update-ui.ts', import.meta.url), 'utf8')
   const host = await readFile(new URL('../src/index.ts', import.meta.url), 'utf8')
-  assert.match(client, /packageName: "@michengai\/dsh-archive-manager"/)
-  assert.match(client, /titleRowSelector: "\.dsham_settingsTitleRow"/)
-  assert.match(client, /createIcon: createPluginUpdateIcon/)
-  assert.match(client, /UPDATE_ICON_PATHS/)
-  assert.match(client, /document\.createElementNS\("http:\/\/www\.w3\.org\/2000\/svg", "svg"\)/)
+  assert.doesNotMatch(client, /createIcon: createPluginUpdateIcon/)
+  assert.doesNotMatch(client, /UPDATE_ICON_PATHS/)
   assert.doesNotMatch(client, /react-dom\/client/)
   assert.match(updateUi, /data-mpi-label/)
   assert.match(updateUi, /document\.addEventListener\("keydown"/)

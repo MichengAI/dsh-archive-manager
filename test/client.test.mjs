@@ -112,10 +112,16 @@ test("分叉失败向列表提示回调报告错误，成功时不提示", async
   assert.equal(messages.length, 1);
 });
 
-test("完整客户端中英文词条和占位符对应", () => {
-  assert.deepEqual(Object.keys(t.zh).sort(), Object.keys(t.en).sort());
-  for (const key of Object.keys(t.zh)) {
-    assert.deepEqual((t.zh[key].match(/\{\w+\}/g) ?? []).sort(), (t.en[key].match(/\{\w+\}/g) ?? []).sort(), key);
+test("完整客户端 8 门内置语言词条和占位符严格一致", () => {
+  const langs = [t.zh, t.en, t.ja, t.es, t.fr, t.de, t.ru, t.pt];
+  const zhKeys = Object.keys(t.zh).sort();
+  for (const dict of langs) {
+    assert.ok(dict, "词典必须存在");
+    assert.deepEqual(Object.keys(dict).sort(), zhKeys);
+    for (const key of zhKeys) {
+      assert.ok(typeof dict[key] === "string" && dict[key].length > 0, `空值检查: ${key}`);
+      assert.deepEqual((t.zh[key].match(/\{\w+\}/g) ?? []).sort(), (dict[key].match(/\{\w+\}/g) ?? []).sort(), key);
+    }
   }
 });
 
