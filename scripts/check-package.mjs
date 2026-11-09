@@ -28,9 +28,14 @@ const required = [
   "lib/native-explorer.js",
   "LICENSE",
   "README.md",
+  "README.en.md",
+  "README.ja.md",
+  "README.es.md",
+  "README.fr.md",
+  "README.de.md",
   "README.ru.md",
+  "README.pt.md",
   "README.zh-CN.md",
-    "README.en.md",
   "CHANGELOG.md",
   "CHANGELOG.zh-CN.md"
 ];
