@@ -240,7 +240,6 @@ test('客户端侧边栏入口与 bundle.config 开关槽位生命周期', async
 
   let clientSidebar = false
   let clientLocation = 'settings'
-  let clientUpdate = true
   const controller = setupSidebarEntry(mockCtx, {
     callApi: async (path, options) => {
       if (path === '/sidebar-entry') {
@@ -253,14 +252,6 @@ test('客户端侧边栏入口与 bundle.config 开关槽位生命周期', async
           return { ok: true, location: clientLocation, enabled: clientSidebar }
         }
         return { ok: true, location: clientLocation, enabled: clientSidebar }
-      }
-      if (path === '/online-update') {
-        if (options?.method === 'POST') {
-          const body = JSON.parse(options.body)
-          clientUpdate = body.enabled
-          return { enabled: clientUpdate }
-        }
-        return { enabled: clientUpdate, locked: false }
       }
       throw new Error('unexpected path: ' + path)
     },
@@ -342,15 +333,7 @@ test('客户端侧边栏入口与 bundle.config 开关槽位生命周期', async
   assert.equal(slotRegistrations.has('sidebar.panellist'), false, '关闭后注销 sidebar.panellist 槽位')
   assert.equal(selectedPanel, null, '关闭正在查看的面板时安全切回 null（杜绝悬空白屏）')
 
-  // 3. 测试 onlineUpdate 兼容控制（内存级安全兼容，不再向宿主网络发送请求）
-  assert.equal(controller.isOnlineUpdateEnabled(), true)
-  assert.equal(controller.isOnlineUpdateLocked(), false)
-  await controller.setOnlineUpdate(false)
-  assert.equal(controller.isOnlineUpdateEnabled(), false)
-  await controller.setOnlineUpdate(true)
-  assert.equal(controller.isOnlineUpdateEnabled(), true)
-
-  // 4. 测试槽位撤销与重建生命周期（针对 P2-3 防回归）
+  // 3. 测试槽位撤销与重建生命周期（针对 P2-3 防回归）
   await controller.setEnabled(true)
   assert.equal(slotRegistrations.has('sidebar.panellist'), true)
   assert.equal(slotRegistrations.has('main'), true)

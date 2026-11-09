@@ -45,10 +45,6 @@ export function ArchiveBundleConfigCard(props: {
   enabled?: boolean;
   onToggle?: (enabled: boolean) => void;
   disabled?: boolean;
-  onlineUpdateEnabled?: boolean;
-  onToggleOnlineUpdate?: (enabled: boolean) => void;
-  onlineUpdateDisabled?: boolean;
-  onlineUpdateLocked?: boolean;
   sidebarFavoriteStarEnabled?: boolean;
   onToggleSidebarFavoriteStar?: (enabled: boolean) => void;
   sidebarFavoriteStarDisabled?: boolean;
@@ -62,10 +58,6 @@ export function ArchiveBundleConfigCard(props: {
     enabled = false,
     onToggle,
     disabled,
-    onlineUpdateEnabled = true,
-    onToggleOnlineUpdate,
-    onlineUpdateDisabled,
-    onlineUpdateLocked = false,
     sidebarFavoriteStarEnabled = true,
     onToggleSidebarFavoriteStar,
     sidebarFavoriteStarDisabled,
@@ -131,9 +123,6 @@ export function ArchiveBundleConfigCardWrapper(props: {
   setLocation: (next: EntryLocation) => Promise<unknown>;
   getEnabled?: () => boolean;
   setSidebar?: (next: boolean) => Promise<unknown>;
-  getOnlineUpdateEnabled?: () => boolean;
-  setOnlineUpdate?: (next: boolean) => Promise<unknown>;
-  getOnlineUpdateLocked?: () => boolean;
   getSidebarFavoriteStarEnabled?: () => boolean;
   setSidebarFavoriteStar?: (next: boolean) => Promise<unknown>;
   subscribe: (fn: () => void) => () => void;
@@ -194,11 +183,10 @@ export function ArchiveBundleConfigCardWrapper(props: {
 }
 
 export interface SetupSidebarEntryOptions {
-  callApi: (path: "/sidebar-entry" | "/online-update" | "/sidebar-favorite-star", options?: RequestInit) => Promise<{ location?: EntryLocation; enabled?: boolean; locked?: boolean }>;
+  callApi: (path: "/sidebar-entry" | "/sidebar-favorite-star", options?: RequestInit) => Promise<{ location?: EntryLocation; enabled?: boolean; locked?: boolean }>;
   renderPanel: (ownerProps?: Record<string, unknown>) => React.ReactNode;
   injectProps?: () => Record<string, unknown>;
   ns: string;
-  onOnlineUpdateChange?: (enabled: boolean) => void;
   onSidebarFavoriteStarChange?: (enabled: boolean) => void;
   onLocationChange?: (location: EntryLocation) => void;
 }
@@ -210,9 +198,6 @@ export interface SidebarEntryController {
   isEnabled(): boolean;
   isSupported(): boolean;
   setEnabled(enabled: boolean): Promise<boolean>;
-  isOnlineUpdateEnabled(): boolean;
-  isOnlineUpdateLocked(): boolean;
-  setOnlineUpdate(enabled: boolean): Promise<boolean>;
   isSidebarFavoriteStarEnabled(): boolean;
   setSidebarFavoriteStar(enabled: boolean): Promise<boolean>;
   destroy(): void;
@@ -231,9 +216,6 @@ export function setupSidebarEntry(
       isEnabled: () => false,
       isSupported: () => false,
       setEnabled: async () => false,
-      isOnlineUpdateEnabled: () => true,
-      isOnlineUpdateLocked: () => false,
-      setOnlineUpdate: async () => false,
       isSidebarFavoriteStarEnabled: () => true,
       setSidebarFavoriteStar: async () => false,
       destroy: () => {},
@@ -356,19 +338,6 @@ export function setupSidebarEntry(
     return isSidebarEnabled();
   };
 
-  let onlineUpdateEnabled = true;
-  let onlineUpdateLocked = false;
-
-  const setOnlineUpdate = async (next: boolean): Promise<boolean> => {
-    if (destroyed || onlineUpdateLocked) return onlineUpdateEnabled;
-    onlineUpdateEnabled = next;
-    notify();
-    if (typeof options.onOnlineUpdateChange === "function") {
-      try { options.onOnlineUpdateChange(next); } catch {}
-    }
-    return next;
-  };
-
   let sidebarFavoriteStarEnabled = true;
   let favoriteStarEpoch = 0;
 
@@ -474,9 +443,6 @@ export function setupSidebarEntry(
         setLocation: setLocation,
         getEnabled: () => isSidebarEnabled(),
         setSidebar: setEnabled,
-        getOnlineUpdateEnabled: () => onlineUpdateEnabled,
-        setOnlineUpdate: setOnlineUpdate,
-        getOnlineUpdateLocked: () => onlineUpdateLocked,
         getSidebarFavoriteStarEnabled: () => sidebarFavoriteStarEnabled,
         setSidebarFavoriteStar: setSidebarFavoriteStar,
         subscribe: (fn) => {
@@ -494,9 +460,6 @@ export function setupSidebarEntry(
     isEnabled: () => isSidebarEnabled(),
     isSupported: () => sidebarSupported,
     setEnabled,
-    isOnlineUpdateEnabled: () => onlineUpdateEnabled,
-    isOnlineUpdateLocked: () => onlineUpdateLocked,
-    setOnlineUpdate,
     isSidebarFavoriteStarEnabled: () => sidebarFavoriteStarEnabled,
     setSidebarFavoriteStar,
     destroy: () => {

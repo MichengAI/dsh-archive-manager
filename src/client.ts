@@ -5100,7 +5100,7 @@ export function startArchiveClient(require: HostRequire) {
 				t: ctx.locale.bind(NS)
 			});
 
-			const callSettingsApi = async (path: "/sidebar-entry" | "/online-update" | "/sidebar-favorite-star" | "/open-in-explorer", options?: RequestInit) => {
+			const callSettingsApi = async (path: "/sidebar-entry" | "/sidebar-favorite-star" | "/open-in-explorer", options?: RequestInit) => {
 				const targetUrl = resolveApiUrl(`/api/michengai/dsh-archive-manager${path}`);
 				const reqHeaders = Object.assign({
 					"content-type": "application/json",

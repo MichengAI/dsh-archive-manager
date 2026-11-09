@@ -138,6 +138,7 @@ export function DateRange(props: {
 	fromLabel: string;
 	toLabel: string;
 	invalid?: boolean;
+	/** 初始展开状态；默认收起，测试与需要默认展开的嵌入场景可传 true。 */
 	defaultOpen?: boolean;
 	t?: (key: string, params?: Record<string, unknown>) => string;
 	onFrom(value: string): void;
