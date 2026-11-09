@@ -277,6 +277,11 @@ test('Issue 111: DOM 行为：favorites 模式下仅已收藏行保留星标且�
       for (const fn of list) fn(ev)
       return true
     },
+    requestAnimationFrame(fn) {
+      fn()
+      return 1
+    },
+    cancelAnimationFrame() {},
     localStorage: { getItem: () => null, setItem: () => {} },
   }
 
@@ -311,17 +316,17 @@ test('Issue 111: DOM 行为：favorites 模式下仅已收藏行保留星标且�
     },
     querySelectorAll() { return [] },
     createElement(tag) {
+      let _className = ''
+      const classes = new Set()
       const el = {
         tagName: tag.toUpperCase(),
         dataset: {},
         classList: {
-          contains(cls) { return this.classes.includes(cls) },
-          add(cls) { if (!this.classes.includes(cls)) this.classes.push(cls) },
-          remove(cls) { this.classes = this.classes.filter(c => c !== cls) },
-          classes: [],
-          [Symbol.iterator]() { return this.classes[Symbol.iterator]() },
+          contains(cls) { return classes.has(cls) },
+          add(cls) { classes.add(cls); _className = [...classes].join(' ') },
+          remove(cls) { classes.delete(cls); _className = [...classes].join(' ') },
+          [Symbol.iterator]() { return classes[Symbol.iterator]() },
         },
-        className: '',
         children: [],
         parentElement: null,
         nextElementSibling: null,
@@ -330,6 +335,8 @@ test('Issue 111: DOM 行为：favorites 模式下仅已收藏行保留星标且�
         getAttribute(k) { return this.attributes.get(k) ?? null },
         removeAttribute(k) { this.attributes.delete(k) },
         hasAttribute(k) { return this.attributes.has(k) },
+        addEventListener() {},
+        removeEventListener() {},
         appendChild(child) {
           child.parentElement = this
           this.children.push(child)
@@ -347,12 +354,21 @@ test('Issue 111: DOM 行为：favorites 模式下仅已收藏行保留星标且�
         querySelector(sel) {
           if (sel.startsWith('.')) {
             const cls = sel.slice(1)
-            return this.children.find(c => c.classList.contains(cls) || c.className === cls) ?? null
+            return this.children.find(c => c.classList?.contains(cls) || c.className === cls) ?? null
           }
           return null
         },
         querySelectorAll() { return [] },
       }
+      Object.defineProperty(el, 'className', {
+        get() { return _className },
+        set(val) {
+          _className = String(val ?? '')
+          classes.clear()
+          for (const c of _className.split(/\s+/).filter(Boolean)) classes.add(c)
+        },
+        configurable: true,
+      })
       return el
     },
     addEventListener(name, fn) {
@@ -369,9 +385,13 @@ test('Issue 111: DOM 行为：favorites 模式下仅已收藏行保留星标且�
   const origDocument = globalThis.document
   const origWindow = globalThis.window
   const origMutationObserver = globalThis.MutationObserver
+  const origRaf = globalThis.requestAnimationFrame
+  const origCaf = globalThis.cancelAnimationFrame
 
   globalThis.document = fakeDocument
   globalThis.window = fakeWindow
+  globalThis.requestAnimationFrame = (fn) => { fn(); return 1; }
+  globalThis.cancelAnimationFrame = () => {}
   globalThis.MutationObserver = class {
     observe() {}
     disconnect() {}
@@ -390,19 +410,16 @@ test('Issue 111: DOM 行为：favorites 模式下仅已收藏行保留星标且�
       sessions: { list: { getSnapshot: () => ({ byId: {} }) } },
     }
 
-    const favoritesOnly = setupWorkspaceFavoritesOnly(mockCtx, favoriteStore, () => (k) => k)
-
-    // 创建测试会话行
     const favRow = fakeDocument.createElement('div')
     favRow.setAttribute('data-row-key', 'session:fav-1')
     const favSlot = fakeDocument.createElement('span')
-    favSlot.classList.add('dsh_slot')
+    favSlot.className = 'dsh_slot'
     favRow.appendChild(favSlot)
 
     const unfavRow = fakeDocument.createElement('div')
     unfavRow.setAttribute('data-row-key', 'session:unfav-2')
     const unfavSlot = fakeDocument.createElement('span')
-    unfavSlot.classList.add('dsh_slot')
+    unfavSlot.className = 'dsh_slot'
     unfavRow.appendChild(unfavSlot)
 
     fakeDocument.querySelectorAll = (sel) => {
@@ -410,30 +427,42 @@ test('Issue 111: DOM 行为：favorites 模式下仅已收藏行保留星标且�
       return []
     }
 
-    // 1. 默认模式为 all：RowFavorite.css 包含 :hover 规则
+    const favoritesOnly = setupWorkspaceFavoritesOnly(mockCtx, favoriteStore, () => (k) => k)
+
+    // 1. 默认模式为 all：RowFavorite.css 包含 :hover 规则，两行均真实挂载了 starSlot
     const allStyle = styles.get('dsh-archive-manager/RowFavorite.css')
     assert.ok(allStyle)
     assert.ok(allStyle.textContent.includes(':hover .dsham_starSlot'), 'all 模式必须包含 hover 样式')
+    assert.ok(favRow.querySelector('.dsham_starSlot'), 'all 模式下已收藏行必须挂载 starSlot')
+    assert.ok(unfavRow.querySelector('.dsham_starSlot'), 'all 模式下未收藏行也必须挂载 starSlot（以支持 hover 触发）')
 
-    // 2. 切换至 favorites 模式：样式保留但去除 :hover 规则，且未收藏行绝无 starSlot
+    // 2. 切换至 favorites 模式：未收藏行 starSlot 必须被摘除，已收藏行保留，且去除 :hover 规则
     favoritesOnly.setFavoriteStarMode('favorites')
     const favStyle = styles.get('dsh-archive-manager/RowFavorite.css')
     assert.ok(favStyle)
     assert.equal(favStyle.textContent.includes(':hover .dsham_starSlot'), false, 'favorites 模式下绝不能包含 hover 样式')
     assert.ok(favStyle.textContent.includes(".dsham_starSlot[data-favorited='true']"), 'favorites 模式保留已收藏样式')
+    assert.ok(favRow.querySelector('.dsham_starSlot'), 'favorites 模式下已收藏行依然保留 starSlot')
+    assert.equal(unfavRow.querySelector('.dsham_starSlot'), null, 'favorites 模式下未收藏行 starSlot 必须已被摘除')
 
-    // 验证未收藏行在 favorites 模式下无 starSlot
-    const unfavStar = unfavRow.querySelector('.dsham_starSlot')
-    assert.equal(unfavStar, null, 'favorites 模式下未收藏会话行绝不能存在 starSlot 容器')
-
-    // 3. 切换至 none 模式：样式彻底卸载
+    // 3. 切换至 none 模式：样式彻底卸载，两行星标均被摘除
     favoritesOnly.setFavoriteStarMode('none')
     assert.equal(styles.has('dsh-archive-manager/RowFavorite.css'), false, 'none 模式彻底移除样式')
+    assert.equal(favRow.querySelector('.dsham_starSlot'), null, 'none 模式下已收藏行 starSlot 也被摘除')
+    assert.equal(unfavRow.querySelector('.dsham_starSlot'), null, 'none 模式下未收藏行 starSlot 保持为 null')
+
+    // 4. 回切为 all 模式：两行星标重新挂载恢复，样式重新注入 hover 规则
+    favoritesOnly.setFavoriteStarMode('all')
+    assert.ok(styles.get('dsh-archive-manager/RowFavorite.css')?.textContent.includes(':hover .dsham_starSlot'), '回切 all 模式后 hover 样式重新注入')
+    assert.ok(favRow.querySelector('.dsham_starSlot'), '回切 all 模式后已收藏行星标恢复')
+    assert.ok(unfavRow.querySelector('.dsham_starSlot'), '回切 all 模式后未收藏行星标恢复')
 
     favoritesOnly.dispose()
   } finally {
     globalThis.document = origDocument
     globalThis.window = origWindow
     globalThis.MutationObserver = origMutationObserver
+    globalThis.requestAnimationFrame = origRaf
+    globalThis.cancelAnimationFrame = origCaf
   }
 })

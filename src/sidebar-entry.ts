@@ -1,5 +1,5 @@
 import * as React from "react";
-import { IconArchiveOutlineMedium, SegmentedControl, Switch as PrimitiveSwitch } from "@deepseek-ai/dsh-client-ui-primitives";
+import { IconArchiveOutlineMedium, SegmentedControl } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { ClientContext } from "./client-compat.js";
 import type { Translate } from "./client-types.js";
 import type { EntryLocation, FavoriteStarMode } from "./plugin-settings.js";
