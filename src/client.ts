@@ -446,7 +446,6 @@ export function startArchiveClient(require: HostRequire) {
 			+ ".dsham_rowStar svg{display:block;width:16px;height:16px;flex:none}";
 		const ROW_FAVORITE_HOVER_CSS = "[data-row-key^='session:']:hover .dsham_starSlot{display:inline-flex;pointer-events:auto}"
 			+ "[data-row-key^='session:']:hover>span:first-child:not(:has([data-state])){opacity:0}";
-		const ROW_FAVORITE_CSS = ROW_FAVORITE_BASE_CSS + ROW_FAVORITE_HOVER_CSS;
 		ensurePluginStyle("dsh-archive-manager/RowFavorite.css", ROW_FAVORITE_BASE_CSS);
 		/**
 		 * 主界面「只看收藏」筛选：官方视图选项菜单是一份普通数组、没有插槽，
@@ -2813,7 +2812,7 @@ export function startArchiveClient(require: HostRequire) {
 			"entry.location.settings": "設定のみ",
 			"entry.location.saveFailed": "入口設定の保存に失敗しました。ネットワークを確認するか、ホストプロセスを再起動してください",
 			"sidebar.favoriteStar.title": "サイドバーのお気に入り星標",
-			"sidebar.favoriteStar.desc": "サイドバーセッション行でのお気に入り星标の表示モードを選択します。非表示時もコンテキストメニューから操作できます。",
+			"sidebar.favoriteStar.desc": "サイドバーセッション行でのお気に入り星標の表示モードを選択します。非表示時もコンテキストメニューから操作できます。",
 			"sidebar.favoriteStar.all": "すべて表示",
 			"sidebar.favoriteStar.favorites": "お気に入りのみ",
 			"sidebar.favoriteStar.none": "完全に非表示",
