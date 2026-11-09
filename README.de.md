@@ -139,8 +139,16 @@ Verfügbar unter:
 | **Inaktive Chats bereinigen** | Unter **Nicht archiviert** Inaktivitätstage angeben, Vorschau prüfen und archivieren |
 | **Sitzungs-ID kopieren** | Im Menü **Mehr** die Option **Sitzungs-ID kopieren** wählen |
 | **Verwaiste Subagents bereinigen** | Im Bereinigungsbereich verwaiste Subagents erkennen und physisch löschen |
+| **Archivierung rückgängig machen** | Stellen Sie die im aktuellen Batch archivierten Sitzungen über die Benachrichtigung wieder her |
+| **Endgültig löschen** | Sitzungen auswählen, Löschen wählen und die physische Entfernung von Protokollen und Indizes bestätigen |
 
 ## Häufig gestellte Fragen (FAQ)
+### Was geschieht nach dem Upgrade mit historischen Plugin-Caches?
+
+Das Plugin ersetzt weder die offizielle Projektions-Cache-Tabelle noch scannt oder migriert es alte Plugin-Caches. Das Öffnen der Archivliste liest keine vollständigen Protokolle erneut ein, um fehlende Einträge aufzufüllen. Sitzungsprotokolle verbleiben beim Host, der abgeleitete Projektionen bei Bedarf regeneriert.
+
+**Eine kalte Sitzung ohne offiziellen Cache-Eintrag hat in der Liste möglicherweise zunächst keinen Titel; ein reines Neuladen der Liste garantiert keine Rekonstruktion.** Das Lesen des Protokolls stellt den Titel wieder her, und die Reaktivierung der Sitzung speichert den Cache über den nativen Schreibpfad. Historische Cache-Dateien bleiben unberührt. Weitere Details finden Sie im [Changelog](CHANGELOG.md).
+
 
 ### Warum wird der Eintrag nach der Installation nicht angezeigt?
 Starten Sie DSH Web neu und erzwingen Sie ein Neuladen im Browser (`Ctrl+Shift+R`). Stellen Sie sicher, dass das Plugin im aktiven Profil installiert wurde.
@@ -153,6 +161,22 @@ Ja. [Codex UI](https://github.com/MichengAI/dsh-codex-ui) behält sein Design un
 
 ### Koexistenz mit anderen Archiv-Plugins
 Das Plugin registriert sich unter der Sektions-ID `archive-manager` und kann problemlos parallel zu anderen Archiv-Plugins betrieben werden.
+
+### Favoriten und Bereinigung inaktiver Sitzungen
+
+Kompakte Projektgruppen können eingeklappt werden. Sterne und Wiederherstellungs-/Archivierungssymbole befinden sich rechts; Menüs archivierter Sitzungen enthalten «Wiederherstellen und öffnen» sowie «Löschen».
+
+- Verwenden Sie den Stern auf beiden Registern und das Menü «Nur Favoriten», um wichtige Unterhaltungen zu filtern. Favoriten bleiben auf dem Host über Archivierung, Wiederherstellung und Browserwechsel hinweg erhalten.
+- Unter «Nicht archiviert» können Sie einen Inaktivitätsschwellenwert von 1 bis 36.500 Tagen festlegen, um Kandidaten unter den aktuellen Filtern zu prüfen. Einzelne Treffer können vor der Bestätigung abgewählt werden. Favoriten, der aktuelle Chat, laufende Sitzungen (einschließlich Subagents) und ausstehende Aktionen sind automatisch geschützt.
+- Batch-Vorgänge melden den Fortschritt sowie erfolgreiche, übersprungene und fehlgeschlagene Elemente. Ein Fehler stoppt den restlichen Ablauf nicht; nur fehlgeschlagene Einträge werden wiederholt.
+- **Archivierung rückgängig machen** stellt die im aktuellen Batch archivierten Sitzungen wieder her. Diese Option steht nur zur Verfügung, solange die aktuelle Verwaltungsseite geöffnet bleibt. Endgültiges Löschen kann nicht rückgängig gemacht werden.
+
+### Archivierte Unterhaltungen ansehen und fortsetzen
+
+Die native Navigation ermöglicht die Einsichtnahme und Fortführung archivierter Sitzungen:
+
+- **Auf den Sitzungstitel klicken**: Öffnet die native DSH-Unterhaltung, um Nachrichten, Anhänge und Werkzeugaufrufe einzusehen. Das Chatten kann fortgesetzt werden, während die Sitzung archiviert bleibt.
+- **Mehr → Wiederherstellen und öffnen**: Hebt die Archivierung auf und öffnet die Sitzung sofort zur Weiterarbeit.
 
 ## API-Kompatibilität für die Suche (für Integratoren)
 

@@ -139,8 +139,16 @@ Accessible via :
 | **Nettoyer les sessions inactives** | Dans **Non archivées**, indiquez le nombre de jours d'inactivité pour prévisualiser et archiver |
 | **Copier l'ID de session** | Sélectionnez **Copier l'ID de session** dans le menu **Plus** |
 | **Nettoyer les sous-agents orphelins** | Identifiez et supprimez les sous-agents sans session mère dans le panneau d'organisation |
+| **Annuler cet archivage** | Restaurez les sessions archivées dans le lot actuel depuis la notification |
+| **Suppression définitive** | Sélectionnez des sessions, choisissez Supprimer et confirmez l'effacement physique des journaux et index |
 
 ## FAQ
+### Qu'advient-il des anciens caches du plugin après la mise à jour ?
+
+Le plugin ne remplace pas la table de cache officielle des projections et ne scanne ni ne migre les anciens caches du plugin. Ouvrir la liste d'archives ne relit pas les journaux complets pour combler les entrées manquantes. Les journaux de session appartiennent à l'hôte, qui reconstruit les projections dérivées à la demande.
+
+**Une session froide sans entrée de cache officielle peut initialement apparaître sans titre dans la liste ; rafraîchir la liste seule ne garantit pas sa régénération.** Ouvrir le journal permet de récupérer le titre et restaurer la session comme active permet au chemin d'écriture natif d'enregistrer le cache. Les anciens fichiers de cache restent intacts. Consultez le [journal des modifications](CHANGELOG.md) pour plus de précisions.
+
 
 ### Pourquoi l'entrée n'apparaît-elle pas après installation ?
 Redémarrez DSH Web et forcez le rechargement de votre navigateur (`Ctrl+Shift+R`). Vérifiez que le plugin est bien installé dans le profil actif.
@@ -153,6 +161,22 @@ Oui. [Codex UI](https://github.com/MichengAI/dsh-codex-ui) conserve son apparenc
 
 ### Coexistence avec d'autres plugins d'archivage
 Le plugin utilise l'identifiant de section `archive-manager`, ce qui lui permet de coexister de manière transparente avec d'autres extensions d'archivage.
+
+### Favoris et nettoyage des sessions inactives
+
+Les groupes de projets compacts peuvent être repliés. Les étoiles et les icônes de restauration/archivage s'affichent sur la droite ; les menus des sessions archivées comprennent « Restaurer et ouvrir » et « Supprimer ».
+
+- Utilisez l'étoile sur l'un ou l'autre onglet et le menu « Favoris uniquement » pour retrouver les discussions importantes. Les favoris restent enregistrés sur l'hôte après archivage, restauration ou changement de navigateur.
+- Dans « Non archivées », indiquez un seuil d'inactivité de 1 à 36 500 jours pour prévisualiser les candidats sous les filtres actuels. Vous pouvez désélectionner des éléments individuellement avant de confirmer. Les favoris, le chat actif, les sessions en cours d'exécution (y compris sous-agents) et les interactions en attente sont automatiquement protégés.
+- Les opérations par lots rapportent la progression et le décompte des réussites, éléments ignorés et échecs. Un échec n'arrête pas le reste du traitement ; seuls les éléments en échec sont réessayés.
+- **Annuler cet archivage** restaure les sessions archivées par le lot actuel. Cette action n'est accessible que tant que la page de gestion actuelle reste ouverte. La suppression définitive ne peut pas être annulée.
+
+### Consulter et poursuivre les conversations archivées
+
+La navigation native permet de lire et de reprendre les discussions :
+
+- **Cliquez sur le titre de la session** : ouvre la conversation native DSH pour consulter les messages, pièces jointes et détails d'outils. Continuez à chatter tout en conservant la session archivée.
+- **Plus → Restaurer et ouvrir** : désarchive la session et l'ouvre directement pour reprendre le travail.
 
 ## Compatibilité de l'API de recherche (pour intégrateurs)
 

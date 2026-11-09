@@ -139,8 +139,16 @@ Disponível em:
 | **Limpar conversas inativas** | Em **Não arquivadas**, defina os dias de inatividade para pré-visualizar e arquivar |
 | **Copiar ID da sessão** | Selecione **Copiar ID da sessão** no menu **Mais** |
 | **Limpar subagentes órfãos** | Identifique e remova subagentes órfãos no painel do Organizador |
+| **Desfazer arquivamento** | Restaure as sessões arquivadas no lote atual a partir da notificação |
+| **Exclusão permanente** | Selecione as sessões, clique em Excluir e confirme a remoção física dos registros e índices |
 
 ## Perguntas frequentes (FAQ)
+### O que acontece com os caches históricos do plugin após a atualização?
+
+O plugin não substitui a tabela oficial de projeções em cache nem varre ou migra caches de versões legadas. Abrir a lista de arquivamento não relê registros completos para preencher dados ausentes. Os históricos de sessão pertencem ao host, que reconstrói as projeções sob demanda.
+
+**Uma sessão inativa sem entrada oficial no cache pode aparecer inicialmente sem título na lista; apenas recarregar a lista não garante sua reconstrução.** A abertura do registro recupera o título e a restauração como sessão ativa permite ao fluxo de gravação nativo persistir o cache. Arquivos de cache antigos permanecem intocados. Consulte o [registro de alterações](CHANGELOG.md) para detalhes.
+
 
 ### Por que o atalho não aparece após a instalação?
 Reinicie o DSH Web e force o recarregamento da página (`Ctrl+Shift+R`). Verifique se instalou o plugin no perfil correto.
@@ -153,6 +161,22 @@ Sim. O [Codex UI](https://github.com/MichengAI/dsh-codex-ui) mantém sua barra l
 
 ### Coexistência com outros plugins de arquivamento
 O plugin registra-se sob o ID de seção `archive-manager`, coexistindo de forma independente e harmoniosa com outros complementos de arquivamento.
+
+### Favoritos e limpeza de inativos
+
+Grupos de projetos compactos podem ser recolhidos. Estrelas e ícones de restaurar/arquivar aparecem à direita; os menus de sessões arquivadas incluem «Restaurar e abrir» e «Excluir».
+
+- Use a estrela em qualquer uma das abas e o menu «Apenas favoritas» para encontrar conversas importantes. Os favoritos persistem no host após arquivamento, restauração ou troca de navegador.
+- Em «Não arquivadas», informe um limite de 1 a 36.500 dias de ociosidade para pré-visualizar os candidatos nos filtros atuais. É possível desmarcar candidatos individualmente antes de confirmar. Favoritos, o chat atual, sessões em execução (incluindo subagentes) e interações pendentes são protegidos automaticamente.
+- Operações em lote exibem o progresso e a contagem de sucessos, itens ignorados e falhas. Um erro não interrompe os demais; apenas os itens com falha são repetidos.
+- **Desfazer este arquivamento** restaura as sessões arquivadas pelo lote atual. Essa ação fica disponível apenas enquanto a página de gerenciamento atual permanecer aberta. A exclusão permanente não pode ser desfeita.
+
+### Visualizar e continuar conversas arquivadas
+
+A navegação nativa permite inspecionar e retomar conversas arquivadas:
+
+- **Clique no título da sessão**: abre a conversa nativa no DSH para visualizar mensagens, anexos e detalhes de ferramentas. Continue conversando mantendo a sessão arquivada.
+- **Mais → Restaurar e abrir**: desarquiva a conversa e a abre imediatamente para retomar as atividades.
 
 ## Compatibilidade da API de busca (para integradores)
 

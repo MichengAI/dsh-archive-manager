@@ -139,8 +139,16 @@ Disponible en:
 | **Limpieza de sesiones inactivas** | En **No archivadas**, especifique los días de inactividad para previsualizar y limpiar |
 | **Copiar ID de sesión** | Seleccione **Copiar ID de sesión** en el menú **Más** |
 | **Limpiar subagentes huérfanos** | Detecte y elimine subagentes sin sesión principal en el panel de Organización |
+| **Deshacer archivado** | Restaure las sesiones archivadas en el lote actual desde la notificación |
+| **Eliminación permanente** | Seleccione sesiones, elija Eliminar y confirme el borrado físico de historiales e índices |
 
 ## Preguntas frecuentes
+### ¿Qué sucede con las cachés históricas del complemento tras la actualización?
+
+El complemento no reemplaza la tabla oficial de caché de proyecciones ni escanea o migra cachés de versiones antiguas. Abrir la lista de archivos no vuelve a leer historiales completos ni escribe proyecciones para rellenar entradas ausentes. Los registros de sesión pertenecen al host y este reconstruye las proyecciones derivadas a petición.
+
+**Una sesión en frío sin entrada en la caché oficial puede aparecer inicialmente sin título en la lista; refrescar la lista no garantiza su reconstrucción.** Leer el registro recupera el título y restaurar la sesión como activa permite a la ruta de escritura nativa persistir la caché. Los archivos de caché históricos se mantienen intactos. Consulte el [registro de cambios](CHANGELOG.md) para más detalles.
+
 
 ### ¿Por qué no aparece el acceso tras instalar?
 Reinicie DSH Web y fuerce la recarga de la página (`Ctrl+Shift+R`). Asegúrese de haber instalado el complemento en el perfil activo.
@@ -153,6 +161,22 @@ Sí. [Codex UI](https://github.com/MichengAI/dsh-codex-ui) conserva su interfaz 
 
 ### Coexistencia con otros plugins de archivo
 El complemento se registra con el ID `archive-manager`, permitiendo convivir pacíficamente con otros complementos de sesiones archivadas.
+
+### Favoritos y limpieza de inactivos
+
+Los grupos de proyectos compactos se pueden contraer. Las estrellas y los iconos de restaurar/archivar aparecen a la derecha; los menús de sesión archivada incluyen «Restaurar y abrir» y «Eliminar».
+
+- Utilice la estrella en cualquiera de las pestañas y el desplegable «Solo favoritos» para localizar conversaciones importantes. Los favoritos se conservan en los datos del host a través de operaciones de archivo, restauración y cambios de navegador.
+- En «No archivadas», introduzca un umbral de 1 a 36.500 días de inactividad para previsualizar los candidatos bajo los filtros actuales. Puede deseleccionar candidatos individuales antes de confirmar. Los favoritos, el chat actual, las sesiones en ejecución (incluidos subagentes) y las interacciones pendientes están protegidos automáticamente.
+- El archivo, la restauración y la eliminación por lotes notifican el progreso y los recuentos de elementos correctos, omitidos y fallidos. Si un elemento falla, el resto continúa; solo se reintentan los elementos fallidos.
+- **Deshacer este archivado** restaura las sesiones archivadas por el lote actual. Esta acción solo está disponible mientras permanezca abierta la página de gestión actual; recargarla o cerrarla la desactiva. La eliminación definitiva no se puede deshacer.
+
+### Ver y continuar conversaciones archivadas
+
+La navegación nativa permite inspeccionar y retomar sesiones archivadas:
+
+- **Haga clic en el título de la sesión**: abre la conversación nativa en DSH para ver mensajes, adjuntos y detalles de herramientas. Permite seguir conversando mientras la sesión permanece archivada.
+- **Más → Restaurar y abrir**: desarchiva la conversación y la abre de inmediato para continuar el trabajo.
 
 ## Compatibilidad de la API de búsqueda (para integradores)
 
