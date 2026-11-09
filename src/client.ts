@@ -449,8 +449,18 @@ export function startArchiveClient(require: HostRequire) {
 		const FAVORITES_ONLY_MARKER = "data-dsham-favorites-only";
 		const ROW_STAR_CLASS = "dsham_rowStar";
 		const ROW_STAR_SLOT_CLASS = "dsham_starSlot";
-		/** 官方 onlyArchived 行的三种语言文案，用来在视图选项菜单里定位筛选分组。 */
-		const ONLY_ARCHIVED_TEXTS = ["仅显示已归档", "Archived only", "Только архивные"];
+		/** 官方 onlyArchived 行的全部 8 门语言文案，用来在视图选项菜单里定位筛选分组。 */
+		const ONLY_ARCHIVED_TEXTS = [
+			"仅显示已归档",
+			"Archived only",
+			"アーカイブのみ",
+			"Sólo archivado",
+			"Archivé uniquement",
+			"Nur archiviert",
+			"Только в архиве",
+			"Somente arquivado",
+			"Только архивные"
+		];
 		const FAVORITES_FILTER_CSS = "[data-dsham-favorites-hidden='true']{display:none!important}" + "button[data-dsham-favorites-only='true'][data-active='true']::after{content:\"\\2713\";margin-left:auto;padding-left:12px;font-size:12px;line-height:1;color:var(--dsw-alias-state-business-primary,#3b82f6)}";
 		ensurePluginStyle("dsh-archive-manager/FavoritesFilter.css", FAVORITES_FILTER_CSS);
 		function readWorkspaceFavoritesOnly(): boolean {
@@ -1704,10 +1714,21 @@ export function startArchiveClient(require: HostRequire) {
 				document.removeEventListener("contextmenu", onContextMenu, true);
 			};
 		}
+		const WORKSPACE_DELETE_TEXTS = [
+			"删除工作区",
+			"delete workspace",
+			"ワークスペースを削除",
+			"eliminar espacio de trabajo",
+			"supprimer l'espace de travail",
+			"arbeitsbereich löschen",
+			"удалить рабочую область",
+			"удалить рабочее",
+			"excluir espaço de trabalho"
+		];
 		/** 识别工作区操作菜单里的“删除工作区”项；文案缺失时用 danger 类名兜底。 */
 		function isWorkspaceDeleteMenuItem(item: { textContent: string | null; className: string }, allowDangerFallback = true): boolean {
 			const text = (item.textContent ?? "").toLowerCase();
-			if (text.includes("删除工作区") || text.includes("delete workspace") || text.includes("удалить рабочее")) return true;
+			if (WORKSPACE_DELETE_TEXTS.some((kw) => text.includes(kw.toLowerCase()))) return true;
 			return allowDangerFallback && /(?:^|[_\s-])danger(?:$|[_\s-])/i.test(item.className);
 		}
 		const EMPTY_PENDING_INTERACTIONS = new Map<string, { kind: string }>();
@@ -2394,10 +2415,6 @@ export function startArchiveClient(require: HostRequire) {
             "sidebar.favoriteStar.title": "侧栏收藏星标",
 			"sidebar.favoriteStar.desc": "在会话列表行前显示收藏星标。关闭后不显示图标，仍可通过菜单收藏和筛选。",
 			"sidebar.favoriteStar.toggle": "切换侧栏收藏星标",
-			"update.entry.title": "在线更新",
-			"update.entry.desc": "允许检查并在线安装归档管理器的新版本。关闭后隐藏更新入口。",
-			"update.entry.toggle": "切换在线更新",
-			"update.entry.locked": "在线更新已被宿主配置锁定禁用",
 			"archives.archiveProject": "归档该项目的全部聊天",
 			"archives.archiveUngrouped": "归档全部未分组聊天",
 			"archives.archiveProjectDesc": "将“{name}”中全部 {n} 条未归档会话归档，不受当前搜索筛选影响。之后可在“已归档”中恢复。",
@@ -2515,10 +2532,6 @@ export function startArchiveClient(require: HostRequire) {
             "sidebar.favoriteStar.title": "Sidebar favorite star",
 			"sidebar.favoriteStar.desc": "Show favorite star on session rows in the sidebar. When disabled, the star is hidden while menu actions and filters stay available.",
 			"sidebar.favoriteStar.toggle": "Toggle sidebar favorite star",
-			"update.entry.title": "Online updates",
-			"update.entry.desc": "Allow checking and installing new versions online. Hides the update entry when disabled.",
-			"update.entry.toggle": "Toggle online updates",
-			"update.entry.locked": "Online updates are disabled by the host configuration.",
 			"archives.moreActions": "More actions",
 			"archives.archiveProject": "Archive all chats in this project",
 			"archives.archiveUngrouped": "Archive all ungrouped chats",
@@ -2635,10 +2648,6 @@ export function startArchiveClient(require: HostRequire) {
             "sidebar.favoriteStar.title": "Звезда избранного в боковой панели",
 			"sidebar.favoriteStar.desc": "Отображать звезду избранного у строк сессий в боковой панели. При отключении значок скрывается, а добавление через меню и фильтрация остаются доступными.",
 			"sidebar.favoriteStar.toggle": "Переключить звезду избранного в боковой панели",
-			"update.entry.title": "Онлайн-обновление",
-			"update.entry.desc": "Разрешить проверку и установку обновлений онлайн. Скрывает пункт обновления при отключении.",
-			"update.entry.toggle": "Переключить онлайн-обновление",
-			"update.entry.locked": "Онлайн-обновление отключено конфигурацией хоста.",
 			"archives.moreActions": "Дополнительно",
 			"archives.archiveProject": "Заархивировать все чаты этого проекта",
 			"archives.archiveUngrouped": "Заархивировать все несгруппированные чаты",
@@ -2742,7 +2751,7 @@ export function startArchiveClient(require: HostRequire) {
 			"archiveWorkspace.pending": "Архивация сессий…",
 			"date.ymd": "{y}-{m}-{d}",
 		};
-const ja = {
+		const ja = {
 			...organizerJa, ...discoveryJa,
 			"locale.language": "ja",
 			"service.unavailable": "サービスはまだ準備ができていません。再試行してください。",
@@ -2756,10 +2765,6 @@ const ja = {
 			"sidebar.favoriteStar.title": "サイドバーのお気に入り星標",
 			"sidebar.favoriteStar.desc": "セッション行の先頭にお気に入り星標を表示します。無効にしてもアイコンが非表示になるだけで、メニュー操作や絞り込みは引き続き利用できます。",
 			"sidebar.favoriteStar.toggle": "サイドバーのお気に入り星標を切り替え",
-			"update.entry.title": "オンライン更新",
-			"update.entry.desc": "新バージョンの確認とオンラインインストールを許可します。無効にすると更新エントリが非表示になります。",
-			"update.entry.toggle": "オンライン更新を切り替え",
-			"update.entry.locked": "オンライン更新はホスト設定によりロックされ無効化されています",
 			"archives.archiveProject": "このプロジェクトの全チャットをアーカイブ",
 			"archives.archiveUngrouped": "未分類チャットをすべてアーカイブ",
 			"archives.archiveProjectDesc": "現在の検索フィルターに関係なく、「{name}」内の未アーカイブセッション全 {n} 件をアーカイブします。後から「アーカイブ済み」で復元できます。",
@@ -2875,10 +2880,6 @@ const ja = {
 			"sidebar.favoriteStar.title": "Estrella de favoritos en barra lateral",
 			"sidebar.favoriteStar.desc": "Muestra una estrella de favoritos en las filas de sesión en la barra lateral. Al desactivarla, se oculta el icono, pero las acciones del menú y filtros siguen disponibles.",
 			"sidebar.favoriteStar.toggle": "Alternar estrella de favoritos en barra lateral",
-			"update.entry.title": "Actualizaciones en línea",
-			"update.entry.desc": "Permite buscar e instalar nuevas versiones en línea. Oculta el acceso cuando está desactivado.",
-			"update.entry.toggle": "Alternar actualizaciones en línea",
-			"update.entry.locked": "Las actualizaciones en línea están desactivadas por la configuración del host.",
 			"archives.archiveProject": "Archivar todos los chats de este proyecto",
 			"archives.archiveUngrouped": "Archivar todos los chats no agrupados",
 			"archives.archiveProjectDesc": "Archiva todas las {n} sesiones no archivadas en “{name}”, independientemente del filtro actual. Puede restaurarlas en Archivados.",
@@ -2994,10 +2995,6 @@ const ja = {
 			"sidebar.favoriteStar.title": "Étoile de favori dans la barre latérale",
 			"sidebar.favoriteStar.desc": "Affiche une étoile de favori sur les lignes de session dans la barre latérale. Une fois désactivée, l'étoile est masquée mais les actions et filtres restent disponibles.",
 			"sidebar.favoriteStar.toggle": "Basculer l'étoile de favori dans la barre latérale",
-			"update.entry.title": "Mises à jour en ligne",
-			"update.entry.desc": "Autoriser la recherche et l'installation de nouvelles versions en ligne. Masque l'accès lorsqu'il est désactivé.",
-			"update.entry.toggle": "Basculer les mises à jour en ligne",
-			"update.entry.locked": "Les mises à jour en ligne sont désactivées par la configuration de l'hôte.",
 			"archives.archiveProject": "Archiver toutes les discussions de ce projet",
 			"archives.archiveUngrouped": "Archiver toutes les discussions non groupées",
 			"archives.archiveProjectDesc": "Archive les {n} sessions non archivées de « {name} », quel que soit le filtre actuel. Vous pourrez les restaurer dans Archivées.",
@@ -3113,10 +3110,6 @@ const ja = {
 			"sidebar.favoriteStar.title": "Favoritenstern in der Seitenleiste",
 			"sidebar.favoriteStar.desc": "Favoritenstern in den Sitzungszeilen der Seitenleiste anzeigen. Bei Deaktivierung wird das Symbol ausgeblendet, Menüaktionen und Filter bleiben verfügbar.",
 			"sidebar.favoriteStar.toggle": "Favoritenstern in der Seitenleiste umschalten",
-			"update.entry.title": "Online-Aktualisierungen",
-			"update.entry.desc": "Prüfung und Online-Installation neuer Versionen erlauben. Blendet den Eintrag bei Deaktivierung aus.",
-			"update.entry.toggle": "Online-Aktualisierungen umschalten",
-			"update.entry.locked": "Online-Aktualisierungen sind durch die Host-Konfiguration deaktiviert.",
 			"archives.archiveProject": "Alle Chats in diesem Projekt archivieren",
 			"archives.archiveUngrouped": "Alle ungruppierten Chats archivieren",
 			"archives.archiveProjectDesc": "Archiviert alle {n} nicht archivierten Sitzungen in „{name}“ unabhängig vom aktuellen Filter. Sie können sie unter Archiviert wiederherstellen.",
@@ -3232,10 +3225,6 @@ const ja = {
 			"sidebar.favoriteStar.title": "Estrela de favoritos na barra lateral",
 			"sidebar.favoriteStar.desc": "Mostra a estrela de favoritos nas linhas de sessão na barra lateral. Quando desativada, o ícone é ocultado, mas as ações de menu e filtros continuam disponíveis.",
 			"sidebar.favoriteStar.toggle": "Alternar estrela de favoritos na barra lateral",
-			"update.entry.title": "Atualizações online",
-			"update.entry.desc": "Permite verificar e instalar novas versões online. Oculta o acesso quando desativado.",
-			"update.entry.toggle": "Alternar atualizações online",
-			"update.entry.locked": "As atualizações online estão desativadas pela configuração do host.",
 			"archives.archiveProject": "Arquivar todas as conversas deste projeto",
 			"archives.archiveUngrouped": "Arquivar todas as conversas não agrupadas",
 			"archives.archiveProjectDesc": "Arquiva todas as {n} sessões não arquivadas em “{name}”, independentemente do filtro atual. Você pode restaurá-las em Arquivadas.",
@@ -5270,6 +5259,7 @@ const ja = {
 			favoritesOnlyVisibility,
 			favoriteGroupPredicate,
 			createFavoriteRowStore,
+			ONLY_ARCHIVED_TEXTS,
 			unarchivedSessionIds,
 			ArchiveSelectionToolbar,
 			ArchivedSessionsSection,

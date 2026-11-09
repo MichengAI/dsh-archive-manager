@@ -257,3 +257,22 @@ test("侧栏收藏星标与菜单图标标准尺寸对齐为 16×16 并复用前
 	assert.match(src, /\.dsham_rowStar svg\{[^}]*width:16px;height:16px/, "CSS 中星标 SVG 必须设为 16px×16px");
 	assert.match(src, /\.dsham_starSlot\{[^}]*position:absolute/, "星标容器必须采用绝对定位覆盖前导插槽");
 });
+
+test("侧栏视图选项锚点 ONLY_ARCHIVED_TEXTS 完整覆盖官方全部 8 门语言", async () => {
+	const hostTexts = [
+		"仅显示已归档",
+		"Archived only",
+		"アーカイブのみ",
+		"Sólo archivado",
+		"Archivé uniquement",
+		"Nur archiviert",
+		"Только в архиве",
+		"Somente arquivado"
+	];
+	const { ONLY_ARCHIVED_TEXTS } = bundle.__test;
+	assert.ok(Array.isArray(ONLY_ARCHIVED_TEXTS));
+	for (const text of hostTexts) {
+		const matched = ONLY_ARCHIVED_TEXTS.some((t) => text.includes(t) || t.includes(text));
+		assert.equal(matched, true, `官方文案 “${text}” 必须能够被 ONLY_ARCHIVED_TEXTS 成功匹配`);
+	}
+});

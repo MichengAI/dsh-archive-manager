@@ -137,26 +137,26 @@ test('预览按 Escape 只关闭自身，拦截外层设置关闭并在退出后
   } finally {env.dispose();if(previous===undefined)delete globalThis.window;else globalThis.window=previous;}
 });
 
-test("DateRange 轻量日历组件支持三语本地化与无障碍焦点属性", () => {
+test("DateRange 轻量日历组件支持 8 门语言本地化与无障碍焦点属性", () => {
   const dicts = {
     zh: { "discovery.timeRange": "时间范围", "discovery.today": "今天", "discovery.allTime": "全部时间", "locale.language": "zh" },
     en: { "discovery.timeRange": "Date range", "discovery.today": "Today", "discovery.allTime": "All time", "locale.language": "en" },
-    ru: { "discovery.timeRange": "Период", "discovery.today": "Сегодня", "discovery.allTime": "Все время", "locale.language": "ru" }
+    ja: { "discovery.timeRange": "期間", "discovery.today": "今日", "discovery.allTime": "すべての期間", "locale.language": "ja" },
+    es: { "discovery.timeRange": "Rango de fechas", "discovery.today": "Hoy", "discovery.allTime": "Todo el tiempo", "locale.language": "es" },
+    fr: { "discovery.timeRange": "Plage de dates", "discovery.today": "Aujourd'hui", "discovery.allTime": "Tout l'historique", "locale.language": "fr" },
+    de: { "discovery.timeRange": "Zeitbereich", "discovery.today": "Heute", "discovery.allTime": "Gesamter Zeitraum", "locale.language": "de" },
+    ru: { "discovery.timeRange": "Период", "discovery.today": "Сегодня", "discovery.allTime": "Все время", "locale.language": "ru" },
+    pt: { "discovery.timeRange": "Intervalo de datas", "discovery.today": "Hoje", "discovery.allTime": "Todo o período", "locale.language": "pt" }
   };
   const makeT = dict => key => dict[key] ?? key;
   const base = { label: "Date", fromLabel: "Updated from", toLabel: "To", onFrom() {}, onTo() {}, onClear() {} };
 
-  // 1. 三语占位与国际化输出
-  const htmlZh = renderToStaticMarkup(React.createElement(DateRange, { ...base, from: "", to: "", t: makeT(dicts.zh) }));
-  assert.ok(htmlZh.includes("时间范围"), "中文渲染时间范围");
-  assert.ok(htmlZh.includes("tabindex=\"-1\""), "隐藏 input 具备 tabindex=-1 避免键盘卡焦");
-  assert.ok(htmlZh.includes("aria-hidden=\"true\""), "隐藏 input 具备 aria-hidden 避免读屏器报出");
-
-  const htmlEn = renderToStaticMarkup(React.createElement(DateRange, { ...base, from: "", to: "", t: makeT(dicts.en) }));
-  assert.ok(htmlEn.includes("Date range"), "英文正确渲染 Date range 占位");
-
-  const htmlRu = renderToStaticMarkup(React.createElement(DateRange, { ...base, from: "", to: "", t: makeT(dicts.ru) }));
-  assert.ok(htmlRu.includes("Период"), "俄文正确渲染 Период 占位");
+  for (const [lang, dict] of Object.entries(dicts)) {
+    const html = renderToStaticMarkup(React.createElement(DateRange, { ...base, from: "", to: "", t: makeT(dict) }));
+    assert.ok(html.includes(dict["discovery.timeRange"]), `${lang} 正确渲染占位文案`);
+    assert.ok(html.includes("tabindex=\"-1\""), "隐藏 input 具备 tabindex=-1 避免键盘卡焦");
+    assert.ok(html.includes("aria-hidden=\"true\""), "隐藏 input 具备 aria-hidden 避免读屏器报出");
+  }
 });
 
 test("buildMonthGrid 与 getPresetRange 纯函数核心行为与边界验证", () => {

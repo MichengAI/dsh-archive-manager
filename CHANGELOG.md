@@ -1,4 +1,17 @@
 # Changelog
+## [1.3.0] - 2026-11-09
+
+### New Features & Localization
+
+- **Full support for all 8 official DeepSeek Harness languages**: Seamlessly localized into Chinese, English, Japanese, Spanish, French, German, Russian, and Portuguese (`zh`, `en`, `ja`, `es`, `fr`, `de`, `ru`, `pt`). All archive management workspaces, search and preview tools, cleanup panels, sidebar context menus, and date pickers adapt natively to the selected host language.
+- **Full multilingual support for sidebar "Favorites only" toggle**: The "Favorites only" filter option in the sidebar view menu now accurately displays across all 8 official languages, allowing quick filtering of starred sessions regardless of locale.
+- **Localized DateRange picker**: Calendar month headers and weekday labels now fully adapt to all 8 supported languages.
+
+### Enhancements & Simplification
+
+- **Simplified settings interface**: Removed the in-app update trigger and bundle card toggle for a cleaner and more streamlined settings workspace.
+- **Enriched plugin metadata**: Added comprehensive multilingual package manifests, icons, and documentation links.
+
 ## [1.2.8] - 2026-11-05
 
 ### Fixes & Enhancements

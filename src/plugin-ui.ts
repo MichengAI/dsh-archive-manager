@@ -208,10 +208,42 @@ export function DateRange(props: {
 		el?.focus();
 	}, [open, focusedDate]);
 
-	const isEn = props.t ? (props.t("discovery.today") === "Today" || (props.t("locale.language") || "").startsWith("en")) : false;
-	const isRu = props.t ? (props.t("discovery.today") === "Сегодня" || (props.t("locale.language") || "").startsWith("ru")) : false;
-	const locale = isEn ? "en-US" : isRu ? "ru-RU" : "zh-CN";
-	const weekdays = isEn ? ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] : isRu ? ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"] : ["一", "二", "三", "四", "五", "六", "日"];
+	const langTag = props.t ? (props.t("locale.language") || "").toLowerCase() : "";
+	const lang = langTag.startsWith("en") ? "en"
+		: langTag.startsWith("ja") ? "ja"
+		: langTag.startsWith("es") ? "es"
+		: langTag.startsWith("fr") ? "fr"
+		: langTag.startsWith("de") ? "de"
+		: langTag.startsWith("ru") ? "ru"
+		: langTag.startsWith("pt") ? "pt"
+		: (props.t?.("discovery.today") === "Today" ? "en"
+			: props.t?.("discovery.today") === "Сегодня" ? "ru"
+			: props.t?.("discovery.today") === "今日" ? "ja"
+			: "zh");
+
+	const localeMap: Record<string, string> = {
+		zh: "zh-CN",
+		en: "en-US",
+		ja: "ja-JP",
+		es: "es-ES",
+		fr: "fr-FR",
+		de: "de-DE",
+		ru: "ru-RU",
+		pt: "pt-BR",
+	};
+	const locale = localeMap[lang] || "zh-CN";
+
+	const weekdayMap: Record<string, string[]> = {
+		zh: ["一", "二", "三", "四", "五", "六", "日"],
+		en: ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"],
+		ja: ["月", "火", "水", "木", "金", "土", "日"],
+		es: ["Lu", "Ma", "Mi", "Ju", "Vi", "Sá", "Do"],
+		fr: ["Lu", "Ma", "Me", "Je", "Ve", "Sa", "Di"],
+		de: ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"],
+		ru: ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"],
+		pt: ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"],
+	};
+	const weekdays = weekdayMap[lang] || weekdayMap.zh;
 
 	function prevMonth(event: React.MouseEvent) {
 		event.stopPropagation();
@@ -378,7 +410,7 @@ export function DateRange(props: {
 	try {
 		monthTitle = new Intl.DateTimeFormat(locale, { year: "numeric", month: "long" }).format(new Date(viewYear, viewMonth, 1));
 	} catch {
-		monthTitle = isEn || isRu ? `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}` : `${viewYear}年 ${viewMonth + 1}月`;
+		monthTitle = (lang === "zh" || lang === "ja") ? `${viewYear}年 ${viewMonth + 1}月` : `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}`;
 	}
 
 	return R.createElement("div", { ref: containerRef, className: "dsham_dateRange", role: "group", "aria-label": props.label },

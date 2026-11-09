@@ -41,7 +41,7 @@ Put inactive conversations away and find them again when needed, keeping everyda
 - **Automated idle session cleanup**: Specify an idle threshold in days to discover inactive chats, automatically protecting running tasks, interactive prompts, and starred items, with instant undo support.
 - **Permanent deletion**: Thoroughly purge unwanted transcripts, cache rows, and indexes with per-item retry reporting.
 - **Orphan subagent detection & cleanup**: Automatically detect residue subagents whose parent sessions were externally deleted, displaying disk usage and enabling safe one-click reclamation.
-- **Controlled online updates & reverse proxy ready**: Features a toggleable online update switch, enterprise host-level configuration locking, and native baseURI dynamic endpoint resolution for prefix-stripping reverse proxies.
+- **Enterprise host-level configuration locking & reverse proxy ready**: Supports enterprise Cordis host security locking and native baseURI dynamic endpoint resolution for prefix-stripping reverse proxies.
 
 ## Manual list-cache rebuild (#88)
 
@@ -112,7 +112,7 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 dsh plugin --profile web add @michengai/dsh-archive-manager@latest --registry=https://registry.npmjs.org/
 ```
 
-Restart DSH Web, then refresh the page (or hard-refresh with `Ctrl+Shift+R`). Open **Settings → Archived sessions** to get started. To update, click **Check for updates** or re-run the installation command.
+Restart DSH Web, then refresh the page (or hard-refresh with `Ctrl+Shift+R`). Open **Settings → Archived sessions** to get started. To update, re-run the installation command.
 
 - Host compatibility: Full DeepSeek Harness `0.2.x` line (`>=0.2.0-rc.1 <0.3.0-0`), verified with every `0.2.x` release candidate (`0.2.0-rc.1`, `0.2.0-rc.2`, `0.2.1-rc.1` through `0.2.1-rc.5`, and `0.2.2-rc.1`). Intermediate alphas of a release candidate line are outside the supported range, so install a release candidate or the newest alpha.
 - Legacy hosts prior to `0.2.0-rc.1` are no longer supported. The version gate cleanly intercepts breaking changes in the `0.3.0` generation. Users on `0.1.x` hosts should install `1.0.20`.
@@ -136,17 +136,12 @@ Native configuration options are available:
   - When switching to **Settings only**, safely unregisters the sidebar entry (and resets the active panel gracefully if currently viewing the panel, preventing blank views);
   - Backward compatible with legacy `sidebarEntry` boolean settings (`true` maps to `both`, `false` maps to `settings`).
 
-### 2. Online Updates (`onlineUpdate` / `updater`)
-- **Default**: Enabled (`true`)
-- **Description**: Controls whether the plugin checks for and installs updates from npm.
-- **Effect**:
-  - **Dynamic UI Sync**: Disabling the toggle hides the **Check for updates** button and version badge in the header immediately without requiring a full page reload;
-  - **Endpoint Guard**: When disabled, the update API route returns `HTTP 403` for all check and install requests, preventing unreviewed updates;
-  - **Host / Platform Lock**: For curated plugin indexes (such as VibeDev) or restricted enterprise environments, this can be locked directly via Cordis configuration (bundle patch) without needing UI interaction:
-    ```yaml
-    updater: false # or onlineUpdate: false
-    ```
-    Once configured, the updater is disabled at startup, the update action stays hidden, and the online-update switch is disabled. The host lock takes precedence over the user's choice in settings.json and cannot be lifted through the UI. Removing the host lock restores the saved user preference.
+### 2. Online Update Policy (`onlineUpdate` / `updater`)
+- **Configuration**: For curated plugin indexes or enterprise compliance environments, online updates can be governed directly via Cordis configuration (bundle patch):
+  ```yaml
+  updater: false # or onlineUpdate: false
+  ```
+  Once configured, the updater is completely disabled at startup, preventing unreviewed external versions from being installed in the environment.
 
 ## Usage Guide
 
@@ -198,7 +193,7 @@ The canonical API is `workspaceRegistry.searchSessionContent({ sessionIds, query
 
 ## Updates
 
-Click **Check for updates** in the archive management page header. DSH CLI or Desktop environments with automatic update support can update directly; other environments provide a manual command for the current profile. You can also rerun the installation command above.
+Rerun the installation command above in your active DSH profile to update the plugin. In environments requiring compliance locking, updates can be governed via Cordis configuration.
 
 ## FAQ
 
