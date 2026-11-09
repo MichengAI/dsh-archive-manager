@@ -142,26 +142,6 @@ Accessible via :
 | **Annuler cet archivage** | Restaurez les sessions archivées dans le lot actuel depuis la notification |
 | **Suppression définitive** | Sélectionnez des sessions, choisissez Supprimer et confirmez l'effacement physique des journaux et index |
 
-## FAQ
-### Qu'advient-il des anciens caches du plugin après la mise à jour ?
-
-Le plugin ne remplace pas la table de cache officielle des projections et ne scanne ni ne migre les anciens caches du plugin. Ouvrir la liste d'archives ne relit pas les journaux complets pour combler les entrées manquantes. Les journaux de session appartiennent à l'hôte, qui reconstruit les projections dérivées à la demande.
-
-**Une session froide sans entrée de cache officielle peut initialement apparaître sans titre dans la liste ; rafraîchir la liste seule ne garantit pas sa régénération.** Ouvrir le journal permet de récupérer le titre et restaurer la session comme active permet au chemin d'écriture natif d'enregistrer le cache. Les anciens fichiers de cache restent intacts. Consultez le [journal des modifications](CHANGELOG.md) pour plus de précisions.
-
-
-### Pourquoi l'entrée n'apparaît-elle pas après installation ?
-Redémarrez DSH Web et forcez le rechargement de votre navigateur (`Ctrl+Shift+R`). Vérifiez que le plugin est bien installé dans le profil actif.
-
-### Quelle est la différence entre archiver et supprimer ?
-L'archivage range la discussion pour pouvoir la consulter ou la restaurer plus tard. **La suppression définitive est irréversible** et efface physiquement les journaux sur le disque.
-
-### Est-ce compatible avec Codex UI ?
-Oui. [Codex UI](https://github.com/MichengAI/dsh-codex-ui) conserve son apparence et ses interactions dans la barre latérale, et l'Archive Manager reste accessible dans **Paramètres → Sessions archivées**.
-
-### Coexistence avec d'autres plugins d'archivage
-Le plugin utilise l'identifiant de section `archive-manager`, ce qui lui permet de coexister de manière transparente avec d'autres extensions d'archivage.
-
 ### Favoris et nettoyage des sessions inactives
 
 Les groupes de projets compacts peuvent être repliés. Les étoiles et les icônes de restauration/archivage s'affichent sur la droite ; les menus des sessions archivées comprennent « Restaurer et ouvrir » et « Supprimer ».
@@ -187,6 +167,26 @@ L'API canonique est `workspaceRegistry.searchSessionContent({ sessionIds, query 
 ## Mises à jour
 
 Réexécutez la commande d'installation ci-dessus dans votre profil DSH actif pour mettre à jour le plugin. En entreprise, les mises à jour peuvent être verrouillées via la configuration Cordis.
+
+## FAQ
+
+### Qu'advient-il des anciens caches du plugin après la mise à jour ?
+
+Le plugin ne remplace pas la table de cache officielle des projections et ne scanne ni ne migre les anciens caches du plugin. Ouvrir la liste d'archives ne relit pas les journaux complets pour combler les entrées manquantes. Les journaux de session appartiennent à l'hôte, qui reconstruit les projections dérivées à la demande.
+
+**Une session froide sans entrée de cache officielle peut initialement apparaître sans titre dans la liste ; rafraîchir la liste seule ne garantit pas sa régénération.** Ouvrir le journal permet de récupérer le titre et restaurer la session comme active permet au chemin d'écriture natif d'enregistrer le cache. Les anciens fichiers de cache restent intacts. Consultez le [journal des modifications](CHANGELOG.md) pour plus de précisions.
+
+### Pourquoi l'entrée n'apparaît-elle pas après installation ?
+Redémarrez DSH Web et forcez le rechargement de votre navigateur (`Ctrl+Shift+R`). Vérifiez que le plugin est bien installé dans le profil actif.
+
+### Quelle est la différence entre archiver et supprimer ?
+L'archivage range la discussion pour pouvoir la consulter ou la restaurer plus tard. **La suppression définitive est irréversible** et efface physiquement les journaux sur le disque.
+
+### Est-ce compatible avec Codex UI ?
+Oui. [Codex UI](https://github.com/MichengAI/dsh-codex-ui) conserve son apparence et ses interactions dans la barre latérale, et l'Archive Manager reste accessible dans **Paramètres → Sessions archivées**.
+
+### Coexistence avec d'autres plugins d'archivage
+Le plugin utilise l'identifiant de section `archive-manager`, ce qui lui permet de coexister de manière transparente avec d'autres extensions d'archivage.
 
 ## Installation depuis les sources
 

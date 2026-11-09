@@ -142,26 +142,6 @@ Verfügbar unter:
 | **Archivierung rückgängig machen** | Stellen Sie die im aktuellen Batch archivierten Sitzungen über die Benachrichtigung wieder her |
 | **Endgültig löschen** | Sitzungen auswählen, Löschen wählen und die physische Entfernung von Protokollen und Indizes bestätigen |
 
-## Häufig gestellte Fragen (FAQ)
-### Was geschieht nach dem Upgrade mit historischen Plugin-Caches?
-
-Das Plugin ersetzt weder die offizielle Projektions-Cache-Tabelle noch scannt oder migriert es alte Plugin-Caches. Das Öffnen der Archivliste liest keine vollständigen Protokolle erneut ein, um fehlende Einträge aufzufüllen. Sitzungsprotokolle verbleiben beim Host, der abgeleitete Projektionen bei Bedarf regeneriert.
-
-**Eine kalte Sitzung ohne offiziellen Cache-Eintrag hat in der Liste möglicherweise zunächst keinen Titel; ein reines Neuladen der Liste garantiert keine Rekonstruktion.** Das Lesen des Protokolls stellt den Titel wieder her, und die Reaktivierung der Sitzung speichert den Cache über den nativen Schreibpfad. Historische Cache-Dateien bleiben unberührt. Weitere Details finden Sie im [Changelog](CHANGELOG.md).
-
-
-### Warum wird der Eintrag nach der Installation nicht angezeigt?
-Starten Sie DSH Web neu und erzwingen Sie ein Neuladen im Browser (`Ctrl+Shift+R`). Stellen Sie sicher, dass das Plugin im aktiven Profil installiert wurde.
-
-### Was ist der Unterschied zwischen Archivieren und Löschen?
-Archivieren legt die Unterhaltung ab, damit sie später wiederhergestellt werden kann. **Endgültiges Löschen kann nicht rückgängig gemacht werden** und entfernt alle Daten physisch von der Festplatte.
-
-### Kann es zusammen mit Codex UI verwendet werden?
-Ja. [Codex UI](https://github.com/MichengAI/dsh-codex-ui) behält sein Design und seine Seitenleistenfunktionen, und Archive Manager bleibt unter **Einstellungen → Archivierte Sitzungen** verfügbar.
-
-### Koexistenz mit anderen Archiv-Plugins
-Das Plugin registriert sich unter der Sektions-ID `archive-manager` und kann problemlos parallel zu anderen Archiv-Plugins betrieben werden.
-
 ### Favoriten und Bereinigung inaktiver Sitzungen
 
 Kompakte Projektgruppen können eingeklappt werden. Sterne und Wiederherstellungs-/Archivierungssymbole befinden sich rechts; Menüs archivierter Sitzungen enthalten «Wiederherstellen und öffnen» sowie «Löschen».
@@ -187,6 +167,26 @@ Die kanonische API lautet `workspaceRegistry.searchSessionContent({ sessionIds, 
 ## Aktualisierungen
 
 Führen Sie den Installationsbefehl oben in Ihrem aktiven DSH-Profil erneut aus, um das Plugin zu aktualisieren. In kontrollierten Unternehmensumgebungen können Updates über die Cordis-Konfiguration gesperrt werden.
+
+## Häufig gestellte Fragen (FAQ)
+
+### Was geschieht nach dem Upgrade mit historischen Plugin-Caches?
+
+Das Plugin ersetzt weder die offizielle Projektions-Cache-Tabelle noch scannt oder migriert es alte Plugin-Caches. Das Öffnen der Archivliste liest keine vollständigen Protokolle erneut ein, um fehlende Einträge aufzufüllen. Sitzungsprotokolle verbleiben beim Host, der abgeleitete Projektionen bei Bedarf regeneriert.
+
+**Eine kalte Sitzung ohne offiziellen Cache-Eintrag hat in der Liste möglicherweise zunächst keinen Titel; ein reines Neuladen der Liste garantiert keine Rekonstruktion.** Das Lesen des Protokolls stellt den Titel wieder her, und die Reaktivierung der Sitzung speichert den Cache über den nativen Schreibpfad. Historische Cache-Dateien bleiben unberührt. Weitere Details finden Sie im [Changelog](CHANGELOG.md).
+
+### Warum wird der Eintrag nach der Installation nicht angezeigt?
+Starten Sie DSH Web neu und erzwingen Sie ein Neuladen im Browser (`Ctrl+Shift+R`). Stellen Sie sicher, dass das Plugin im aktiven Profil installiert wurde.
+
+### Was ist der Unterschied zwischen Archivieren und Löschen?
+Archivieren legt die Unterhaltung ab, damit sie später wiederhergestellt werden kann. **Endgültiges Löschen kann nicht rückgängig gemacht werden** und entfernt alle Daten physisch von der Festplatte.
+
+### Kann es zusammen mit Codex UI verwendet werden?
+Ja. [Codex UI](https://github.com/MichengAI/dsh-codex-ui) behält sein Design und seine Seitenleistenfunktionen, und Archive Manager bleibt unter **Einstellungen → Archivierte Sitzungen** verfügbar.
+
+### Koexistenz mit anderen Archiv-Plugins
+Das Plugin registriert sich unter der Sektions-ID `archive-manager` und kann problemlos parallel zu anderen Archiv-Plugins betrieben werden.
 
 ## Installation aus dem Quellcode
 

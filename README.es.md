@@ -142,26 +142,6 @@ Disponible en:
 | **Deshacer archivado** | Restaure las sesiones archivadas en el lote actual desde la notificación |
 | **Eliminación permanente** | Seleccione sesiones, elija Eliminar y confirme el borrado físico de historiales e índices |
 
-## Preguntas frecuentes
-### ¿Qué sucede con las cachés históricas del complemento tras la actualización?
-
-El complemento no reemplaza la tabla oficial de caché de proyecciones ni escanea o migra cachés de versiones antiguas. Abrir la lista de archivos no vuelve a leer historiales completos ni escribe proyecciones para rellenar entradas ausentes. Los registros de sesión pertenecen al host y este reconstruye las proyecciones derivadas a petición.
-
-**Una sesión en frío sin entrada en la caché oficial puede aparecer inicialmente sin título en la lista; refrescar la lista no garantiza su reconstrucción.** Leer el registro recupera el título y restaurar la sesión como activa permite a la ruta de escritura nativa persistir la caché. Los archivos de caché históricos se mantienen intactos. Consulte el [registro de cambios](CHANGELOG.md) para más detalles.
-
-
-### ¿Por qué no aparece el acceso tras instalar?
-Reinicie DSH Web y fuerce la recarga de la página (`Ctrl+Shift+R`). Asegúrese de haber instalado el complemento en el perfil activo.
-
-### ¿En qué se diferencia archivar de eliminar?
-Archivar oculta la conversación manteniéndola accesible para su restauración posterior. **La eliminación definitiva no se puede deshacer** y borra los archivos físicos en disco.
-
-### ¿Es compatible con Codex UI?
-Sí. [Codex UI](https://github.com/MichengAI/dsh-codex-ui) conserva su interfaz y barra lateral, y Archive Manager queda totalmente disponible en **Configuración → Sesiones archivadas**.
-
-### Coexistencia con otros plugins de archivo
-El complemento se registra con el ID `archive-manager`, permitiendo convivir pacíficamente con otros complementos de sesiones archivadas.
-
 ### Favoritos y limpieza de inactivos
 
 Los grupos de proyectos compactos se pueden contraer. Las estrellas y los iconos de restaurar/archivar aparecen a la derecha; los menús de sesión archivada incluyen «Restaurar y abrir» y «Eliminar».
@@ -187,6 +167,26 @@ La API canónica es `workspaceRegistry.searchSessionContent({ sessionIds, query 
 ## Actualizaciones
 
 Vuelva a ejecutar el comando de instalación anterior en su perfil activo de DSH para actualizar el complemento. En entornos corporativos, las actualizaciones se pueden deshabilitar mediante la configuración de Cordis.
+
+## Preguntas frecuentes
+
+### ¿Qué sucede con las cachés históricas del complemento tras la actualización?
+
+El complemento no reemplaza la tabla oficial de caché de proyecciones ni escanea o migra cachés de versiones antiguas. Abrir la lista de archivos no vuelve a leer historiales completos ni escribe proyecciones para rellenar entradas ausentes. Los registros de sesión pertenecen al host y este reconstruye las proyecciones derivadas a petición.
+
+**Una sesión en frío sin entrada en la caché oficial puede aparecer inicialmente sin título en la lista; refrescar la lista no garantiza su reconstrucción.** Leer el registro recupera el título y restaurar la sesión como activa permite a la ruta de escritura nativa persistir la caché. Los archivos de caché históricos se mantienen intactos. Consulte el [registro de cambios](CHANGELOG.md) para más detalles.
+
+### ¿Por qué no aparece el acceso tras instalar?
+Reinicie DSH Web y fuerce la recarga de la página (`Ctrl+Shift+R`). Asegúrese de haber instalado el complemento en el perfil activo.
+
+### ¿En qué se diferencia archivar de eliminar?
+Archivar oculta la conversación manteniéndola accesible para su restauración posterior. **La eliminación definitiva no se puede deshacer** y borra los archivos físicos en disco.
+
+### ¿Es compatible con Codex UI?
+Sí. [Codex UI](https://github.com/MichengAI/dsh-codex-ui) conserva su interfaz y barra lateral, y Archive Manager queda totalmente disponible en **Configuración → Sesiones archivadas**.
+
+### Coexistencia con otros plugins de archivo
+El complemento se registra con el ID `archive-manager`, permitiendo convivir pacíficamente con otros complementos de sesiones archivadas.
 
 ## Instalación desde código fuente
 

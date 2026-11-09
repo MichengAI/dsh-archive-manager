@@ -142,26 +142,6 @@ Disponível em:
 | **Desfazer arquivamento** | Restaure as sessões arquivadas no lote atual a partir da notificação |
 | **Exclusão permanente** | Selecione as sessões, clique em Excluir e confirme a remoção física dos registros e índices |
 
-## Perguntas frequentes (FAQ)
-### O que acontece com os caches históricos do plugin após a atualização?
-
-O plugin não substitui a tabela oficial de projeções em cache nem varre ou migra caches de versões legadas. Abrir a lista de arquivamento não relê registros completos para preencher dados ausentes. Os históricos de sessão pertencem ao host, que reconstrói as projeções sob demanda.
-
-**Uma sessão inativa sem entrada oficial no cache pode aparecer inicialmente sem título na lista; apenas recarregar a lista não garante sua reconstrução.** A abertura do registro recupera o título e a restauração como sessão ativa permite ao fluxo de gravação nativo persistir o cache. Arquivos de cache antigos permanecem intocados. Consulte o [registro de alterações](CHANGELOG.md) para detalhes.
-
-
-### Por que o atalho não aparece após a instalação?
-Reinicie o DSH Web e force o recarregamento da página (`Ctrl+Shift+R`). Verifique se instalou o plugin no perfil correto.
-
-### Qual a diferença entre arquivar e excluir?
-Arquivar oculta a conversa permitindo recuperá-la posteriormente. **A exclusão definitiva é irreversível** e remove os dados fisicamente do disco.
-
-### Posso usar junto com o Codex UI?
-Sim. O [Codex UI](https://github.com/MichengAI/dsh-codex-ui) mantém sua barra lateral e visual característicos, e o Archive Manager continua totalmente funcional em **Configurações → Sessões arquivadas**.
-
-### Coexistência com outros plugins de arquivamento
-O plugin registra-se sob o ID de seção `archive-manager`, coexistindo de forma independente e harmoniosa com outros complementos de arquivamento.
-
 ### Favoritos e limpeza de inativos
 
 Grupos de projetos compactos podem ser recolhidos. Estrelas e ícones de restaurar/arquivar aparecem à direita; os menus de sessões arquivadas incluem «Restaurar e abrir» e «Excluir».
@@ -187,6 +167,26 @@ A API oficial é `workspaceRegistry.searchSessionContent({ sessionIds, query })`
 ## Atualizações
 
 Execute novamente o comando de instalação acima no seu perfil DSH ativo para atualizar o plugin. Em ambientes empresariais, as atualizações podem ser bloqueadas via configuração Cordis.
+
+## Perguntas frequentes (FAQ)
+
+### O que acontece com os caches históricos do plugin após a atualização?
+
+O plugin não substitui a tabela oficial de projeções em cache nem varre ou migra caches de versões legadas. Abrir a lista de arquivamento não relê registros completos para preencher dados ausentes. Os históricos de sessão pertencem ao host, que reconstrói as projeções sob demanda.
+
+**Uma sessão inativa sem entrada oficial no cache pode aparecer inicialmente sem título na lista; apenas recarregar a lista não garante sua reconstrução.** A abertura do registro recupera o título e a restauração como sessão ativa permite ao fluxo de gravação nativo persistir o cache. Arquivos de cache antigos permanecem intocados. Consulte o [registro de alterações](CHANGELOG.md) para detalhes.
+
+### Por que o atalho não aparece após a instalação?
+Reinicie o DSH Web e force o recarregamento da página (`Ctrl+Shift+R`). Verifique se instalou o plugin no perfil correto.
+
+### Qual a diferença entre arquivar e excluir?
+Arquivar oculta a conversa permitindo recuperá-la posteriormente. **A exclusão definitiva é irreversível** e remove os dados fisicamente do disco.
+
+### Posso usar junto com o Codex UI?
+Sim. O [Codex UI](https://github.com/MichengAI/dsh-codex-ui) mantém sua barra lateral e visual característicos, e o Archive Manager continua totalmente funcional em **Configurações → Sessões arquivadas**.
+
+### Coexistência com outros plugins de arquivamento
+O plugin registra-se sob o ID de seção `archive-manager`, coexistindo de forma independente e harmoniosa com outros complementos de arquivamento.
 
 ## Instalar a partir do código fonte
 
