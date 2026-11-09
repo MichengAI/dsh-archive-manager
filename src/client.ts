@@ -1667,8 +1667,8 @@ export function startArchiveClient(require: HostRequire) {
 				if (isStarButton(btn)) return false;
 				if (btn.getAttribute("aria-haspopup") === "menu") return true;
 				const label = (btn.getAttribute("aria-label") ?? btn.getAttribute("title") ?? "").toLowerCase();
-				if (/new|create|新建|add|\+|созда/.test(label)) return false;
-				return /action|操作|действи|more|更多|选项|options|menu/.test(label);
+				if (/new|create|新建|add|\+|созда|crear|créer|erstellen|novo|新規/.test(label)) return false;
+				return /action|操作|действи|more|更多|选项|options|menu|acción|acciones|más|mais|plus|weitere|ações|その他/.test(label);
 			});
 			return actionBtn ?? null;
 		}
@@ -1677,7 +1677,7 @@ export function startArchiveClient(require: HostRequire) {
 			const menuBtn = findRowMenuButton(row);
 			if (menuBtn === button) return true;
 			const label = (button.getAttribute("aria-label") ?? button.getAttribute("title") ?? "").toLowerCase();
-			return /action|操作|действи|more|更多/.test(label);
+			return /action|操作|действи|more|更多|选项|options|menu|acción|más|mais|plus|weitere|ações|その他/.test(label);
 		}
 		/**
 		 * 监听侧栏工作区行与会话行的整行右键点击，阻止系统默认右键菜单并唤起对应的 "..." 操作菜单。

@@ -159,6 +159,33 @@ test("findRowMenuButton 能从工作区和会话行中精确定位到 ... 按钮
 
 	const foundSession = t.findRowMenuButton(sessionRow);
 	assert.equal(foundSession, sessionMenuBtn, "会话行应精确定位到会话操作菜单按钮");
+
+	// 3. 覆盖 8 门语言行操作按钮与新建避让启发式
+	const multiLangLabels = [
+		{ lang: "zh", action: "操作", create: "新建" },
+		{ lang: "en", action: "Actions", create: "New session" },
+		{ lang: "ja", action: "その他の操作", create: "新規作成" },
+		{ lang: "es", action: "Más opciones", create: "Crear nuevo" },
+		{ lang: "fr", action: "Plus d'options", create: "Créer session" },
+		{ lang: "de", action: "Weitere Optionen", create: "Erstellen" },
+		{ lang: "ru", action: "Действия", create: "Создать" },
+		{ lang: "pt", action: "Mais opções", create: "Novo chat" }
+	];
+
+	for (const { lang, action, create } of multiLangLabels) {
+		const row = new MockElement("div", { "data-row-key": `row:${lang}` });
+		const actionsContainer = new MockElement("span", { class: "Rows_rowActions__abc" });
+		const menuBtn = new MockElement("button", { "aria-label": action });
+		const createBtn = new MockElement("button", { "aria-label": create });
+		actionsContainer.appendChild(menuBtn);
+		actionsContainer.appendChild(createBtn);
+		row.appendChild(actionsContainer);
+
+		const targetBtn = t.findRowMenuButton(row);
+		assert.equal(targetBtn, menuBtn, `${lang} 环境下必须精确定位操作菜单按钮并避开新建按钮`);
+		assert.equal(t.isRowMenuButton(menuBtn, row), true, `${lang} 按钮必须被识别为操作菜单触发按钮`);
+		assert.equal(t.isRowMenuButton(createBtn, row), false, `${lang} 新建按钮不能被误识别为菜单按钮`);
+	}
 });
 
 test("setupSidebarRowContextMenu 在整行右键时阻止默认右键菜单并触发 ... 按钮点击", () => {

@@ -138,6 +138,7 @@ export function DateRange(props: {
 	fromLabel: string;
 	toLabel: string;
 	invalid?: boolean;
+	defaultOpen?: boolean;
 	t?: (key: string, params?: Record<string, unknown>) => string;
 	onFrom(value: string): void;
 	onTo(value: string): void;
@@ -170,7 +171,7 @@ export function DateRange(props: {
 		return ref;
 	});
 	const containerRef = useRef<HTMLDivElement>(null);
-	const [open, setOpen] = R.useState(false);
+	const [open, setOpen] = R.useState(Boolean(props.defaultOpen));
 	const initial = parseYmd(props.from || props.to) ?? { year: new Date().getFullYear(), monthIndex: new Date().getMonth(), day: new Date().getDate() };
 	const [viewYear, setViewYear] = R.useState(initial.year);
 	const [viewMonth, setViewMonth] = R.useState(initial.monthIndex);

@@ -272,7 +272,7 @@ test("侧栏视图选项锚点 ONLY_ARCHIVED_TEXTS 完整覆盖官方全部 8 �
 	const { ONLY_ARCHIVED_TEXTS } = bundle.__test;
 	assert.ok(Array.isArray(ONLY_ARCHIVED_TEXTS));
 	for (const text of hostTexts) {
-		const matched = ONLY_ARCHIVED_TEXTS.some((t) => text.includes(t) || t.includes(text));
-		assert.equal(matched, true, `官方文案 “${text}” 必须能够被 ONLY_ARCHIVED_TEXTS 成功匹配`);
+		const matched = ONLY_ARCHIVED_TEXTS.some((t) => text.includes(t));
+		assert.equal(matched, true, `官方文案 “${text}” 必须能够被 ONLY_ARCHIVED_TEXTS 成功单向匹配`);
 	}
 });

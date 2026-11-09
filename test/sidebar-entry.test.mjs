@@ -342,15 +342,13 @@ test('客户端侧边栏入口与 bundle.config 开关槽位生命周期', async
   assert.equal(slotRegistrations.has('sidebar.panellist'), false, '关闭后注销 sidebar.panellist 槽位')
   assert.equal(selectedPanel, null, '关闭正在查看的面板时安全切回 null（杜绝悬空白屏）')
 
-  // 3. 测试 onlineUpdate 控制
+  // 3. 测试 onlineUpdate 兼容控制（内存级安全兼容，不再向宿主网络发送请求）
   assert.equal(controller.isOnlineUpdateEnabled(), true)
   assert.equal(controller.isOnlineUpdateLocked(), false)
   await controller.setOnlineUpdate(false)
   assert.equal(controller.isOnlineUpdateEnabled(), false)
-  assert.equal(clientUpdate, false)
   await controller.setOnlineUpdate(true)
   assert.equal(controller.isOnlineUpdateEnabled(), true)
-  assert.equal(clientUpdate, true)
 
   // 4. 测试槽位撤销与重建生命周期（针对 P2-3 防回归）
   await controller.setEnabled(true)
@@ -370,22 +368,6 @@ test('客户端侧边栏入口与 bundle.config 开关槽位生命周期', async
   assert.equal(slotRegistrations.has('main'), true, '宿主重新声明后面板必须自动恢复')
 
   controller.destroy()
-
-  // 4. 测试宿主锁定场景（locked: true）
-  const lockedController = setupSidebarEntry(mockCtx, {
-    callApi: async (path) => {
-      if (path === '/sidebar-entry') return { enabled: true }
-      if (path === '/online-update') return { enabled: false, locked: true }
-      return {}
-    },
-    renderPanel: () => null,
-    ns: 'dsh-archive-manager',
-  })
-  await new Promise((r) => setTimeout(r, 10))
-  assert.equal(lockedController.isOnlineUpdateLocked(), true, '感知宿主锁定状态')
-  await lockedController.setOnlineUpdate(true)
-  assert.equal(lockedController.isOnlineUpdateEnabled(), false, '宿主锁定状态下拒绝开启在线更新')
-  lockedController.destroy()
 })
 
 test('客户端 setLocation 保存失败时的乐观回退', async () => {

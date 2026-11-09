@@ -151,11 +151,34 @@ test("DateRange 轻量日历组件支持 8 门语言本地化与无障碍焦点�
   const makeT = dict => key => dict[key] ?? key;
   const base = { label: "Date", fromLabel: "Updated from", toLabel: "To", onFrom() {}, onTo() {}, onClear() {} };
 
+  const expectedWeekdays = {
+    zh: ["一", "二", "三", "四", "五", "六", "日"],
+    en: ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"],
+    ja: ["月", "火", "水", "木", "金", "土", "日"],
+    es: ["Lu", "Ma", "Mi", "Ju", "Vi", "Sá", "Do"],
+    fr: ["Lu", "Ma", "Me", "Je", "Ve", "Sa", "Di"],
+    de: ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"],
+    ru: ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"],
+    pt: ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+  };
+
   for (const [lang, dict] of Object.entries(dicts)) {
+    // 1. 关闭态断言：占位与输入框无障碍属性
     const html = renderToStaticMarkup(React.createElement(DateRange, { ...base, from: "", to: "", t: makeT(dict) }));
     assert.ok(html.includes(dict["discovery.timeRange"]), `${lang} 正确渲染占位文案`);
     assert.ok(html.includes("tabindex=\"-1\""), "隐藏 input 具备 tabindex=-1 避免键盘卡焦");
     assert.ok(html.includes("aria-hidden=\"true\""), "隐藏 input 具备 aria-hidden 避免读屏器报出");
+    assert.equal(html.includes("dsham_datePopover"), false, "关闭态下不渲染 popover");
+
+    // 2. 打开态断言：验证 8 门语言 Popover 星期缩写与月份真实渲染
+    const htmlOpen = renderToStaticMarkup(React.createElement(DateRange, { ...base, from: "2026-10-15", to: "2026-10-20", defaultOpen: true, t: makeT(dict) }));
+    assert.ok(htmlOpen.includes("dsham_datePopover"), `${lang} 打开态必须渲染 popover`);
+    assert.ok(htmlOpen.includes("dsham_dateMonthTitle"), `${lang} 渲染月份标题容器`);
+
+    // 严密断言：7 个星期缩写在各自语言下必须全部精准渲染
+    for (const wd of expectedWeekdays[lang]) {
+      assert.ok(htmlOpen.includes(`dsham_dateWeekday">${wd}</div>`), `${lang} 正确渲染星期标签 ${wd}`);
+    }
   }
 });
 

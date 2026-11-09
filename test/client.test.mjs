@@ -125,6 +125,33 @@ test("完整客户端 8 门内置语言词条和占位符严格一致", () => {
   }
 });
 
+test("客户端 apply 启动时向 ctx.locale.register 完整注册全部 8 门内置语言", async () => {
+  let registeredNamespace = null;
+  let registeredDicts = null;
+  const mockContext = {
+    locale: {
+      register: (ns, dicts) => {
+        registeredNamespace = ns;
+        registeredDicts = dicts;
+      },
+      bind: () => (k) => k
+    },
+    workspaces: { list: { getSnapshot: () => ({ items: [], archivedSessionIds: [] }) } },
+    sessions: { list: { getSnapshot: () => ({ byId: {} }) } },
+    slots: { inject: () => () => {}, register: () => () => {}, entries: () => [] },
+    effect: (fn) => fn(),
+    get: () => undefined,
+    on: () => () => {}
+  };
+  await bundle.apply(mockContext);
+  assert.equal(registeredNamespace, "archive-manager-workspace");
+  assert.ok(registeredDicts);
+  assert.deepEqual(Object.keys(registeredDicts).sort(), ["de", "en", "es", "fr", "ja", "pt", "ru", "zh"]);
+  for (const lang of ["zh", "en", "ja", "es", "fr", "de", "ru", "pt"]) {
+    assert.equal(typeof registeredDicts[lang], "object", `${lang} 字典必须已注册`);
+  }
+});
+
 function summary(id, extra = {}) {
 	return { id, displayTitle: `Title-${id}`, origin: "root", blank: false, running: false, updatedAt: 1, ...extra };
 }

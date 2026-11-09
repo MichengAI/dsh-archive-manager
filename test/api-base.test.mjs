@@ -102,7 +102,5 @@ test('无 document 或非法 base 时安全回退', () => {
 test('源码出口级防回归断言', async () => {
   const { readFile } = await import('node:fs/promises')
   const clientSource = await readFile(new URL('../src/client.ts', import.meta.url), 'utf8')
-  const updateUiSource = await readFile(new URL('../src/plugin-update-ui.ts', import.meta.url), 'utf8')
   assert.ok(clientSource.includes('resolveApiUrl('), 'client.ts 统一通过 resolveApiUrl 解析端点')
-  assert.ok(updateUiSource.includes('resolveApiUrl(options.endpoint)'), 'plugin-update-ui.ts 在模块顶层通过 resolveApiUrl 解析')
 })

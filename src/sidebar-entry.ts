@@ -362,33 +362,12 @@ export function setupSidebarEntry(
 
   const setOnlineUpdate = async (next: boolean): Promise<boolean> => {
     if (destroyed || onlineUpdateLocked) return onlineUpdateEnabled;
-    const currentEpoch = ++updateEpoch;
     onlineUpdateEnabled = next;
     notify();
     if (typeof options.onOnlineUpdateChange === "function") {
       try { options.onOnlineUpdateChange(next); } catch {}
     }
-    try {
-      await callApi("/online-update", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ enabled: next }),
-      });
-      // 乐观通知可能早于服务端开启；保存完成后再通知更新器重读版本。
-      if (currentEpoch === updateEpoch && typeof options.onOnlineUpdateChange === "function") {
-        try { options.onOnlineUpdateChange(next); } catch {}
-      }
-      return next;
-    } catch (err) {
-      if (currentEpoch === updateEpoch) {
-        onlineUpdateEnabled = !next;
-        notify();
-        if (typeof options.onOnlineUpdateChange === "function") {
-          try { options.onOnlineUpdateChange(!next); } catch {}
-        }
-      }
-      throw err;
-    }
+    return next;
   };
 
   let sidebarFavoriteStarEnabled = true;
@@ -434,20 +413,6 @@ export function setupSidebarEntry(
         notify();
         if (typeof options.onLocationChange === "function") {
           try { options.onLocationChange(entryLocation); } catch {}
-        }
-      }
-    })
-    .catch(() => {});
-
-  const loadUpdateEpoch = updateEpoch;
-  callApi("/online-update")
-    .then((res) => {
-      if (!destroyed && updateEpoch === loadUpdateEpoch && res && typeof res.enabled === "boolean") {
-        onlineUpdateEnabled = res.enabled;
-        if (res.locked === true) onlineUpdateLocked = true;
-        notify();
-        if (typeof options.onOnlineUpdateChange === "function") {
-          try { options.onOnlineUpdateChange(onlineUpdateEnabled); } catch {}
         }
       }
     })
