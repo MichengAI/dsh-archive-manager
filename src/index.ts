@@ -24,7 +24,6 @@ const SIDEBAR_FAVORITE_STAR_ENDPOINT = "/api/michengai/dsh-archive-manager/sideb
 const OPEN_IN_EXPLORER_ENDPOINT = "/api/michengai/dsh-archive-manager/open-in-explorer";
 
 const TRUSTED_MUTATION_HEADER = "x-michengai-archive-settings";
-const LEGACY_TRUSTED_MUTATION_HEADER = "x-michengai-plugin-update";
 
 function header(request: IncomingMessage, name: string): string | undefined {
 	const value = request.headers?.[name];
@@ -37,8 +36,7 @@ function isLoopbackAddress(value: string | undefined): boolean {
 }
 
 export function isTrustedLocalRequest(request: IncomingMessage): boolean {
-	const headerValue = header(request, TRUSTED_MUTATION_HEADER) ?? header(request, LEGACY_TRUSTED_MUTATION_HEADER);
-	if (headerValue !== "1") return false;
+	if (header(request, TRUSTED_MUTATION_HEADER) !== "1") return false;
 	if (!isLoopbackAddress(request.socket?.remoteAddress)) return false;
 	const site = header(request, "sec-fetch-site");
 	if (site !== undefined && site !== "same-origin") return false;
