@@ -23,7 +23,7 @@ const SIDEBAR_ENTRY_ENDPOINT = "/api/michengai/dsh-archive-manager/sidebar-entry
 const SIDEBAR_FAVORITE_STAR_ENDPOINT = "/api/michengai/dsh-archive-manager/sidebar-favorite-star";
 const OPEN_IN_EXPLORER_ENDPOINT = "/api/michengai/dsh-archive-manager/open-in-explorer";
 
-const PLUGIN_UPDATE_HEADER = "x-michengai-plugin-update";
+const TRUSTED_MUTATION_HEADER = "x-michengai-plugin-update";
 
 function header(request: IncomingMessage, name: string): string | undefined {
 	const value = request.headers?.[name];
@@ -35,8 +35,8 @@ function isLoopbackAddress(value: string | undefined): boolean {
 	return address === "localhost" || address === "localhost." || address === "::1" || address?.startsWith("127.") === true || address?.startsWith("::ffff:127.") === true;
 }
 
-export function isTrustedUpdateRequest(request: IncomingMessage): boolean {
-	if (header(request, PLUGIN_UPDATE_HEADER) !== "1") return false;
+export function isTrustedLocalRequest(request: IncomingMessage): boolean {
+	if (header(request, TRUSTED_MUTATION_HEADER) !== "1") return false;
 	if (!isLoopbackAddress(request.socket?.remoteAddress)) return false;
 	const site = header(request, "sec-fetch-site");
 	if (site !== undefined && site !== "same-origin") return false;
@@ -57,6 +57,7 @@ export function isTrustedUpdateRequest(request: IncomingMessage): boolean {
 		return false;
 	}
 }
+export const isTrustedUpdateRequest = isTrustedLocalRequest;
 
 const managedRoutes = Symbol.for("dsh-archive-manager.managed-routes");
 function managedRouteBag(server: object): Map<string, () => void> {
@@ -69,7 +70,7 @@ function rawService(service: object): object {
 	return original !== null && typeof original === "object" ? original : service;
 }
 
-function releaseUpdateRoute(server: object, path: string) {
+function releaseManagedRoute(server: object, path: string) {
 	const raw = rawService(server);
 	const bag = managedRouteBag(raw);
 	const owned = bag.get(path);
@@ -125,9 +126,9 @@ type HostContext = Context & {
 
 function registerSettingsRoutes(ctx: HostContext): () => void {
 	const server = rawService(ctx.webServer as object);
-	releaseUpdateRoute(server, SIDEBAR_ENTRY_ENDPOINT);
-	releaseUpdateRoute(server, SIDEBAR_FAVORITE_STAR_ENDPOINT);
-	releaseUpdateRoute(server, OPEN_IN_EXPLORER_ENDPOINT);
+	releaseManagedRoute(server, SIDEBAR_ENTRY_ENDPOINT);
+	releaseManagedRoute(server, SIDEBAR_FAVORITE_STAR_ENDPOINT);
+	releaseManagedRoute(server, OPEN_IN_EXPLORER_ENDPOINT);
 
 	const disposeSidebar = ctx.webServer.register({
 		kind: "exact",
