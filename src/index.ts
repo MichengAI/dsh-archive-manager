@@ -57,7 +57,6 @@ export function isTrustedLocalRequest(request: IncomingMessage): boolean {
 		return false;
 	}
 }
-export const isTrustedUpdateRequest = isTrustedLocalRequest;
 
 const managedRoutes = Symbol.for("dsh-archive-manager.managed-routes");
 function managedRouteBag(server: object): Map<string, () => void> {
@@ -140,7 +139,7 @@ function registerSettingsRoutes(ctx: HostContext): () => void {
 				return;
 			}
 			if (request.method === "POST") {
-				if (!isTrustedUpdateRequest(request)) {
+				if (!isTrustedLocalRequest(request)) {
 					sendJson(response, 403, { ok: false, error: "已拒绝非本机同源请求。" });
 					return;
 				}
@@ -181,7 +180,7 @@ function registerSettingsRoutes(ctx: HostContext): () => void {
 				return;
 			}
 			if (request.method === "POST") {
-				if (!isTrustedUpdateRequest(request)) {
+				if (!isTrustedLocalRequest(request)) {
 					sendJson(response, 403, { ok: false, error: "已拒绝非本机同源请求。" });
 					return;
 				}
@@ -221,7 +220,7 @@ function registerSettingsRoutes(ctx: HostContext): () => void {
 				response.end();
 				return;
 			}
-			if (!isTrustedUpdateRequest(request)) {
+			if (!isTrustedLocalRequest(request)) {
 				sendJson(response, 403, { ok: false, error: "已拒绝非本机同源请求。" });
 				return;
 			}
