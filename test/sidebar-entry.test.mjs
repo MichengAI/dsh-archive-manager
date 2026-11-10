@@ -99,7 +99,7 @@ test('入口位置配置（三合一）：设置方法、持久化与 HTTP API',
       })
     })
     const baseUrl = `http://127.0.0.1:${port}/api/michengai/dsh-archive-manager/sidebar-entry`
-    const headers = { 'content-type': 'application/json', 'x-michengai-plugin-update': '1' }
+    const headers = { 'content-type': 'application/json', 'x-michengai-archive-settings': '1' }
 
     try {
       // 跨站或无守卫头被拒绝（403）

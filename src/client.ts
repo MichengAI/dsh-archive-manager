@@ -5163,7 +5163,7 @@ export function startArchiveClient(require: HostRequire) {
 				const targetUrl = resolveApiUrl(`/api/michengai/dsh-archive-manager${path}`);
 				const reqHeaders = Object.assign({
 					"content-type": "application/json",
-					"x-michengai-plugin-update": "1",
+					"x-michengai-archive-settings": "1",
 				}, options?.headers);
 				const response = await fetch(targetUrl, Object.assign({}, options, { headers: reqHeaders }));
 				const data = await response.json();

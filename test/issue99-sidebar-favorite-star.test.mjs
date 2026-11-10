@@ -74,7 +74,7 @@ test('Issue 99: 侧栏收藏星标配置项、持久化与 HTTP API', async () =
       })
     })
     const baseUrl = `http://127.0.0.1:${port}/api/michengai/dsh-archive-manager/sidebar-favorite-star`
-    const headers = { 'content-type': 'application/json', 'x-michengai-plugin-update': '1' }
+    const headers = { 'content-type': 'application/json', 'x-michengai-archive-settings': '1' }
 
     try {
       // 跨站或无守卫头被拒绝（403）

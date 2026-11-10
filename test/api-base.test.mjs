@@ -23,8 +23,8 @@ function withBase(baseURI, run) {
 test('直连部署保持根路径原始绝对 URL', () => {
   withBase('http://127.0.0.1:28000/', () => {
     assert.equal(
-      resolveApiUrl('/api/michengai/dsh-archive-manager/update'),
-      'http://127.0.0.1:28000/api/michengai/dsh-archive-manager/update',
+      resolveApiUrl('/api/michengai/dsh-archive-manager/sidebar-entry'),
+      'http://127.0.0.1:28000/api/michengai/dsh-archive-manager/sidebar-entry',
       'root deployment keeps the original absolute URL',
     )
   })
@@ -33,8 +33,8 @@ test('直连部署保持根路径原始绝对 URL', () => {
 test('带前缀的反向代理保留完整路径前缀', () => {
   withBase('https://nas.example.com/app/dsh/', () => {
     assert.equal(
-      resolveApiUrl('/api/michengai/dsh-archive-manager/update'),
-      'https://nas.example.com/app/dsh/api/michengai/dsh-archive-manager/update',
+      resolveApiUrl('/api/michengai/dsh-archive-manager/sidebar-entry'),
+      'https://nas.example.com/app/dsh/api/michengai/dsh-archive-manager/sidebar-entry',
       'prefix proxy keeps the path prefix',
     )
   })
@@ -43,8 +43,8 @@ test('带前缀的反向代理保留完整路径前缀', () => {
 test('页面地址不带结尾斜杠时也能保留完整前缀', () => {
   withBase('https://nas.example.com/app/dsh', () => {
     assert.equal(
-      resolveApiUrl('/api/michengai/dsh-archive-manager/update'),
-      'https://nas.example.com/app/dsh/api/michengai/dsh-archive-manager/update',
+      resolveApiUrl('/api/michengai/dsh-archive-manager/sidebar-entry'),
+      'https://nas.example.com/app/dsh/api/michengai/dsh-archive-manager/sidebar-entry',
       'prefix without trailing slash keeps the full prefix',
     )
   })
@@ -53,8 +53,8 @@ test('页面地址不带结尾斜杠时也能保留完整前缀', () => {
 test('页面地址以 index.html 结尾时截断保留目录前缀', () => {
   withBase('https://nas.example.com/app/dsh/index.html', () => {
     assert.equal(
-      resolveApiUrl('/api/michengai/dsh-archive-manager/update'),
-      'https://nas.example.com/app/dsh/api/michengai/dsh-archive-manager/update',
+      resolveApiUrl('/api/michengai/dsh-archive-manager/sidebar-entry'),
+      'https://nas.example.com/app/dsh/api/michengai/dsh-archive-manager/sidebar-entry',
       'baseURI with index.html strips filename and keeps directory prefix',
     )
   })
@@ -63,8 +63,8 @@ test('页面地址以 index.html 结尾时截断保留目录前缀', () => {
 test('页面地址目录名包含点且无尾斜杠时完整保留目录前缀', () => {
   withBase('https://host/dsh-0.2.1', () => {
     assert.equal(
-      resolveApiUrl('/api/michengai/dsh-archive-manager/update'),
-      'https://host/dsh-0.2.1/api/michengai/dsh-archive-manager/update',
+      resolveApiUrl('/api/michengai/dsh-archive-manager/sidebar-entry'),
+      'https://host/dsh-0.2.1/api/michengai/dsh-archive-manager/sidebar-entry',
       'directory name containing dots is not mistaken for a file',
     )
   })
@@ -85,15 +85,15 @@ test('非根绝对路径原样返回', () => {
 test('无 document 或非法 base 时安全回退', () => {
   withBase(undefined, () => {
     assert.equal(
-      resolveApiUrl('/api/michengai/dsh-archive-manager/update'),
-      '/api/michengai/dsh-archive-manager/update',
+      resolveApiUrl('/api/michengai/dsh-archive-manager/sidebar-entry'),
+      '/api/michengai/dsh-archive-manager/sidebar-entry',
       'no document falls back to the literal path',
     )
   })
   withBase('not a url', () => {
     assert.equal(
-      resolveApiUrl('/api/michengai/dsh-archive-manager/update'),
-      '/api/michengai/dsh-archive-manager/update',
+      resolveApiUrl('/api/michengai/dsh-archive-manager/sidebar-entry'),
+      '/api/michengai/dsh-archive-manager/sidebar-entry',
       'invalid base falls back to the literal path',
     )
   })

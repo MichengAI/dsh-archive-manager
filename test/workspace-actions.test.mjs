@@ -119,7 +119,7 @@ test("open-in-explorer HTTP 端点：拒绝未信任请求、拒绝非法路径�
 		stream.method = "POST";
 		stream.headers = {
 			host: "localhost",
-			"x-michengai-plugin-update": "1",
+			"x-michengai-archive-settings": "1",
 			"sec-fetch-site": "same-origin",
 		};
 		stream.socket = { remoteAddress: "127.0.0.1" };

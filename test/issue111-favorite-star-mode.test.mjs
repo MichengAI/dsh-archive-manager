@@ -102,7 +102,7 @@ test('Issue 111: HTTP API 支持 mode（all / favorites / none）与布尔值兼
     })
   })
   const baseUrl = `http://127.0.0.1:${port}/api/michengai/dsh-archive-manager/sidebar-favorite-star`
-  const headers = { 'content-type': 'application/json', 'x-michengai-plugin-update': '1' }
+  const headers = { 'content-type': 'application/json', 'x-michengai-archive-settings': '1' }
 
   try {
     // 1. GET 初始返回 mode: 'all', enabled: true
