@@ -43,7 +43,7 @@ Mettez de côté vos conversations inactives et retrouvez-les au besoin, pour un
 - **Nettoyage automatique des sessions inactives** : Définissez un seuil d'inactivité en jours pour détecter les conversations dormantes, en protégeant automatiquement les tâches en cours, les invites interactives et les favoris, avec annulation immédiate (Undo).
 - **Suppression définitive physique** : Élimination complète des journaux physiques, lignes de cache et index avec rapport d'erreurs et réessai par élément.
 - **Détection et nettoyage des sous-agents orphelins** : Détection des sous-agents résiduels dont la session mère a été supprimée, calcul de l'espace disque occupé et libération physique en un clic.
-- **Verrouillage d'entreprise via configuration Cordis et compatibilité proxy inverse** : Possibilité de désactiver complètement le composant de mise à jour dans le fichier de configuration Cordis (`updater: false` ou `onlineUpdate: false`) et résolution dynamique des points de terminaison avec `document.baseURI`.
+- **Verrouillage d'entreprise via configuration Cordis et compatibilité proxy inverse** : Possibilité de désactiver complètement le composant de mise à jour dans le fichier de configuration Cordis () et résolution dynamique des points de terminaison avec `document.baseURI`.
 
 ## Reconstruction manuelle du cache de liste (#88)
 
@@ -116,12 +116,6 @@ Accessible via :
 - **Barre latérale uniquement (`sidebar`)** : Affiche l'icône dans la barre latérale et retire l'entrée des paramètres pour un panneau allégé.
 - **Paramètres uniquement (`settings`)** (Défaut) : Garde la barre latérale sobre et conserve l'accès depuis **Paramètres → Sessions archivées**.
 
-### 2. Politique de mise à jour (`onlineUpdate` / `updater`)
-- En entreprise ou environnement sous contrôle strict, les mises à jour peuvent être verrouillées via la configuration Cordis :
-  ```yaml
-  updater: false # ou onlineUpdate: false
-  ```
-  Le gestionnaire de mise à jour est alors entièrement désactivé au démarrage du serveur.
 
 ## Guide d'utilisation
 

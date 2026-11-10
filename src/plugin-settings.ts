@@ -10,7 +10,6 @@ export type FavoriteStarMode = "all" | "favorites" | "none";
 export interface ArchiveManagerSettings {
   entryLocation?: EntryLocation;
   sidebarEntry?: boolean;
-  onlineUpdate?: boolean;
   sidebarFavoriteStar?: boolean | FavoriteStarMode;
 }
 
@@ -76,7 +75,6 @@ export async function readSettings(): Promise<ArchiveManagerSettings> {
   const defaultSettings: ArchiveManagerSettings = {
     entryLocation: "settings",
     sidebarEntry: false,
-    onlineUpdate: true,
     sidebarFavoriteStar: "all",
   };
   if (!existsSync(path)) {
@@ -101,7 +99,6 @@ export async function readSettings(): Promise<ArchiveManagerSettings> {
     return {
       entryLocation,
       sidebarEntry: entryLocation !== "settings",
-      onlineUpdate: typeof item.onlineUpdate === "boolean" ? item.onlineUpdate : true,
       sidebarFavoriteStar: normalizeFavoriteStarMode(item.sidebarFavoriteStar),
     };
   } catch {
@@ -115,7 +112,6 @@ export async function writeSettings(next: ArchiveManagerSettings): Promise<void>
   const normalized: ArchiveManagerSettings = {
     entryLocation: location,
     sidebarEntry: location !== "settings",
-    onlineUpdate: next.onlineUpdate !== false,
     sidebarFavoriteStar: normalizeFavoriteStarMode(next.sidebarFavoriteStar),
   };
   const serialized = `${JSON.stringify(normalized, null, 2)}\n`;
@@ -142,7 +138,7 @@ export async function setEntryLocation(location: EntryLocation): Promise<EntryLo
 
 export async function getSidebarEntry(): Promise<boolean> {
   const current = await readSettings();
-  return current.entryLocation !== "settings";
+  return current.sidebarEntry ?? current.entryLocation !== "settings";
 }
 
 export async function setSidebarEntry(enabled: boolean): Promise<boolean> {
@@ -150,27 +146,10 @@ export async function setSidebarEntry(enabled: boolean): Promise<boolean> {
     throw new TypeError("sidebarEntry must be a boolean");
   }
   return enqueueWrite(async () => {
-    const location: EntryLocation = enabled ? "both" : "settings";
     const current = await readSettings();
+    const location: EntryLocation = enabled ? (current.entryLocation === "settings" ? "both" : current.entryLocation ?? "both") : "settings";
     current.entryLocation = location;
     current.sidebarEntry = enabled;
-    await writeSettings(current);
-    return enabled;
-  });
-}
-
-export async function getOnlineUpdate(): Promise<boolean> {
-  const current = await readSettings();
-  return current.onlineUpdate !== false;
-}
-
-export async function setOnlineUpdate(enabled: boolean): Promise<boolean> {
-  if (typeof enabled !== "boolean") {
-    throw new TypeError("onlineUpdate must be a boolean");
-  }
-  return enqueueWrite(async () => {
-    const current = await readSettings();
-    current.onlineUpdate = enabled;
     await writeSettings(current);
     return enabled;
   });

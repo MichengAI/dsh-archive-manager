@@ -43,7 +43,7 @@ Guarde conversaciones inactivas de forma segura y recupérelas cuando las necesi
 - **Limpieza automática de sesiones inactivas**: Establezca un umbral en días para detectar conversaciones sin actividad, protegiendo automáticamente tareas en ejecución, preguntas interactivas y elementos favoritos, con soporte para deshacer de inmediato.
 - **Eliminación permanente**: Borrado físico y definitivo de historiales, filas de caché e índices, con posibilidad de reintentar elementos fallidos.
 - **Detección y limpieza de subagentes huérfanos**: Detección de subagentes residuales cuyas sesiones principales fueron eliminadas externamente, con visualización del espacio ocupado y liberación en un clic.
-- **Bloqueo empresarial por configuración Cordis y soporte para proxy inverso**: Compatible con bloqueo estricto en el archivo de configuración Cordis (`updater: false` o `onlineUpdate: false`) y resolución dinámica de rutas mediante `document.baseURI`.
+- **Bloqueo empresarial por configuración Cordis y soporte para proxy inverso**: Compatible con bloqueo estricto en el archivo de configuración Cordis () y resolución dinámica de rutas mediante `document.baseURI`.
 
 ## Reconstrucción manual de caché de lista (#88)
 
@@ -116,12 +116,6 @@ Disponible en:
 - **Solo barra lateral (`sidebar`)**: Muestra el icono en la barra lateral y oculta la sección de configuración para una interfaz más despejada.
 - **Solo configuración (`settings`)** (Predeterminado): Mantiene la barra lateral despejada y permite el acceso desde **Configuración → Sesiones archivadas**.
 
-### 2. Política de actualización en línea (`onlineUpdate` / `updater`)
-- En entornos empresariales o restringidos, las actualizaciones se pueden deshabilitar mediante el archivo de configuración de Cordis:
-  ```yaml
-  updater: false # o onlineUpdate: false
-  ```
-  Al desactivarse, el actualizador queda deshabilitado desde el inicio del servidor.
 
 ## Guía de uso
 

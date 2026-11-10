@@ -8,24 +8,80 @@ import type { Context } from "@deepseek-ai/cordis";
  * 不再另插一条可以单独停用的 host 行。浏览器端由 package.json 的
  * `dsh.client` 声明发现，对应同一个插件入口。
  */
-import { getEntryLocation, getOnlineUpdate, getSidebarFavoriteStarMode, setEntryLocation, setOnlineUpdate, setSidebarFavoriteStarMode } from "./plugin-settings.js";
+import { getEntryLocation, getSidebarFavoriteStarMode, setEntryLocation, setSidebarFavoriteStarMode } from "./plugin-settings.js";
 import type { FavoriteStarMode } from "./plugin-settings.js";
-import { isTrustedUpdateRequest, rawService, registerPluginUpdater, releaseUpdateRoute } from "./plugin-updater.js";
+import { symbols } from "@deepseek-ai/cordis";
 import { apply as installHost, inject as hostInject } from "./host-install.js";
 import { authorizeExplorerPath } from "./explorer-path-policy.js";
 import { revealPathInSystem } from "./native-explorer.js";
 
-export interface PluginConfig {
-	updater?: boolean;
-	onlineUpdate?: boolean;
-}
+export interface PluginConfig {}
 
 const inject = ["webServer", ...hostInject];
 
 const SIDEBAR_ENTRY_ENDPOINT = "/api/michengai/dsh-archive-manager/sidebar-entry";
-const ONLINE_UPDATE_ENDPOINT = "/api/michengai/dsh-archive-manager/online-update";
 const SIDEBAR_FAVORITE_STAR_ENDPOINT = "/api/michengai/dsh-archive-manager/sidebar-favorite-star";
 const OPEN_IN_EXPLORER_ENDPOINT = "/api/michengai/dsh-archive-manager/open-in-explorer";
+
+const PLUGIN_UPDATE_HEADER = "x-michengai-plugin-update";
+
+function header(request: IncomingMessage, name: string): string | undefined {
+	const value = request.headers?.[name];
+	return Array.isArray(value) ? value[0] : value;
+}
+
+function isLoopbackAddress(value: string | undefined): boolean {
+	const address = value?.toLowerCase().replace(/^\[|\]$/g, "");
+	return address === "localhost" || address === "localhost." || address === "::1" || address?.startsWith("127.") === true || address?.startsWith("::ffff:127.") === true;
+}
+
+export function isTrustedUpdateRequest(request: IncomingMessage): boolean {
+	if (header(request, PLUGIN_UPDATE_HEADER) !== "1") return false;
+	if (!isLoopbackAddress(request.socket?.remoteAddress)) return false;
+	const site = header(request, "sec-fetch-site");
+	if (site !== undefined && site !== "same-origin") return false;
+	const host = header(request, "host");
+	if (host === undefined || host === "") return false;
+	const origin = header(request, "origin");
+	if (origin === undefined || origin === "") {
+		try {
+			return isLoopbackAddress(new URL(`http://${host}`).hostname);
+		} catch {
+			return false;
+		}
+	}
+	try {
+		const url = new URL(origin);
+		return (url.protocol === "http:" || url.protocol === "https:") && isLoopbackAddress(url.hostname) && url.host === host;
+	} catch {
+		return false;
+	}
+}
+
+const managedRoutes = Symbol.for("dsh-archive-manager.managed-routes");
+function managedRouteBag(server: object): Map<string, () => void> {
+	const owner = server as Record<symbol, Map<string, () => void>>;
+	return owner[managedRoutes] ?? (owner[managedRoutes] = new Map());
+}
+
+function rawService(service: object): object {
+	const original = Reflect.get(service, symbols.original);
+	return original !== null && typeof original === "object" ? original : service;
+}
+
+function releaseUpdateRoute(server: object, path: string) {
+	const raw = rawService(server);
+	const bag = managedRouteBag(raw);
+	const owned = bag.get(path);
+	if (owned !== undefined) {
+		bag.delete(path);
+		owned();
+	}
+	for (const key of ["exact", "prefixes"]) {
+		const table = Reflect.get(raw, key);
+		if (table instanceof Map && table.has(path)) table.delete(path);
+	}
+}
 
 function sendJson(response: ServerResponse, statusCode: number, value: unknown) {
 	response.writeHead(statusCode, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
@@ -55,10 +111,21 @@ function readJsonBody(request: IncomingMessage): Promise<Record<string, unknown>
 	});
 }
 
-function registerSettingsRoutes(ctx: Context, hostUpdateDisabled: boolean): () => void {
+interface WebServerRoute {
+	kind: "exact" | "prefix";
+	path: string;
+	handler: (request: IncomingMessage, response: ServerResponse) => Promise<void> | void;
+}
+interface WebServer {
+	register(route: WebServerRoute): () => void;
+}
+type HostContext = Context & {
+	webServer: WebServer;
+};
+
+function registerSettingsRoutes(ctx: HostContext): () => void {
 	const server = rawService(ctx.webServer as object);
 	releaseUpdateRoute(server, SIDEBAR_ENTRY_ENDPOINT);
-	releaseUpdateRoute(server, ONLINE_UPDATE_ENDPOINT);
 	releaseUpdateRoute(server, SIDEBAR_FAVORITE_STAR_ENDPOINT);
 	releaseUpdateRoute(server, OPEN_IN_EXPLORER_ENDPOINT);
 
@@ -144,38 +211,6 @@ function registerSettingsRoutes(ctx: Context, hostUpdateDisabled: boolean): () =
 		},
 	});
 
-	const disposeUpdate = ctx.webServer.register({
-		kind: "exact",
-		path: ONLINE_UPDATE_ENDPOINT,
-		handler: async (request: IncomingMessage, response: ServerResponse) => {
-			if (request.method === "GET" || request.method === "HEAD") {
-				const enabled = !hostUpdateDisabled && (await getOnlineUpdate());
-				sendJson(response, 200, { ok: true, enabled, locked: hostUpdateDisabled });
-				return;
-			}
-			if (request.method === "POST") {
-				if (!isTrustedUpdateRequest(request)) {
-					sendJson(response, 403, { ok: false, error: "已拒绝非本机同源请求。" });
-					return;
-				}
-				if (hostUpdateDisabled) {
-					sendJson(response, 403, { ok: false, error: "在线更新已被宿主配置锁定禁用" });
-					return;
-				}
-				const body = await readJsonBody(request);
-				if (!body || typeof body.enabled !== "boolean") {
-					sendJson(response, 400, { ok: false, error: "enabled 必须是布尔值" });
-					return;
-				}
-				const enabled = await setOnlineUpdate(body.enabled);
-				sendJson(response, 200, { ok: true, enabled });
-				return;
-			}
-			response.writeHead(405, { allow: "GET, HEAD, POST" });
-			response.end();
-		},
-	});
-
 	const disposeOpenExplorer = ctx.webServer.register({
 		kind: "exact",
 		path: OPEN_IN_EXPLORER_ENDPOINT,
@@ -211,43 +246,28 @@ function registerSettingsRoutes(ctx: Context, hostUpdateDisabled: boolean): () =
 	return () => {
 		try { disposeSidebar(); } catch {}
 		try { disposeFavoriteStar(); } catch {}
-		try { disposeUpdate(); } catch {}
 		try { disposeOpenExplorer(); } catch {}
 	};
 }
 
-async function apply(ctx: Context, config?: PluginConfig) {
-	const hostUpdateDisabled = config?.updater === false || config?.onlineUpdate === false;
-	let disposeUpdater = () => {};
+async function apply(ctx: Context, _config?: PluginConfig) {
 	let disposeSettingsRoutes = () => {};
 
 	try {
-		disposeSettingsRoutes = registerSettingsRoutes(ctx, hostUpdateDisabled);
+		disposeSettingsRoutes = registerSettingsRoutes(ctx as HostContext);
 	} catch (error) {
 		ctx.logger?.warn?.(`archive-manager: settings routes skipped: ${String(error)}`);
 	}
 
-	try {
-		disposeUpdater = registerPluginUpdater(ctx, {
-			endpoint: "/api/michengai/dsh-archive-manager/update",
-			packageName: "@michengai/dsh-archive-manager",
-			manifestUrl: new URL("../package.json", import.meta.url),
-			isEnabled: async () => !hostUpdateDisabled && (await getOnlineUpdate()),
-		});
-	} catch (error) {
-		ctx.logger?.warn?.(`archive-manager: update route skipped: ${String(error)}`);
-	}
 	let disposeHost: () => void | Promise<void>;
 	try {
 		disposeHost = await installHost(ctx);
 	} catch (error) {
-		disposeUpdater();
 		disposeSettingsRoutes();
 		throw error;
 	}
 	return async () => {
 		try {
-			disposeUpdater();
 			disposeSettingsRoutes();
 		} finally {
 			await disposeHost();

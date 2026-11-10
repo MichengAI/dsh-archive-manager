@@ -142,12 +142,6 @@ dsh plugin --profile web add @michengai/dsh-archive-manager@latest --registry=ht
   - 切换为「仅设置」关闭侧栏时安全注销侧栏槽位（若当前正停留在归档大面板，会自动安全切回默认视图，防止悬空和白屏）；
   - 向后完全兼容旧版 `sidebarEntry` 配置（`true` 自动映射为 `both`，`false` 自动映射为 `settings`）。
 
-### 2. 在线更新策略 (`onlineUpdate` / `updater`)
-- **配置说明**：面向精选插件索引或企业安全合规环境，支持通过 Cordis 配置文件（bundle patch）进行安全管控：
-  ```yaml
-  updater: false # 或 onlineUpdate: false
-  ```
-  配置生效后，更新器在启动时即被完全禁用，服务端更新接口自动返回禁用状态，杜绝在环境中安装未审核的外部版本。
 
 ## 使用指南
 

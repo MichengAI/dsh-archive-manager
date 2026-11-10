@@ -138,12 +138,6 @@ Native configuration options are available:
   - When switching to **Settings only**, safely unregisters the sidebar entry (and resets the active panel gracefully if currently viewing the panel, preventing blank views);
   - Backward compatible with legacy `sidebarEntry` boolean settings (`true` maps to `both`, `false` maps to `settings`).
 
-### 2. Online Update Policy (`onlineUpdate` / `updater`)
-- **Configuration**: For curated plugin indexes or enterprise compliance environments, online updates can be governed directly via Cordis configuration (bundle patch):
-  ```yaml
-  updater: false # or onlineUpdate: false
-  ```
-  Once configured, the updater is completely disabled at startup, preventing unreviewed external versions from being installed in the environment.
 
 ## Usage Guide
 

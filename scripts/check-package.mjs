@@ -15,8 +15,6 @@ const required = [
   "lib/projcache.js",
   "lib/host-install.js",
   "lib/client.js",
-  "lib/plugin-updater.js",
-  "lib/release-age.js",
   "lib/archive-experience.js",
   "lib/archive-organizer.js",
   "lib/archive-discovery.js",

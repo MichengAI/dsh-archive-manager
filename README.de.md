@@ -43,7 +43,7 @@ Legen Sie inaktive Unterhaltungen ab und holen Sie sie bei Bedarf zurück, um di
 - **Automatische Bereinigung inaktiver Sitzungen**: Schwellenwert in Tagen festlegen, um inaktive Chats zu finden. Laufende Aufgaben, interaktive Prompts und Favoriten werden automatisch geschützt, mit sofortiger Rückgängig-Funktion (Undo).
 - **Dauerhafte physische Löschung**: Vollständige physische Entfernung von Protokollen, Cache-Zeilen und Indizes mit detaillierter Fehler- und Wiederholungsfunktion.
 - **Erkennung und Bereinigung verwaister Subagents**: Verwaiste Subagents, deren Hauptsitzung extern gelöscht wurde, erkennen, Speicherplatz berechnen und mit einem Klick physisch freigeben.
-- **Unternehmensweite Sperre via Cordis-Konfiguration & Reverse-Proxy-Unterstützung**: Vollständiges Deaktivieren der Aktualisierungskomponente in der Cordis-Konfiguration (`updater: false` oder `onlineUpdate: false`) und dynamische Pfadauflösung über `document.baseURI`.
+- **Unternehmensweite Sperre via Cordis-Konfiguration & Reverse-Proxy-Unterstützung**: Vollständiges Deaktivieren der Aktualisierungskomponente in der Cordis-Konfiguration () und dynamische Pfadauflösung über `document.baseURI`.
 
 ## Manuelle Rekonstruktion des Listen-Caches (#88)
 
@@ -116,12 +116,6 @@ Verfügbar unter:
 - **Nur Seitenleiste (`sidebar`)**: Zeigt das Symbol in der Seitenleiste an und entfernt den Eintrag aus den Einstellungen für eine schlankere Oberfläche.
 - **Nur Einstellungen (`settings`)** (Standard): Hält die Seitenleiste minimalistisch und bietet Zugriff unter **Einstellungen → Archivierte Sitzungen**.
 
-### 2. Richtlinie für Online-Aktualisierungen (`onlineUpdate` / `updater`)
-- In Firmenumgebungen können Updates direkt in der Cordis-Konfiguration deaktiviert werden:
-  ```yaml
-  updater: false # oder onlineUpdate: false
-  ```
-  Dadurch wird die Aktualisierungskomponente beim Serverstart vollständig deaktiviert.
 
 ## Bedienungsanleitung
 
