@@ -1,4 +1,12 @@
 # Changelog
+## [1.3.2] - 2026-11-12
+
+### Compatibility & Maintenance
+
+- Verified full compatibility with DeepSeek Harness `0.2.2-rc.2`, covering all `0.2.x` RC hosts (`0.2.0-rc.1` through `0.2.2-rc.2`), and aligned development dependencies to `0.2.2-rc.2`.
+- Removed obsolete built-in update routes and expired update configuration options; plugin installation and upgrades are managed uniformly by the host plugin manager.
+- Updated compatibility badges and verified version matrices across all localized README manuals.
+
 ## [1.3.1] - 2026-11-10
 
 ### Enhancements & User Experience

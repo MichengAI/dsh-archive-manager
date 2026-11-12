@@ -18,6 +18,7 @@ const profiles = [
 	{ version: "0.2.1-rc.4", cordis: "4.0.5", schemastery: "3.18.5", latest: true },
 	{ version: "0.2.1-rc.5", cordis: "4.0.5", schemastery: "3.18.5", latest: true },
 	{ version: "0.2.2-rc.1", cordis: "4.1.0", schemastery: "3.19.0", latest: true },
+	{ version: "0.2.2-rc.2", cordis: "4.1.0", schemastery: "3.19.0", latest: true },
 ];
 const cordisPlugins = {
 	"4.0.4": {
@@ -74,8 +75,8 @@ function run(command, args, cwd, env = process.env) {
 	});
 }
 
-if (manifest.devDependencies["@deepseek-ai/dsh-session"] !== "0.2.2-rc.1") {
-	throw new Error(`开发依赖基线必须钉为 0.2.2-rc.1，实际 ${manifest.devDependencies["@deepseek-ai/dsh-session"]}`);
+if (manifest.devDependencies["@deepseek-ai/dsh-session"] !== "0.2.2-rc.2") {
+	throw new Error(`开发依赖基线必须钉为 0.2.2-rc.2，实际 ${manifest.devDependencies["@deepseek-ai/dsh-session"]}`);
 }
 const failures = [];
 for (const profile of profiles) {
@@ -84,6 +85,7 @@ for (const profile of profiles) {
 	try {
 		const dependencies = {};
 		for (const [name, pinned] of Object.entries(manifest.devDependencies)) {
+			if (name === "@deepseek-ai/dsh-error" && (profile.version.startsWith("0.2.0-") || profile.version.startsWith("0.2.1-") || profile.version === "0.2.2-rc.1")) continue;
 			dependencies[name] = name.startsWith("@deepseek-ai/dsh-") ? profile.version : pinned;
 		}
 		dependencies["@deepseek-ai/cordis"] = profile.cordis;

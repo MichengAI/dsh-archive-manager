@@ -11,12 +11,15 @@ export function hostTestOverrides(version) {
 		"0.2.1-rc.4",
 		"0.2.1-rc.5",
 		"0.2.2-rc.1",
+		"0.2.2-rc.2",
 	];
 	if (!supported.includes(version)) return {};
 	const names = [
 		"agent", "api-gateway", "brand", "client-connection", "client-locale", "client-store",
 		"client-ui-conversation", "client-ui-primitives", "client-ui-sidebar", "client-ui-slots", "client-ui-workspace",
-		"code-runtime", "compaction", "credentials", "deque", "host-webserver",
+		"code-runtime", "compaction", "credentials", "deque",
+		...(!(version.startsWith("0.2.0-") || version.startsWith("0.2.1-") || version === "0.2.2-rc.1") ? ["error"] : []),
+		"host-webserver",
 		...(version.startsWith("0.2.0-") ? ["invariants"] : []),
 		"llm",
 		"sandbox", "sandbox-policy", "scope", "session",

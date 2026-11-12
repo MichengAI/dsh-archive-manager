@@ -16,7 +16,7 @@
   [![npm package](https://img.shields.io/npm/v/%40michengai%2Fdsh-archive-manager.svg?label=npm%20package)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
   [![npm downloads](https://img.shields.io/npm/dt/%40michengai%2Fdsh-archive-manager.svg?label=npm%20downloads)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
   [![DSH Web Plugin](https://img.shields.io/badge/DSH%20Web-Plugin-0f766e.svg)](https://github.com/MichengAI/dsh-archive-manager)
-  [![DSH supported through 0.2.2-alpha.3](https://img.shields.io/badge/DSH-up%20to%200.2.2--alpha.3-2563eb.svg)](#предварительные-требования)
+  [![DSH supported through 0.2.2-rc.2](https://img.shields.io/badge/DSH-up%20to%200.2.2--rc.2-2563eb.svg)](#предварительные-требования)
 </div>
 
 > DSH Archive Manager — это поддерживаемый сообществом плагин для DeepSeek Harness (DSH), а не официальный продукт DeepSeek AI.
@@ -93,7 +93,7 @@
 
 Требуется рабочая установка [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web с доступным `dsh` в терминале. В примерах используется профиль `web`. Замените его на тот профиль, который вы действительно используете.
 
-- Поддерживаемые версии DSH: все RC ветки `0.2.x` (`0.2.0-rc.1`, `0.2.0-rc.2`, `0.2.1-rc.1`–`0.2.1-rc.5`, `0.2.2-rc.1`).
+- Поддерживаемые версии DSH: все RC ветки `0.2.x` (`0.2.0-rc.1`, `0.2.0-rc.2`, `0.2.1-rc.1`–`0.2.1-rc.5`, `0.2.2-rc.1`, `0.2.2-rc.2`).
 - Более ранние хосты (до `0.2.0-rc.1`) отклоняются проверкой версии. Для `0.1.x` установите `1.0.20`.
 
 ### Попросите агента установить

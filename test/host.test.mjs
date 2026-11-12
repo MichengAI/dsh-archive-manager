@@ -483,7 +483,7 @@ test("running sessions use the host activity gate", async () => {
 		return [{ kind: "turn" }];
 	};
 	env.ctx.parallel = async (name, request) => {
-		stopped.push([name, request.sessionId]);
+		if (name === "workspace/session-stop") stopped.push([name, request.sessionId]);
 	};
 	await assert.rejects(
 		registry.archiveSession(s1),

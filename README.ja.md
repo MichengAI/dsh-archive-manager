@@ -16,12 +16,12 @@
   [![npm package](https://img.shields.io/npm/v/%40michengai%2Fdsh-archive-manager.svg?label=npm%20package)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
   [![npm ダウンロード数](https://img.shields.io/npm/dt/%40michengai%2Fdsh-archive-manager.svg?label=npm%20downloads)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
   [![DSH Web Plugin](https://img.shields.io/badge/DSH%20Web-Plugin-0f766e.svg)](https://github.com/MichengAI/dsh-archive-manager)
-  [![DSH 対応バージョン 0.2.2-rc.1 まで](https://img.shields.io/badge/DSH-up%20to%200.2.2--rc.1-2563eb.svg)](#前提条件)
+  [![DSH 対応バージョン 0.2.2-rc.2 まで](https://img.shields.io/badge/DSH-up%20to%200.2.2--rc.2-2563eb.svg)](#前提条件)
 </div>
 
 > DSH Archive Manager はコミュニティによって保守されている DeepSeek Harness（DSH）向けプラグインであり、DeepSeek AI 公式の製品ではありません。
 
-本文書は **1.3.1** を対象としています。過去の変更履歴は [CHANGELOG.md](CHANGELOG.md) をご覧ください。
+本文書は **1.3.2** を対象としています。過去の変更履歴は [CHANGELOG.md](CHANGELOG.md) をご覧ください。
 
 ## 機能概要
 
@@ -108,7 +108,7 @@ dsh plugin --profile web add @michengai/dsh-archive-manager@latest --registry=ht
 
 インストール後、DSH Web を再起動し、ブラウザでページを更新（または `Ctrl+Shift+R` でハードリフレッシュ）してください。「設定 → アーカイブセッション」を開いて利用を開始します。更新時は同じインストールコマンドを再実行するだけです。
 
-- **ホスト対応範囲**：DeepSeek Harness `0.2.x` 全シリーズ（`>=0.2.0-rc.1 <0.3.0-0`）。全 RC 版（`0.2.0-rc.1`, `0.2.0-rc.2`, `0.2.1-rc.1`〜`0.2.1-rc.5`, `0.2.2-rc.1`）で検証済みです。
+- **ホスト対応範囲**：DeepSeek Harness `0.2.x` 全シリーズ（`>=0.2.0-rc.1 <0.3.0-0`）。全 RC 版（`0.2.0-rc.1`, `0.2.0-rc.2`, `0.2.1-rc.1`〜`0.2.1-rc.5`, `0.2.2-rc.1`, `0.2.2-rc.2`）で検証済みです。
 - `0.2.0-rc.1` 未満の旧バージョンホストはサポート終了しました。`0.1.x` をご利用の場合はプラグイン `1.0.20` をご利用ください。
 - **リバースプロキシ対応**：`/app/dsh/` などのサブパス配下に配置されたリバースプロキシ構成にも完全対応。API エンドポイントはページのベース URI（`document.baseURI`）に基づいて動的に解決されます。
 

@@ -16,12 +16,12 @@
   [![Paquet npm](https://img.shields.io/npm/v/%40michengai%2Fdsh-archive-manager.svg?label=npm%20package)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
   [![Téléchargements npm](https://img.shields.io/npm/dt/%40michengai%2Fdsh-archive-manager.svg?label=npm%20downloads)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
   [![DSH Web Plugin](https://img.shields.io/badge/DSH%20Web-Plugin-0f766e.svg)](https://github.com/MichengAI/dsh-archive-manager)
-  [![Compatible DSH jusqu'à 0.2.2-rc.1](https://img.shields.io/badge/DSH-up%20to%200.2.2--rc.1-2563eb.svg)](#prérequis)
+  [![Compatible DSH jusqu'à 0.2.2-rc.2](https://img.shields.io/badge/DSH-up%20to%200.2.2--rc.2-2563eb.svg)](#prérequis)
 </div>
 
 > DSH Archive Manager est un plugin maintenu par la communauté pour DeepSeek Harness (DSH), et n'est pas un produit officiel de DeepSeek AI.
 
-Ce document décrit la version **1.3.1**. Consultez le [journal des modifications](CHANGELOG.md) pour les détails des versions publiées.
+Ce document décrit la version **1.3.2**. Consultez le [journal des modifications](CHANGELOG.md) pour les détails des versions publiées.
 
 ## Vue d'ensemble
 
@@ -103,7 +103,7 @@ dsh plugin --profile web add @michengai/dsh-archive-manager@latest --registry=ht
 
 Redémarrez DSH Web et rechargez la page du navigateur (`Ctrl+Shift+R`). Ouvrez **Paramètres → Sessions archivées** pour commencer.
 
-- **Compatibilité hôte** : Série DeepSeek Harness `0.2.x` complète (`>=0.2.0-rc.1 <0.3.0-0`), validée sur toutes les versions candidates (`0.2.0-rc.1` à `0.2.2-rc.1`).
+- **Compatibilité hôte** : Série DeepSeek Harness `0.2.x` complète (`>=0.2.0-rc.1 <0.3.0-0`), validée sur toutes les versions candidates (`0.2.0-rc.1` à `0.2.2-rc.2`).
 - Les versions antérieures à `0.2.0-rc.1` ne sont plus prises en charge. Pour `0.1.x`, installez la version `1.0.20`.
 
 ## Configuration du plugin
