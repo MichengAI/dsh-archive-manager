@@ -16,178 +16,141 @@
   [![Paquet npm](https://img.shields.io/npm/v/%40michengai%2Fdsh-archive-manager.svg?label=npm%20package)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
   [![Téléchargements npm](https://img.shields.io/npm/dt/%40michengai%2Fdsh-archive-manager.svg?label=npm%20downloads)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
   [![DSH Web Plugin](https://img.shields.io/badge/DSH%20Web-Plugin-0f766e.svg)](https://github.com/MichengAI/dsh-archive-manager)
-  [![Compatible DSH jusqu'à 0.2.2-rc.2](https://img.shields.io/badge/DSH-up%20to%200.2.2--rc.2-2563eb.svg)](#prérequis)
+  [![Compatible DSH jusqu'à 0.2.2-rc.2](https://img.shields.io/badge/DSH-up%20to%200.2.2--rc.2-2563eb.svg)](#installation)
 </div>
 
 > DSH Archive Manager est un plugin maintenu par la communauté pour DeepSeek Harness (DSH), et n'est pas un produit officiel de DeepSeek AI.
 
-Ce document décrit la version **1.3.2**. Consultez le [journal des modifications](CHANGELOG.md) pour les détails des versions publiées.
+Ce document décrit la version **1.3.2**. Consultez le [journal des modifications](CHANGELOG.md) pour les versions publiées.
 
 ## Vue d'ensemble
 
 Mettez de côté vos conversations inactives et retrouvez-les au besoin, pour une liste de travail claire et aérée.
 
-- **Double vue et accès direct dans la barre latérale** : Une icône dédiée dans la barre latérale principale ouvre une vue spacieuse et centrée de **960 px** pour les sessions archivées et non archivées, éliminant les contraintes des boîtes de dialogue étroites.
-- **Gestion complète du cycle de vie** : Archivez des conversations individuelles, des espaces de travail complets en un clic, des lots multi-projets, et restaurez ou reprenez des sessions directement.
-- **Clic droit sur toute la ligne de la barre latérale** : Faites un clic droit n'importe où sur une ligne d'espace de travail ou de session pour ouvrir le menu d'actions. Les lignes non groupées ou vierges laissent passer le menu contextuel natif en toute sécurité.
-- **Étoile de favori stable et coexistence avec les pastilles d'état (#90, #92)** : Taille d'étoile standardisée à 16×16 px en superposition absolue pour éliminer tout décalage du titre. Pendant les tâches actives ou les demandes d'approbation, la pastille d'état de l'hôte reste 100 % visible tandis que l'étoile se convertit en badge compact de 10 px en bas à droite.
-- **Menu d'actions rapides d'espace de travail** : Copiez le chemin du dossier, ouvrez directement l'emplacement dans l'Explorateur Windows ou le Finder macOS, et archivez toutes les sessions associées en un clic.
-- **Déplacement de sessions entre espaces de travail** : Transférez des sessions d'un espace de travail à un autre via un sous-menu au survol, avec mise en veille des processus, réécriture atomique et protection NTFS pour les sessions de messagerie.
-- **Cartes accordéon unifiées et lignes ultra-compactes de 40 px** : Organisation des projets avec des cartes à tiroir intégrées de style Skills Manager (en-tête de 38 px) et lignes réduites à 40 px pour doubler la densité d'information.
-- **Cases à cocher natives en mode sombre** : Composants conformes aux spécifications de l'hôte utilisant `accent-color` pour une intégration harmonieuse avec les thèmes sombres et les sélections actives.
-- **Modales opaques sans transparence parasite et accessibilité localisée** : Montage direct sur `body` (`portalToBody`) avec fond opaque et flou pour empêcher le texte en arrière-plan d'apparaître en transparence. Libellés d'accessibilité complets pour le bouton de fermeture (`common.close`).
-- **Identifiant de section standardisé et coexistence (#91)** : Enregistré sous l'ID `archive-manager` avec protection contre les pannes à l'exécution (`try/catch`), assurant une parfaite coexistence avec les plugins tiers d'archivage.
-- **Barre d'outils adaptative sur une seule ligne** : Utilise le composant natif `Input` avec l'icône de recherche officielle et une bordure verte au focus. Regroupe sur une seule ligne la recherche, le menu d'affichage et de tri, le filtre par projet et le sélecteur de dates.
-- **Recherche plein texte et menu composite de style Codex** : Recherche automatique couvrant les titres et le corps des messages (utilisateur et assistant). Menu à deux volets pour filtrer (toutes / favoris uniquement) et trier les résultats.
-- **Sélecteur DateRange léger avec popover calendrier** : Remplace l'élément de date natif pour éviter les inversions de couleur en mode sombre (#74). Affichage en une ligne avec bouton d'effacement, préréglages rapides, traduction des jours et des mois dans les 8 langues officielles et navigation complète au clavier WAI-ARIA.
-- **Nettoyage automatique des sessions inactives** : Définissez un seuil d'inactivité en jours pour détecter les conversations dormantes, en protégeant automatiquement les tâches en cours, les invites interactives et les favoris, avec annulation immédiate (Undo).
-- **Suppression définitive physique** : Élimination complète des journaux physiques, lignes de cache et index avec rapport d'erreurs et réessai par élément.
-- **Détection et nettoyage des sous-agents orphelins** : Détection des sous-agents résiduels dont la session mère a été supprimée, calcul de l'espace disque occupé et libération physique en un clic.
-- **Verrouillage d'entreprise via configuration Cordis et compatibilité proxy inverse** : Possibilité de désactiver complètement le composant de mise à jour dans le fichier de configuration Cordis () et résolution dynamique des points de terminaison avec `document.baseURI`.
-
-## Reconstruction manuelle du cache de liste (#88)
-
-L'ouverture de l'Archive Manager vérifie uniquement les en-têtes et les projections en cache officielles pour les sessions froides dans les espaces de travail enregistrés, listes non groupées et archives (en excluant les sessions spéciales `im:`). Si un cache est manquant ou incompatible, une carte de réparation s'affiche pour relire les journaux un à un en lecture seule et régénérer les projections via `coldSnapshot` dans `session_projcache`.
-
-## Nettoyage des sous-agents orphelins
-
-Lorsqu'une session mère est supprimée hors de DSH, des sous-agents peuvent rester orphelins sur le disque. L'Archive Manager les repère dans le panneau d'organisation et permet de les effacer de manière sécurisée.
-
-## Recherche et prévisualisation
-
-- Les onglets « Archivées » et « Non archivées » partagent la recherche par titre et contenu, le filtre de projet, les favoris, le filtre de dates et le tri par date de création.
-- La prévisualisation affiche les tableaux Markdown, citations et blocs de code avec les étiquettes de rôle, ou permet de basculer vers le texte source avec mise en surbrillance.
-- La recherche lit des lots séquentiels d'au plus 20 sessions pour une requête de 200 caractères maximum, en excluant les outils, pièces jointes, raisonnements et messages système.
+- **Double accès et vue large** : Gérez vos sessions depuis **Paramètres → Sessions archivées**, ou activez l'icône dans la barre latérale principale pour ouvrir un panneau centré dans l'espace de travail.
+- **Archivage et restauration** : Archivez des discussions individuelles, des espaces de travail entiers ou des lots multi-projets, et restaurez ou reprenez vos sessions directement.
+- **Recherche plein texte et aperçu rapide** : Recherchez simultanément dans les titres et l'historique des messages, combinez filtres par projet, favoris et plage de dates avec tri flexible, et prévisualisez le contexte en Markdown ou texte source surligné sans restaurer.
+- **Favoris et nettoyage des inactifs** : Épinglez vos discussions importantes et filtrez via **Favoris uniquement** ; prévisualisez et archivez les discussions inactives selon un seuil de jours tout en protégeant les tâches en cours, les invites en attente et les favoris, avec annulation immédiate du lot.
+- **Actions dans la barre latérale et déplacement entre espaces** : Faites un clic droit sur les lignes d'espace de travail ou de session dans la barre latérale pour mettre en favori, archiver, déplacer une session standard vers un autre espace ou copier/ouvrir le dossier du projet.
+- **Nettoyage des sous-agents orphelins et suppression définitive** : Détectez et nettoyez les sous-agents résiduels dont la session mère a été supprimée en externe, et purgez définitivement les sessions et journaux indésirables après confirmation.
+- **Multilingue et compatible proxy inverse** : Prend en charge les 8 langues intégrées de DeepSeek Harness, suit le thème clair/sombre et fonctionne derrière un proxy inverse avec préfixe de chemin.
 
 ## Captures d'écran
 
-### 1. Gestion des sessions archivées (Cartes accordéon et mode sombre)
-Recherchez, marquez comme favori, prévisualisez, restaurez et nettoyez dans **Paramètres → Sessions archivées → Archivées** :
+### 1. Panneau de gestion des archives
+
+Recherchez, mettez en favori, prévisualisez, restaurez et nettoyez dans **Paramètres → Sessions archivées → Archivées** :
 
 ![Archivées : filtres partagés, favoris et lignes compactes](assets/screenshots/archived-sessions.webp)
 
-Basculez vers **Non archivées** pour des suggestions de nettoyage intelligent et l'archivage par projet :
+Passez à **Non archivées** pour prévisualiser le nettoyage des sessions inactives ou archiver par projet :
 
 ![Non archivées : nettoyage intelligent et archivage par projet](assets/screenshots/unarchived-sessions.webp)
 
-### 2. Panneau centralisé de 960 px dans l'espace de travail principal
-Ouvrez un panneau complet de 960 px directement depuis la barre latérale principale :
+### 2. Panneau principal de l'espace de travail (accès barre latérale)
+
+Lorsque l'accès barre latérale est activé, cliquez sur l'icône de navigation à gauche pour ouvrir la vue complète :
 
 ![Panneau principal : accès direct depuis la barre latérale](assets/screenshots/main-view-panel.webp)
 
-### 3. Clic droit natif et sous-menu en cascade dans la barre latérale
-Faites un clic droit sur n'importe quelle ligne de la barre latérale pour ouvrir les menus contextuels et déplacer des sessions :
+### 3. Menus contextuels et déplacement dans la barre latérale
 
-| Actions d'espace de travail | Déplacer une session entre projets |
+Faites un clic droit sur une ligne d'espace de travail ou de session dans la barre latérale pour accéder aux actions rapides et au déplacement entre espaces :
+
+| Actions d'espace de travail (Copier/Ouvrir le dossier) | Déplacer la session vers un autre espace |
 | :---: | :---: |
-| <img src="assets/screenshots/workspace-context-menu.webp" alt="Workspace Actions Menu" width="100%"> | <img src="assets/screenshots/session-move-menu.webp" alt="Move Session Menu" width="100%"> |
+| <img src="assets/screenshots/workspace-context-menu.webp" alt="Menu d'actions d'espace de travail" width="100%"> | <img src="assets/screenshots/session-move-menu.webp" alt="Menu de déplacement de session" width="100%"> |
 
 ## Installation
 
-Nécessite un environnement DeepSeek Harness opérationnel (exemple avec le profil `web`) :
+Un environnement DeepSeek Harness opérationnel est requis. Les exemples utilisent le profil `web` ; adaptez selon votre configuration.
 
-### Installation par un agent
-Transmettez cette commande à un agent disposant d'un accès terminal sur votre machine :
+- **Compatibilité hôte** : Série DeepSeek Harness `0.2.x` (`>=0.2.0-rc.1 <0.3.0-0`), validée sur toutes les versions candidates `0.2.x` (`0.2.0-rc.1` à `0.2.2-rc.2` ; les alphas intermédiaires ne sont pas pris en charge).
+- Les versions antérieures à `0.2.0-rc.1` ne sont plus prises en charge, et la génération `0.3.0` est bloquée par le contrôle de version. Les utilisateurs sur `0.1.x` doivent installer la version `1.0.20`.
+- **Support proxy inverse** : Fonctionne derrière un proxy inverse avec préfixe de chemin (ex. `/app/dsh/`).
+
+### Demander à un agent d'installer (recommandé)
+
+Envoyez cette instruction à un agent disposant d'un accès terminal :
 
 ```text
-Installez la dernière version de @michengai/dsh-archive-manager dans mon profil web DSH depuis le registre officiel npm, vérifiez l'activation et indiquez comment recharger.
+Installez la dernière version de @michengai/dsh-archive-manager dans mon profil web DSH depuis le registre officiel npm, vérifiez l'activation et expliquez comment recharger.
 ```
 
-### Installation manuelle
+### Installation manuelle et mise à jour
 
 ```powershell
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
+
 dsh plugin --profile web add @michengai/dsh-archive-manager@latest --registry=https://registry.npmjs.org/
 ```
 
-Redémarrez DSH Web et rechargez la page du navigateur (`Ctrl+Shift+R`). Ouvrez **Paramètres → Sessions archivées** pour commencer.
-
-- **Compatibilité hôte** : Série DeepSeek Harness `0.2.x` complète (`>=0.2.0-rc.1 <0.3.0-0`), validée sur toutes les versions candidates (`0.2.0-rc.1` à `0.2.2-rc.2`).
-- Les versions antérieures à `0.2.0-rc.1` ne sont plus prises en charge. Pour `0.1.x`, installez la version `1.0.20`.
+Redémarrez DSH Web puis forcez le rechargement du navigateur (`Ctrl+Shift+R`), et ouvrez **Paramètres → Sessions archivées**. Pour mettre à jour, relancez simplement la commande d'installation.
 
 ## Configuration du plugin
 
-Accessible via :
-> **Barre latérale → Plugins → Cliquez sur `Archive Manager`**
+Ouvrez **Barre latérale → Plugins → `Archive Manager`** pour configurer :
 
-### 1. Emplacement du raccourci (`entryLocation`)
-- **Partout (`both`)** : Affiche l'icône dans la barre latérale gauche et conserve l'entrée dans **Paramètres → Sessions archivées**.
-- **Barre latérale uniquement (`sidebar`)** : Affiche l'icône dans la barre latérale et retire l'entrée des paramètres pour un panneau allégé.
-- **Paramètres uniquement (`settings`)** (Défaut) : Garde la barre latérale sobre et conserve l'accès depuis **Paramètres → Sessions archivées**.
-
+- **Emplacement de l'accès (`entryLocation`)**
+  - **Les deux (`both`)** : Affiche l'icône dans la barre latérale gauche et conserve **Paramètres → Sessions archivées**.
+  - **Barre latérale uniquement (`sidebar`)** : Affiche l'icône dans la barre latérale gauche et masque l'entrée dans les Paramètres.
+  - **Paramètres uniquement (`settings`)** (Défaut) : Conserve l'accès uniquement dans **Paramètres → Sessions archivées**.
+- **Étoile de favori dans la barre latérale (`sidebarFavoriteStar`)**
+  - **Tout afficher (`all`)** (Défaut) : Affiche l'étoile au survol et sur les sessions favorites.
+  - **Favoris uniquement (`favorites`)** : Affiche l'étoile uniquement sur les sessions favorites ; masque l'étoile au survol sur les autres lignes.
+  - **Tout masquer (`none`)** : Masque les étoiles sur les lignes de la barre latérale (vous pouvez toujours gérer les favoris via le menu contextuel et filtrer avec **Favoris uniquement**).
 
 ## Guide d'utilisation
 
-| Action | Description |
+| Action | Procédure |
 | --- | --- |
-| **Archiver une discussion** | Ouvrez le menu de la session dans la barre latérale et choisissez **Archiver la session** |
-| **Archiver un espace de travail** | Ouvrez le menu de l'espace de travail et choisissez **Archiver la session** (confirmation sur place) |
-| **Rechercher et filtrer** | Ouvrez **Paramètres → Sessions archivées** ou cliquez sur **Archiver** dans la barre latérale. La recherche couvre titres et contenus |
-| **Calendrier interactif** | Cliquez sur la gélule de date pour ouvrir le popover avec navigation complète au clavier |
-| **Aperçu rapide** | Cliquez sur un résultat ou dans **Plus → Aperçu rapide** pour lire sans restaurer |
-| **Modifier le tri** | Triez par date d'archivage récent, date de mise à jour, de création ou titre |
-| **Restaurer une discussion** | Cliquez sur l'icône de restauration de la ligne, ou sur **Plus → Restaurer et ouvrir** |
-| **Archiver un groupe entier** | Dans **Non archivées**, utilisez le menu **…** du groupe pour archiver toutes les sessions |
-| **Ajouter aux favoris** | Cliquez sur l'icône d'étoile de la ligne pour l'épingler en favori |
-| **Nettoyer les sessions inactives** | Dans **Non archivées**, indiquez le nombre de jours d'inactivité pour prévisualiser et archiver |
-| **Copier l'ID de session** | Sélectionnez **Copier l'ID de session** dans le menu **Plus** |
-| **Nettoyer les sous-agents orphelins** | Identifiez et supprimez les sous-agents sans session mère dans le panneau d'organisation |
-| **Annuler cet archivage** | Restaurez les sessions archivées dans le lot actuel depuis la notification |
-| **Suppression définitive** | Sélectionnez des sessions, choisissez Supprimer et confirmez l'effacement physique des journaux et index |
+| **Archiver des sessions** | Choisissez **Archiver la session** dans le menu contextuel de la barre latérale, ou sélectionnez des sessions dans **Non archivées** pour un archivage par lot |
+| **Archiver un espace / groupe** | Choisissez **Archiver l'espace de travail** dans le menu de l'espace, ou utilisez le menu **…** d'un groupe dans **Non archivées** (ignore les filtres de recherche) |
+| **Rechercher et filtrer** | La recherche couvre titres et corps de messages ; combinez **Favoris uniquement**, tri, filtre par projet et plage de dates (le calendrier inclut préréglages et navigation clavier) |
+| **Aperçu rapide** | Cliquez sur un extrait ou **Plus d'actions → Aperçu rapide** pour inspecter le contexte sans restaurer |
+| **Consulter ou restaurer** | Cliquez sur le titre pour lire et poursuivre la discussion tout en la gardant archivée ; cliquez sur restaurer ou **Plus d'actions → Restaurer et ouvrir** |
+| **Mettre en favori** | Cliquez sur l'étoile de la ligne ou utilisez le menu contextuel, puis filtrez via **Favoris uniquement** |
+| **Nettoyer les inactives** | Dans **Non archivées**, définissez les jours d'inactivité (1–36 500), prévisualisez les candidats et confirmez ; utilisez **Annuler cet archivage** avant de fermer ou d'actualiser |
+| **Déplacer entre espaces** | Faites un clic droit sur une session standard dans la barre latérale et choisissez **Déplacer vers l'espace de travail** |
+| **Nettoyer les sous-agents orphelins** | Lorsque des sous-agents dont la session mère a été supprimée en externe sont détectés, cliquez sur nettoyer dans le panneau d'organisation pour libérer l'espace disque |
+| **Reconstruire le cache de liste** | Si des entrées officielles de cache manquent, cliquez sur la carte de reconstruction pour relire les journaux en lecture seule et restaurer les titres |
+| **Suppression définitive** | Sélectionnez des sessions et cliquez sur **Supprimer** (ou via le menu contextuel) pour effacer définitivement journaux et caches après confirmation |
+| **Copier l'ID de session** | Choisissez **Copier l'ID de session** dans le menu **Plus d'actions** |
 
-### Favoris et nettoyage des sessions inactives
+### Remarques
 
-Les groupes de projets compacts peuvent être repliés. Les étoiles et les icônes de restauration/archivage s'affichent sur la droite ; les menus des sessions archivées comprennent « Restaurer et ouvrir » et « Supprimer ».
-
-- Utilisez l'étoile sur l'un ou l'autre onglet et le menu « Favoris uniquement » pour retrouver les discussions importantes. Les favoris restent enregistrés sur l'hôte après archivage, restauration ou changement de navigateur.
-- Dans « Non archivées », indiquez un seuil d'inactivité de 1 à 36 500 jours pour prévisualiser les candidats sous les filtres actuels. Vous pouvez désélectionner des éléments individuellement avant de confirmer. Les favoris, le chat actif, les sessions en cours d'exécution (y compris sous-agents) et les interactions en attente sont automatiquement protégés.
-- Les opérations par lots rapportent la progression et le décompte des réussites, éléments ignorés et échecs. Un échec n'arrête pas le reste du traitement ; seuls les éléments en échec sont réessayés.
-- **Annuler cet archivage** restaure les sessions archivées par le lot actuel. Cette action n'est accessible que tant que la page de gestion actuelle reste ouverte. La suppression définitive ne peut pas être annulée.
-
-### Consulter et poursuivre les conversations archivées
-
-La navigation native permet de lire et de reprendre les discussions :
-
-- **Cliquez sur le titre de la session** : ouvre la conversation native DSH pour consulter les messages, pièces jointes et détails d'outils. Continuez à chatter tout en conservant la session archivée.
-- **Plus → Restaurer et ouvrir** : désarchive la session et l'ouvre directement pour reprendre le travail.
-
-## Compatibilité de l'API de recherche (pour intégrateurs)
-
-L'API canonique est `workspaceRegistry.searchSessionContent({ sessionIds, query })`, couvrant les sessions archivées et non archivées. Fournissez de 1 à 20 identifiants de session et une requête non vide de 1 à 200 caractères. Le format de retour est `{ items: [{ sessionId, seq, snippet }], failures: [{ sessionId, message }] }`.
-
-`searchArchivedContent` reste le point d'entrée hérité pour les archives uniquement. Tous deux utilisent la connexion Typert de l'hôte existant et la limite d'autorisation.
-
-## Mises à jour
-
-Réexécutez la commande d'installation ci-dessus dans votre profil DSH actif pour mettre à jour le plugin. En entreprise, les mises à jour peuvent être verrouillées via la configuration Cordis.
+- **Favoris et protection des inactives** : Les favoris sont stockés par l'hôte et conservés lors de l'archivage ou de la restauration. Le nettoyage des inactives exclut automatiquement les favoris, la session ouverte, les sessions en cours d'exécution et les interactions en attente ; les favoris restent archivables manuellement. Il n'y a pas d'archivage automatique en arrière-plan.
+- **Portée de recherche** : La recherche plein texte porte sur les messages utilisateur et assistant, à l'exclusion des sorties d'outils, pièces jointes, raisonnements et messages système. Il n'existe pas d'index persistant : filtrer par projet, date ou favoris accélère les recherches sur les historiques volumineux.
+- **Opérations par lot et annulation** : Les lots d'archivage, de restauration et de suppression poursuivent en cas d'échec individuel et permettent de réessayer uniquement les éléments en échec. **Annuler cet archivage** n'est disponible que tant que la page de gestion reste ouverte. La suppression définitive est irréversible.
 
 ## FAQ
 
-### Qu'advient-il des anciens caches du plugin après la mise à jour ?
+### Pourquoi l'entrée n'apparaît-elle pas après l'installation ?
 
-Le plugin ne remplace pas la table de cache officielle des projections et ne scanne ni ne migre les anciens caches du plugin. Ouvrir la liste d'archives ne relit pas les journaux complets pour combler les entrées manquantes. Les journaux de session appartiennent à l'hôte, qui reconstruit les projections dérivées à la demande.
+Redémarrez DSH Web, forcez le rechargement du navigateur (`Ctrl+Shift+R`) et vérifiez l'installation dans le profil actif. Si rien n'apparaît, exécutez la commande ci-dessous pour vérifier la présence de `ui-workspace-archive-manager` et que `cordis.patch.yml` ne désactive pas `workspace`, `session-projection-cache` ou `ui-workspace` :
 
-**Une session froide sans entrée de cache officielle peut initialement apparaître sans titre dans la liste ; rafraîchir la liste seule ne garantit pas sa régénération.** Ouvrir le journal permet de récupérer le titre et restaurer la session comme active permet au chemin d'écriture natif d'enregistrer le cache. Les anciens fichiers de cache restent intacts. Consultez le [journal des modifications](CHANGELOG.md) pour plus de précisions.
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 
-### Pourquoi l'entrée n'apparaît-elle pas après installation ?
-Redémarrez DSH Web et forcez le rechargement de votre navigateur (`Ctrl+Shift+R`). Vérifiez que le plugin est bien installé dans le profil actif.
+dsh --profile web --dump-config
+```
 
-### Quelle est la différence entre archiver et supprimer ?
-L'archivage range la discussion pour pouvoir la consulter ou la restaurer plus tard. **La suppression définitive est irréversible** et efface physiquement les journaux sur le disque.
+### Quelle est la différence entre archiver et supprimer définitivement ?
 
-### Est-ce compatible avec Codex UI ?
-Oui. [Codex UI](https://github.com/MichengAI/dsh-codex-ui) conserve son apparence et ses interactions dans la barre latérale, et l'Archive Manager reste accessible dans **Paramètres → Sessions archivées**.
+L'archivage met une conversation de côté afin de pouvoir la restaurer à tout moment. **La suppression définitive est irréversible** et efface journaux, caches et pièces jointes (votre répertoire de projet n'est jamais supprimé). Une confirmation est toujours demandée.
 
-### Coexistence avec d'autres plugins d'archivage
-Le plugin utilise l'identifiant de section `archive-manager`, ce qui lui permet de coexister de manière transparente avec d'autres extensions d'archivage.
+### Est-ce compatible avec Codex UI ou d'autres plugins d'archivage ?
+
+Oui. Le plugin fonctionne avec [Codex UI](https://github.com/MichengAI/dsh-codex-ui), et si d'autres plugins d'archivage sont installés, chacun affiche son entrée de paramètres indépendamment.
+
+Pour tout autre problème, ouvrez un [issue](https://github.com/MichengAI/dsh-archive-manager/issues) avec les versions de DSH et du plugin, les étapes de reproduction et les détails d'erreur.
 
 ## Installation depuis les sources
 
 <details>
 <summary>Déplier pour le développement ou tester des modifications non publiées</summary>
-
-Exécutez ces commandes dans le répertoire de votre choix :
 
 ```powershell
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -200,7 +163,7 @@ pnpm build
 dsh plugin --profile web add .
 ```
 
-Après installation, redémarrez DSH Web et rechargez la page. Le code source dans [src](src) utilise TypeScript strict. GitHub et npm contiennent tous deux le répertoire `lib` prêt à l'emploi.
+Redémarrez DSH Web et rechargez la page. Après modification de [src](src), exécutez `pnpm build` avant de commiter (vérifications : `pnpm typecheck`, `pnpm test`, `pnpm verify`).
 
 </details>
 

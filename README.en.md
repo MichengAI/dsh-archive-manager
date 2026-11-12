@@ -16,7 +16,7 @@
   [![npm package](https://img.shields.io/npm/v/%40michengai%2Fdsh-archive-manager.svg?label=npm%20package)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
   [![npm downloads](https://img.shields.io/npm/dt/%40michengai%2Fdsh-archive-manager.svg?label=npm%20downloads)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
   [![DSH Web Plugin](https://img.shields.io/badge/DSH%20Web-Plugin-0f766e.svg)](https://github.com/MichengAI/dsh-archive-manager)
-  [![DSH supported through 0.2.2-rc.2](https://img.shields.io/badge/DSH-up%20to%200.2.2--rc.2-2563eb.svg)](#prerequisites)
+  [![DSH supported through 0.2.2-rc.2](https://img.shields.io/badge/DSH-up%20to%200.2.2--rc.2-2563eb.svg)](#installation)
 </div>
 
 > DSH Archive Manager is a community-maintained DeepSeek Harness (DSH) plugin, not an official DeepSeek AI product.
@@ -27,175 +27,108 @@ This document describes **1.3.2**. See [Changelog](CHANGELOG.md) for published r
 
 Put inactive conversations away and find them again when needed, keeping everyday task lists tidy.
 
-- **Dual views & primary sidebar entry**: Toggleable persistent icon on the host's primary sidebar opens a **960px centered workspace view** for both Archived and Unarchived sessions, eliminating narrow dialog scrolling constraints.
-- **Full lifecycle session management**: Archive individual chats, all chats in a workspace, cross-project batches, and restore or open sessions seamlessly.
-- **Full-row sidebar right-click actions**: Right-click directly anywhere on sidebar workspace or session rows to trigger dedicated actions menus; passes through native system context menus on ungrouped or blank rows without accidental clicks.
-- **Zero-jitter star alignment & status dot coexistence (#90, #92)**: Standardizes favorite stars to 16×16px size and overlays the host leading slot via absolute positioning, eliminating horizontal title jitter; during active states (running or waiting approval), host status dots remain 100% visible while the star badge adapts into a 10px bottom-right badge for seamless coexistence, preserving custom skin compatibility.
-- **Workspace quick action menu**: Provides fast "Copy folder path", "Open folder" (directly opens in Windows Explorer or macOS Finder), and one-click "Archive sessions" in the sidebar workspace menu.
-- **Move session across workspaces**: Move conversations across project workspaces via a cascading hover submenu with process quiescence, atomic rewriting, instant projection pre-warming, and NTFS colon-safety for IM sessions.
-- **Unified accordion cards & 40px ultra-compact rows**: Unifies workspace groups with Skills Manager-style integrated drawer cards (38px header); compacts session row height to 40px for doubled information density.
-- **Host-native dark mode checkboxes**: Reverts checkbox styling strictly to host primitive Checkbox specifications using native `accent-color`, perfectly blending with dark backgrounds and brand blue checked states.
-- **Anti-bleedthrough modals & localized accessibility**: Mounts wide preview dialogs directly to body (`portalToBody`) with solid backing and frosted blur to prevent text bleedthrough; adds comprehensive trilingual close button accessibility labels (`common.close`).
-- **Standardized section ID & coexistence compatibility (#91)**: Section ID updated to `archive-manager` with runtime fail-soft `try/catch` protection, ensuring smooth coexistence with third-party archive plugins.
-- **Clean single-line adaptive toolbar**: Uses the host's native `Input` primitive with an official search icon and glowing green focus border, flexibly expanding to fill remaining width; arranged as search input, view filter/sort menu, project filter, and date range in a clean single line with strict box-model boundaries.
-- **Unified full-text search & Codex composite menu**: Search automatically covers both conversation titles and body history (including user and assistant messages) by default; consolidates session filtering (all / favorites only) and sorting into a two-section Codex-style menu with native checkmarks.
-- **Lightweight DateRange capsule & calendar popover**: Completely replaces the native date input to eliminate dark-mode inversion and focus loss (#74); displays the selected range in a single line with a dedicated clear button; supports quick presets, localized English/Chinese/Russian typography, and full WAI-ARIA keyboard navigation (arrows, Home/End, PageUp/Down with month-end clamping) with real-time range stretch preview.
-- **Automated idle session cleanup**: Specify an idle threshold in days to discover inactive chats, automatically protecting running tasks, interactive prompts, and starred items, with instant undo support.
-- **Permanent deletion**: Thoroughly purge unwanted transcripts, cache rows, and indexes with per-item retry reporting.
-- **Orphan subagent detection & cleanup**: Automatically detect residue subagents whose parent sessions were externally deleted, displaying disk usage and enabling safe one-click reclamation.
-- **Enterprise host-level configuration locking & reverse proxy ready**: Supports enterprise Cordis host security locking and native baseURI dynamic endpoint resolution for prefix-stripping reverse proxies.
-
-## Manual list-cache rebuild (#88)
-
-Opening Archive Manager checks only headers and official cached projections for ordinary cold sessions in registered workspaces, ungrouped lists, and archives, while excluding special IM channel sessions (`im:`). A repair card appears only for missing/incompatible caches or an unavailable title projection. Click to read complete logs one at a time through read-only handles and rebuild registered projections with official `coldSnapshot`, saving to official `session_projcache`.
-
-No old plugin domains are scanned, no JSON is copied, no Session/Agent is activated, no model is called, and archives/schedules remain unchanged. Active sessions are skipped; failed items can be retried individually; feedback provides a "Done" dismiss button and auto-dismisses when clear. The official session list is refreshed and candidates checked again afterward. A persistence-confirmation timeout means unknown, not cancelled: deletion remains ordered after pending native writes. Closing the page stops later requests, not the one already sent.
-
-## Orphan subagent cleanup
-
-When parent sessions are deleted externally or via the host, orphaned subagents may remain on disk. The Archive Manager detects these orphan sessions in the Organizer panel, calculates disk space usage, and provides one-click physical deletion.
-
-## Search and preview
-
-- Archived and Unarchived share title/content search, project, favorites, updated-date filters, and creation-time sorting. Star or unstar conversations on either tab.
-- Search automatically covers both conversation titles and body history (including user and assistant messages) by default. Date filters include the entire local end date and combine with project and favorites.
-- Matches show snippets and highlights. On Archived, click a snippet or **More → Quick preview** to inspect context without restoring. On Unarchived, a snippet opens the full conversation.
-- Preview renders Markdown tables, quotes, and code blocks with role labels; switch to source text for highlights. It shows up to eight recent messages, or context around the first match. Each message is limited to 2,000 UTF-16 code units without splitting Unicode characters.
-- Search accepts up to 200 query characters and reads batches of at most 20 sessions, sequentially within each batch. Tools, attachments, reasoning, system messages, and plugin injections are excluded. Read failures remain visible and can be retried. Stored text is not the model's current context.
-- There is no persistent full-text index. Large or long conversations can be slow; narrow project, dates, or favorites first. No session-count or latency guarantee has been established. Changing filters prevents later batches and stale results, but cannot interrupt the batch already reading.
+- **Dual entry points & wide workspace view**: Manage sessions from **Settings → Archived sessions**, or enable the primary sidebar icon to open a full centered panel in the main workspace.
+- **Archive & restore**: Archive individual chats, all chats in a workspace, or cross-project batches, and restore or restore-and-open sessions seamlessly.
+- **Full-text search & quick preview**: Search across conversation titles and message history together, combine project, favorites, and date-range filters with flexible sorting, and preview context in Markdown or highlighted source text without restoring.
+- **Favorites & idle cleanup**: Star important conversations and filter with **Favorites only**; preview and archive idle chats by day threshold while automatically protecting running tasks, pending interactions, and starred chats, with instant batch undo.
+- **Sidebar actions & cross-workspace move**: Right-click workspace or session rows in the sidebar to favorite, archive, move standard sessions between workspaces, or copy/open workspace folders.
+- **Orphan subagent cleanup & permanent deletion**: Detect and clean up leftover subagents whose parent sessions were deleted externally, and permanently purge unwanted sessions and logs after confirmation.
+- **Multilingual & reverse proxy ready**: Supports all 8 built-in DeepSeek Harness languages, follows light/dark themes, and works behind path-prefixed reverse proxies.
 
 ## Screenshots
 
-### 1. Archive Settings Management (Accordion Cards & Dark Mode Checkboxes)
+### 1. Archive Management Panel
 
-Search, favorite, preview, restore, and clean up in **Settings → Archived sessions → Archived** with integrated drawer cards, 40px ultra-compact rows, and native dark mode checkboxes:
+Search, favorite, preview, restore, and clean up in **Settings → Archived sessions → Archived**:
 
 ![Archived: shared search filters, favorites, and compact rows](assets/screenshots/archived-sessions.webp)
 
-Switch to **Unarchived** for smart idle cleanup suggestions, one-click archiving, and project-wide operations:
+Switch to **Unarchived** for idle cleanup previews and project-level batch archiving:
 
 ![Unarchived: smart idle cleanup and project archiving](assets/screenshots/unarchived-sessions.webp)
 
-### 2. Centered Full-Screen Workspace Panel (Direct Sidebar Entry)
+### 2. Main Workspace Panel (Direct Sidebar Entry)
 
-With the sidebar entry enabled, open a full-featured 960px centered workspace panel directly from the main sidebar:
+With the sidebar entry enabled, click the icon in the left navigation bar to open the full workspace view:
 
-![Main Workspace Panel: dedicated sidebar entry expanding 960px centered view](assets/screenshots/main-view-panel.webp)
+![Main Workspace Panel: dedicated sidebar entry centered view](assets/screenshots/main-view-panel.webp)
 
-### 3. Native Sidebar Full-Row Right-Click & Cascading Menus
+### 3. Sidebar Context & Move Menus
 
-Right-click directly on any workspace or session row in the primary sidebar to open context menus and cascading workspace migration submenus:
+Right-click any workspace or session row in the sidebar for quick actions and cross-workspace session moving:
 
-| Workspace Actions (Copy/Open Folder) | Move Session Across Workspaces (Cascading Submenu) |
+| Workspace Actions (Copy/Open Folder) | Move Session Across Workspaces |
 | :---: | :---: |
 | <img src="assets/screenshots/workspace-context-menu.webp" alt="Workspace Actions Menu" width="100%"> | <img src="assets/screenshots/session-move-menu.webp" alt="Move Session Menu" width="100%"> |
 
-*Screenshots showcase the core management panels, centered workspace view, and native sidebar context menu enhancements in lossless WebP format.*
-
 ## Installation
 
-A working DeepSeek Harness environment is required. Examples use the `web` profile; adjust to your environment.
+A working DeepSeek Harness environment is required. Examples below use the `web` profile; adjust to your environment.
 
-Plugin installation supports npm registry, locally built `.tgz` packages, and GitHub. Both GitHub and npm contain runnable `lib` artifacts.
+- **Host compatibility**: DeepSeek Harness `0.2.x` (`>=0.2.0-rc.1 <0.3.0-0`), verified across all `0.2.x` release candidates (`0.2.0-rc.1` through `0.2.2-rc.2`; intermediate alphas are not supported).
+- Hosts prior to `0.2.0-rc.1` are no longer supported, and `0.3.0` breaking releases are blocked by the version gate. Users on `0.1.x` hosts should install `1.0.20`.
+- **Reverse proxy support**: Works behind path-prefixed reverse proxies (e.g. `/app/dsh/`).
 
-### Ask an agent to install it
+### Ask an agent to install it (recommended)
 
-Send this prompt to an agent that can run terminal commands on your computer:
+Send this prompt to an agent with terminal access:
 
 ```text
 Please install the latest @michengai/dsh-archive-manager into my DSH web profile using the official npm registry, verify activation, and explain how to reload.
 ```
 
-### Install manually
+### Install manually & update
 
 ```powershell
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
+
 dsh plugin --profile web add @michengai/dsh-archive-manager@latest --registry=https://registry.npmjs.org/
 ```
 
-Restart DSH Web, then refresh the page (or hard-refresh with `Ctrl+Shift+R`). Open **Settings → Archived sessions** to get started. To update, re-run the installation command.
+Restart DSH Web and hard-refresh your browser (`Ctrl+Shift+R`), then open **Settings → Archived sessions**. Re-run the install command to update.
 
-- Host compatibility: Full DeepSeek Harness `0.2.x` line (`>=0.2.0-rc.1 <0.3.0-0`), verified with every `0.2.x` release candidate (`0.2.0-rc.1`, `0.2.0-rc.2`, `0.2.1-rc.1` through `0.2.1-rc.5`, `0.2.2-rc.1`, and `0.2.2-rc.2`). Intermediate alphas of a release candidate line are outside the supported range, so install a release candidate or the newest alpha.
-- Legacy hosts prior to `0.2.0-rc.1` are no longer supported. The version gate cleanly intercepts breaking changes in the `0.3.0` generation. Users on `0.1.x` hosts should install `1.0.20`.
-- **Reverse proxy deployment**: Supports hosting DSH behind prefix-stripping reverse proxies (e.g. `/app/dsh/`). API and update endpoints automatically resolve against the page base URI (`document.baseURI`), preventing 404 errors caused by lost prefix segments.
+## Plugin Configuration
 
-## Plugin Configuration & Toggles
+Open **Sidebar → Plugins → `Archive Manager`** to configure:
 
-The plugin follows standard DSH bundle configuration conventions. Options are located at:
-> **Sidebar → Plugins → Click `Archive Manager`** (the host's `plugins.bundle.config` slot).
-
-Native configuration options are available:
-
-### 1. Entry Location (`entryLocation`)
-- **Options**:
-  - **All locations (`both`)**: Displays the Archive navigation icon in the left sidebar and keeps the menu entry under **Settings → Archived sessions**.
-  - **Sidebar only (`sidebar`)**: Displays the Archive navigation icon in the left sidebar and unregisters the settings section for a streamlined settings dialog.
-  - **Settings only (`settings`)** (Default): Keeps the entry under **Settings → Archived sessions** while maintaining a minimal sidebar.
-- **Fail-safe Guarantee**: A mutually-exclusive 3-state segmented control ensures at least one entry point is always accessible, preventing accidental orphan states.
-- **Effect**:
-  - When the sidebar is enabled, clicking the icon opens Archive Manager directly in the primary workspace with a **960px centered container** (matching host plugin manager conventions). This eliminates vertical scrolling constraints in narrow settings dialogs;
-  - When switching to **Settings only**, safely unregisters the sidebar entry (and resets the active panel gracefully if currently viewing the panel, preventing blank views);
-  - Backward compatible with legacy `sidebarEntry` boolean settings (`true` maps to `both`, `false` maps to `settings`).
-
+- **Entry placement (`entryLocation`)**
+  - **Both (`both`)**: Show the navigation icon in the left sidebar and keep **Settings → Archived sessions**.
+  - **Sidebar only (`sidebar`)**: Show the icon in the left sidebar and hide the entry in Settings.
+  - **Settings only (`settings`)** (Default): Keep the entry only under **Settings → Archived sessions**.
+- **Sidebar favorite star (`sidebarFavoriteStar`)**
+  - **Show all (`all`)** (Default): Show stars on sidebar session rows on hover and when favorited.
+  - **Favorites only (`favorites`)**: Always show stars only on favorited sessions; hide hover stars on unstarred rows.
+  - **Hide all (`none`)**: Hide favorite stars on sidebar rows (you can still favorite via the context menu and filter with **Favorites only**).
 
 ## Usage Guide
 
 | Action | How to do it |
 | --- | --- |
-| **Archive one chat** | Open the session context menu in the sidebar and choose **Archive session** |
-| **Archive a workspace** | Open the workspace menu and choose **Archive session** (opens an in-place confirmation overlay) |
-| **Search & filter** | Open **Settings → Archived sessions** or click **Archive** in the sidebar; search bar automatically covers titles and body messages; use the Codex-style view menu to filter (all / favorites only) and sort; select projects from dropdown; pick dates with the single-field capsule |
-| **Custom calendar & keyboard nav** | Click the date capsule to open the lightweight calendar popover; supports all time and quick presets; provides complete WAI-ARIA keyboard navigation (arrows, Home/End, PageUp/Down, Enter/Space) and real-time range stretch preview |
+| **Archive sessions** | Choose **Archive session** from a sidebar session menu, or select sessions on **Unarchived** for batch archiving |
+| **Archive workspace / group** | Choose **Archive workspace** in the sidebar workspace menu, or use the **…** menu on a project group in **Unarchived** (ignores search filters) |
+| **Search & filter** | Search matches both titles and message bodies; combine **Favorites only**, sort order, project filter, and date range (calendar popover supports presets and keyboard navigation) |
 | **Quick preview** | Click a match snippet or **More → Quick preview** to inspect context with highlights without restoring |
-| **Adjust ordering** | Sort by recently archived, update time, creation time, or title in the view menu |
-| **Restore a chat** | Click the restore icon on any row; use **More → Restore and open** to resume the chat directly |
-| **Archive entire group** | On **Unarchived**, click the **…** menu next to a group and confirm archiving all chats in that project |
-| **Favorite chats** | Click the star icon on any row; use the view menu to filter starred chats |
-| **Clean up idle chats** | On **Unarchived**, set an idle day threshold, automatically protecting running and starred chats, preview candidates, and confirm |
-| **Copy session ID** | Select **Copy session ID** from the **More** menu |
-| **Clean up orphan subagents** | Detect and physically delete orphan subagents in the Organizer panel |
-| **Archive across projects** | Switch to **Unarchived**, select sessions across projects, then click **Archive** and confirm |
-| **Restore or delete in bulk** | Select chats and use the bulk actions, or use the project menu; there are no separate Restore all / Delete all buttons |
+| **View or restore chats** | Click a title to read and continue chatting while keeping it archived; click restore or **More → Restore and open** to unarchive |
+| **Favorite chats** | Click the star on any row or use the sidebar context menu, then filter with **Favorites only** in the view menu |
+| **Clean up idle chats** | On **Unarchived**, set idle days (1–36,500), preview candidates, and confirm; use **Undo this archive** before closing or refreshing the page |
+| **Move across workspaces** | Right-click a standard session in the sidebar and choose **Move to workspace** |
+| **Clean up orphan subagents** | When leftover subagents from externally deleted parent sessions are detected, click clean up in the organizer area to reclaim disk space |
+| **Rebuild missing list cache** | When sessions lack official list cache entries, click **Rebuild list cache** in the organizer area to read logs read-only and restore titles |
+| **Permanent delete** | Select sessions and click **Delete** (or use the sidebar context menu) to permanently purge logs and caches after confirmation |
+| **Copy session ID** | Choose **Copy session ID** from the **More** menu |
 
-The page opens on **Archived**, with **Unarchived** on the right. Switching tabs clears selections; changing search or project filters preserves them. Check the hidden selection count before applying bulk actions, or clear your selection first.
+### Notes
 
-**Select all filtered results** selects matching sessions, including collapsed groups. Project-wide actions still apply to the whole project regardless of search filters. Unarchived excludes subagents and blank placeholders.
-
-Settings and sidebar batch archive/restore call the official single-session APIs `ctx.workspaces.archiveSession` and `ctx.workspaces.unarchiveSession` serially.
-
-### Favorites and idle cleanup
-
-Compact project groups can be collapsed. Stars and restore/archive icons appear on the right; archived session menus include restore-and-open and deletion.
-
-- Use the star on either tab and the **Favorites only** dropdown to find important chats. Favorites persist on the host across archive, restore, and browser changes. Reopen management to see changes made in other pages. Unknown or unreadable sessions retain their stored favorite IDs; cleanup requires confirmed artifact absence.
-- On Unarchived, enter 1–36,500 whole idle days and preview candidates under the current filters. Deselect individual candidates before confirmation. Favorites, the current chat, running sessions (including subagents), and pending interactions are protected; sessions without a valid activity time are excluded.
-- Archive rechecks favorites and activity. Batch archive, restore, and delete report progress plus successful, skipped, and failed counts. A failure does not stop the rest; retry only the failed items. Delete retries still require confirmation.
-- **Undo this archive** restores sessions archived by the current batch, including successful retries. It is available only while the current management page remains open; refreshing or closing clears it. Permanent deletion cannot be undone.
-- Favorites can still be archived manually. Protection applies to idle cleanup only. There is no scheduled or automatic background cleanup.
-
-### View and continue archived conversations
-
-Native conversation navigation has been available since `0.1.40`; 1.0.0 uses these entry points:
-
-- **Click the session title**: open the native DSH session to view messages, attachments, and tool details. Continue chatting while keeping the session archived.
-- **More → Restore and open**: unarchive the session and open it to resume work.
-
-## Search API compatibility (integrators)
-
-The canonical API is `workspaceRegistry.searchSessionContent({ sessionIds, query })`, covering archived and unarchived sessions. Supply 1–20 session IDs and a nonempty query of 1–200 characters; IDs are deduplicated. Results have the shape `{ items: [{ sessionId, seq, snippet }], failures: [{ sessionId, message }] }`. Individual read failures appear in `failures`; invalid input rejects the call.
-
-`searchArchivedContent` remains the legacy, archived-only entry point. Both use the existing host Typert connection and authorization boundary; no HTTP endpoint or authentication setting is added. Keep the legacy descriptor throughout the currently supported host range, including patch releases. Removal requires an explicit compatibility-range change, client migration, and deprecation notice. New clients prefer the canonical API and use the old one only as a version fallback, never dispatching the same search to both.
-
-## Updates
-
-Rerun the installation command above in your active DSH profile to update the plugin. In environments requiring compliance locking, updates can be governed via Cordis configuration.
+- **Favorites & idle protection**: Favorites are stored by the host and persist across archiving and restoring. Idle cleanup automatically excludes favorites, the open session, running sessions, and pending interactions; starred chats can still be archived manually. There is no automatic background archiving.
+- **Search scope**: Full-text search covers user and assistant messages and excludes tool outputs, attachments, reasoning, and system messages. There is no persistent full-text index, so narrowing by project, date, or favorites helps on large histories.
+- **Batch actions & undo**: Batch archive, restore, and delete continue past individual failures and let you retry failed items only. **Undo this archive** is available only while the current management page remains open. Permanent deletion cannot be undone.
 
 ## FAQ
 
 ### Why is the entry missing after installation?
 
-Restart DSH Web and hard-refresh your browser. Make sure you installed into the profile you are using. If the entry is still missing, run:
+Restart DSH Web and hard-refresh the browser (`Ctrl+Shift+R`), and confirm you installed into the active profile. If it still does not appear, run the command below to verify `ui-workspace-archive-manager` is present and that your profile's `cordis.patch.yml` is not disabling `workspace`, `session-projection-cache`, or `ui-workspace`:
 
 ```powershell
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -204,34 +137,20 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 dsh --profile web --dump-config
 ```
 
-The configuration should include `ui-workspace-archive-manager` and must not disable official `workspace` or `session-projection-cache`. A leftover `archive-manager-host` override can be removed. On current DSH hosts the official `ui-settings-unarchive-sessions` entry is gone, so this plugin no longer disables it (doing so only warned that the patch entry was missing). If your profile's `cordis.patch.yml` still disables `workspace`, `session-projection-cache`, or `ui-workspace`, remove those overrides and restart.
+### How is archiving different from permanent deletion?
 
-### What happens to historical plugin caches after upgrading?
+Archiving tucks a conversation away so you can restore it anytime. **Permanent deletion cannot be undone** and erases the session's logs, cache entries, and attachments (your project working directory is never deleted). Confirmation is always required.
 
-The plugin neither replaces the official projection-cache table nor scans, validates, or migrates historical plugin caches. Opening the archive list does not read complete logs or write back official projections to fill missing cache entries. Session logs remain host-owned, and the host rebuilds derived projections such as titles on demand. Enabling or disabling the plugin does not switch cache tables; there is no need to enable it once just to import old caches.
+### Can I use it with Codex UI or other archive plugins?
 
-**A cold session without an official cache entry may initially have no title in the list; refreshing the list alone does not guarantee a rebuild.** Reading the log can recover the title, and restoring the session as live lets the native write path persist its cache. Historical plugin cache files are left untouched: they are neither read nor deleted automatically. See the [changelog](CHANGELOG.md) for details.
+Yes. It works alongside [Codex UI](https://github.com/MichengAI/dsh-codex-ui), and if other archive plugins are installed, each registers its own Settings entry independently.
 
-### How is archiving different from deletion?
-
-Archiving puts a conversation away so you can restore it later. **Permanent deletion cannot be undone** and may also remove that session's attachments. It does not delete your project working directory. Deletion requires confirmation.
-
-### Can I use it with Codex UI?
-
-Yes. [Codex UI](https://github.com/MichengAI/dsh-codex-ui) keeps its sidebar appearance and interactions. Archive management remains available in **Settings → Archived sessions**.
-
-### Coexisting with other archive plugins
-
-This plugin registers its Settings entry under the section ID `archive-manager`. If other session archive plugins (such as `@linxin666/dsh-session-archive`) are installed at the same time, two distinct "Archived sessions" entries will appear in the settings sidebar. Both can be accessed independently as expected.
-
-For other problems, open an [issue](https://github.com/MichengAI/dsh-archive-manager/issues) with your DSH and plugin versions, reproduction steps, and error details.
+For other issues, please open an [issue](https://github.com/MichengAI/dsh-archive-manager/issues) with your DSH and plugin versions, reproduction steps, and error details.
 
 ## Install from source
 
 <details>
 <summary>Expand for development or testing unreleased changes</summary>
-
-Run these commands in a directory of your choice. For local changes that have not been pushed, use the existing working copy.
 
 ```powershell
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -244,7 +163,7 @@ pnpm build
 dsh plugin --profile web add .
 ```
 
-Restart DSH Web and hard-refresh your browser afterward. Source code in [src](src) uses strict TypeScript. Both GitHub and npm include a ready-to-run `lib`. After changing source, run `pnpm build` before committing, or a source install keeps the previous runtime. Published JavaScript entry points and runtime modules remain unchanged; installing the npm package does not require TypeScript. Run `pnpm typecheck` for type checking, `pnpm test` to validate changes, or `pnpm verify` for the full checks.
+Restart DSH Web and hard-refresh the browser afterward. After editing [src](src), run `pnpm build` before committing (checks: `pnpm typecheck`, `pnpm test`, `pnpm verify`).
 
 </details>
 

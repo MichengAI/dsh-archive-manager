@@ -16,7 +16,7 @@
   [![npm Paket](https://img.shields.io/npm/v/%40michengai%2Fdsh-archive-manager.svg?label=npm%20package)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
   [![npm Downloads](https://img.shields.io/npm/dt/%40michengai%2Fdsh-archive-manager.svg?label=npm%20downloads)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
   [![DSH Web Plugin](https://img.shields.io/badge/DSH%20Web-Plugin-0f766e.svg)](https://github.com/MichengAI/dsh-archive-manager)
-  [![DSH kompatibel bis 0.2.2-rc.2](https://img.shields.io/badge/DSH-up%20to%200.2.2--rc.2-2563eb.svg)](#voraussetzungen)
+  [![DSH kompatibel bis 0.2.2-rc.2](https://img.shields.io/badge/DSH-up%20to%200.2.2--rc.2-2563eb.svg)](#installation)
 </div>
 
 > DSH Archive Manager ist ein von der Community gepflegtes Plugin für DeepSeek Harness (DSH) und kein offizielles Produkt von DeepSeek AI.
@@ -25,169 +25,132 @@ Dieses Dokument beschreibt Version **1.3.2**. Frühere Änderungen finden Sie im
 
 ## Funktionsübersicht
 
-Legen Sie inaktive Unterhaltungen ab und holen Sie sie bei Bedarf zurück, um die tägliche Aufgabenliste übersichtlich zu halten.
+Legen Sie inaktive Unterhaltungen ab und holen Sie sie bei Bedarf zurück, um Ihre tägliche Aufgabenliste übersichtlich zu halten.
 
-- **Doppelansicht und primärer Seitenleisteneintrag**: Ein dauerhaftes Symbol in der Hauptseitenleiste öffnet eine großzügige, **960 px zentrierte Arbeitsbereichsansicht** für archivierte und nicht archivierte Sitzungen ohne beengte Dialog-Scrollbereiche.
-- **Vollständiges Lebenszyklusmanagement**: Einzelne Chats, ganze Arbeitsbereiche mit einem Klick oder projektübergreifende Batches archivieren sowie Sitzungen direkt wiederherstellen oder fortsetzen.
-- **Rechtsklick auf die gesamte Zeile in der Seitenleiste**: Klicken Sie mit der rechten Maustaste auf eine beliebige Stelle einer Arbeitsbereichs- oder Sitzungszeile, um das Aktionsmenü zu öffnen. Auf nicht gruppierten oder leeren Zeilen wird das native Systemmenü sicher durchgereicht.
-- **Ruckelfreie Favoritensterne und Koexistenz mit Statuspunkten (#90, #92)**: Standardisierte Sternengröße von 16×16 px mit absoluter Positionierung über dem führenden Slot verhindert jedes Springen des Titels. Bei laufenden Aufgaben oder Genehmigungen bleibt der Statuspunkt des Hosts zu 100 % sichtbar, während der Stern als kompaktes 10 px Badge unten rechts erhalten bleibt.
-- **Arbeitsbereich-Schnellaktionsmenü**: Ordnerpfad kopieren, Ordner direkt im Windows-Explorer oder macOS Finder öffnen und Sitzungen mit einem Klick archivieren.
-- **Sitzungen zwischen Arbeitsbereichen verschieben**: Verschieben Sie Sitzungen über ein kaskadierendes Untermenü in andere Arbeitsbereiche, mit Prozessberuhigung, atomarer Umschreibung und NTFS-Doppelpunktschutz für IM-Sitzungen.
-- **Einheitliche Akkordeonkarten und 40 px ultrakompakte Zeilen**: Projektgruppen im Stil des Skills Managers mit integrierten Einschubkarten (38 px Kopfzeile) und auf 40 px komprimierten Zeilen für verdoppelte Informationsdichte.
-- **Native Kontrollkästchen im Dunkelmodus**: Komponenten nach offiziellen Host-Spezifikationen mit nativem `accent-color` fügen sich nahtlos in dunkle Designs ein.
-- **Lichtundurchlässige Modaldialoge und barrierefreie Lokalisierung**: Breiter Vorschaudialog direkt am `body` gemountet (`portalToBody`) mit festem Hintergrund und Unschärfe, um Textdurchscheinen zu verhindern. Vollständige ARIA-Labels für den Schließen-Button (`common.close`).
-- **Standardisierte Sektions-ID und Koexistenz (#91)**: Sektions-ID auf `archive-manager` mit Ausfallschutz (`try/catch`) umgestellt, um die problemlose Koexistenz mit Drittanbieter-Plugins zu gewährleisten.
-- **Aufgeräumte einzeilige Werkzeugleiste**: Verwendet das native `Input`-Element mit offiziellem Suchsymbol und grünem Fokusrahmen. Vereint Suche, Anzeige- und Sortiermenü, Projektfilter und Datumsbereich in einer einzigen Zeile.
-- **Volltextsuche und kombiniertes Menü im Codex-Stil**: Automatische Suche in Titeln und Nachrichtenverläufen (Benutzer und Assistent). Menü mit zwei Abschnitten zur Filterung (alle / nur Favoriten) und Sortierung.
-- **Leichter DateRange-Selektor mit Kalender-Popover**: Ersetzt das native Datumselement zur Vermeidung von Farbinversionen und Fokusverlust im Dunkelmodus (#74). Einzeilige Kapsel mit Löschtaste, Schnellvoreinstellungen, 8 Sprachen für Wochentage und Monate sowie vollständiger Tastaturnavigation nach WAI-ARIA.
-- **Automatische Bereinigung inaktiver Sitzungen**: Schwellenwert in Tagen festlegen, um inaktive Chats zu finden. Laufende Aufgaben, interaktive Prompts und Favoriten werden automatisch geschützt, mit sofortiger Rückgängig-Funktion (Undo).
-- **Dauerhafte physische Löschung**: Vollständige physische Entfernung von Protokollen, Cache-Zeilen und Indizes mit detaillierter Fehler- und Wiederholungsfunktion.
-- **Erkennung und Bereinigung verwaister Subagents**: Verwaiste Subagents, deren Hauptsitzung extern gelöscht wurde, erkennen, Speicherplatz berechnen und mit einem Klick physisch freigeben.
-- **Unternehmensweite Sperre via Cordis-Konfiguration & Reverse-Proxy-Unterstützung**: Vollständiges Deaktivieren der Aktualisierungskomponente in der Cordis-Konfiguration () und dynamische Pfadauflösung über `document.baseURI`.
-
-## Manuelle Rekonstruktion des Listen-Caches (#88)
-
-Beim Öffnen des Archive Managers werden lediglich Header und zwischengespeicherte Projektionen normaler Sitzungen in registrierten Arbeitsbereichen, ungruppierten Listen und Archiven geprüft (Sitzungen von IM-Kanälen `im:` sind ausgeschlossen). Eine Reparaturkarte erscheint nur bei fehlenden oder inkompatiblen Caches, um Protokolle einzeln schreibgeschützt zu lesen und offizielle Projektionen mit `coldSnapshot` in `session_projcache` wiederherzustellen.
-
-## Bereinigung verwaister Subagents
-
-Wird eine Hauptsitzung außerhalb gelöscht, können Subagents auf der Festplatte verbleiben. Der Archive Manager erkennt diese im Aufräum-Panel und ermöglicht deren sichere physische Löschung.
-
-## Suche und Vorschau
-
-- Die Reiter „Archiviert“ und „Nicht archiviert“ teilen sich die Suche in Titeln und Inhalten, Projektfilter, Favoriten, Datumsfilter und Sortierung nach Erstellungsdatum.
-- Die Vorschau rendert Markdown-Tabellen, Zitate und Codeblöcke mit Rollenbezeichnungen oder wechselt zum Originaltext mit Hervorhebung.
-- Die Suche verarbeitet Batches von bis zu 20 Sitzungen nacheinander bei maximal 200 Abfragezeichen, ausgenommen Werkzeuge, Anhänge, Reasoning und Systemnachrichten.
+- **Zwei Zugänge & große Arbeitsbereichsansicht**: Verwalten Sie Sitzungen unter **Einstellungen → Archivierte Sitzungen** oder aktivieren Sie das Symbol in der Hauptseitenleiste für ein zentriertes Vollbild-Panel im Arbeitsbereich.
+- **Archivieren & Wiederherstellen**: Archivieren Sie einzelne Chats, ganze Arbeitsbereiche oder projektübergreifende Stapel und stellen Sie Sitzungen direkt wieder her oder setzen sie fort.
+- **Volltextsuche & Schnellvorschau**: Durchsuchen Sie Titel und Nachrichtenverlauf gemeinsam, kombinieren Sie Projekt-, Favoriten- und Datumsfilter mit flexibler Sortierung und prüfen Sie den Kontext in Markdown oder hervorgehobenem Klartext ohne Wiederherstellung.
+- **Favoriten & Bereinigung inaktiver Chats**: Markieren Sie wichtige Chats mit einem Stern und filtern Sie nach **Nur Favoriten**; finden und archivieren Sie inaktive Sitzungen nach Tagen mit automatischem Schutz für laufende Aufgaben, ausstehende Eingaben und Favoriten sowie sofortigem Rückgängigmachen.
+- **Seitenleisten-Aktionen & Verschieben zwischen Arbeitsbereichen**: Rechtsklicken Sie in der Seitenleiste auf Arbeitsbereichs- oder Sitzungszeilen, um zu favorisieren, zu archivieren, reguläre Sitzungen in einen anderen Arbeitsbereich zu verschieben oder Projektordner zu kopieren bzw. zu öffnen.
+- **Bereinigung verwaister Subagents & endgültiges Löschen**: Erkennen und entfernen Sie verwaiste Subagents, deren Hauptsitzung extern gelöscht wurde, und bereinigen Sie unerwünschte Sitzungen und Protokolle nach Bestätigung dauerhaft.
+- **Mehrsprachig & Reverse-Proxy-fähig**: Unterstützt alle 8 integrierten Sprachen von DeepSeek Harness, folgt dem hellen/dunklen Design und funktioniert hinter Reverse Proxies mit Pfadpräfix.
 
 ## Screenshots
 
-### 1. Archiv-Verwaltung (Akkordeonkarten und nativer Dunkelmodus)
+### 1. Archiv-Verwaltungspanel
+
 Suchen, favorisieren, voranzeigen, wiederherstellen und bereinigen unter **Einstellungen → Archivierte Sitzungen → Archiviert**:
 
 ![Archiviert: gemeinsame Suchfilter, Favoriten und kompakte Zeilen](assets/screenshots/archived-sessions.webp)
 
-Zu **Nicht archiviert** wechseln für intelligente Bereinigungsvorschläge und projektweites Archivieren:
+Wechseln Sie zu **Nicht archiviert**, um inaktive Sitzungen vorab zu prüfen oder ganze Projekte zu archivieren:
 
 ![Nicht archiviert: intelligente Bereinigung und Projektarchivierung](assets/screenshots/unarchived-sessions.webp)
 
-### 2. Zentriertes 960 px Panel im Hauptarbeitsbereich
-Öffnen Sie ein vollwertiges 960 px Panel direkt über das dauerhafte Symbol in der Hauptseitenleiste:
+### 2. Hauptarbeitsbereichs-Panel (direkt über die Seitenleiste)
 
-![Hauptarbeitsbereich: direkter Seitenleisteneintrag mit 960 px zentrierter Ansicht](assets/screenshots/main-view-panel.webp)
+Bei aktiviertem Seitenleisteneintrag öffnet ein Klick auf das linke Navigationssymbol direkt die vollständige Ansicht:
 
-### 3. Nativer Rechtsklick in der Seitenleiste & Kaskadierende Untermenüs
-Rechtsklick auf eine beliebige Stelle einer Zeile in der primären Seitenleiste für Kontextmenüs und Projektübertragungen:
+![Hauptarbeitsbereich: direkter Seitenleisteneintrag](assets/screenshots/main-view-panel.webp)
 
-| Arbeitsbereichs-Aktionen | Sitzung zwischen Projekten verschieben |
+### 3. Kontextmenüs & Verschieben in der Seitenleiste
+
+Rechtsklicken Sie auf eine beliebige Arbeitsbereichs- oder Sitzungszeile in der Seitenleiste für Schnellaktionen und das Verschieben zwischen Projekten:
+
+| Arbeitsbereichs-Aktionen (Ordner kopieren/öffnen) | Sitzung in anderen Arbeitsbereich verschieben |
 | :---: | :---: |
-| <img src="assets/screenshots/workspace-context-menu.webp" alt="Workspace Actions Menu" width="100%"> | <img src="assets/screenshots/session-move-menu.webp" alt="Move Session Menu" width="100%"> |
+| <img src="assets/screenshots/workspace-context-menu.webp" alt="Arbeitsbereichs-Aktionsmenü" width="100%"> | <img src="assets/screenshots/session-move-menu.webp" alt="Sitzung-verschieben-Menü" width="100%"> |
 
 ## Installation
 
-Ein funktionierendes DeepSeek Harness-Setup ist erforderlich (Beispiel mit dem Profil `web`):
+Ein funktionierendes DeepSeek Harness-Setup ist erforderlich. Die Beispiele verwenden das Profil `web`; passen Sie es an Ihre Umgebung an.
 
-### Installation durch einen Agenten
+- **Host-Kompatibilität**: DeepSeek Harness `0.2.x`-Reihe (`>=0.2.0-rc.1 <0.3.0-0`), verifiziert auf allen `0.2.x`-Release-Candidates (`0.2.0-rc.1` bis `0.2.2-rc.2`; Zwischen-Alphas werden nicht unterstützt).
+- Hosts vor `0.2.0-rc.1` werden nicht mehr unterstützt, und Breaking-Updates der Generation `0.3.0` werden durch das Versions-Gate abgefangen. Nutzer auf `0.1.x` installieren bitte Version `1.0.20`.
+- **Reverse-Proxy-Unterstützung**: Funktioniert hinter Reverse Proxies mit Pfadpräfix (z. B. `/app/dsh/`).
+
+### Installation durch einen Agenten (empfohlen)
+
 Senden Sie diese Anweisung an einen Agenten mit Terminal-Zugriff:
 
 ```text
 Installiere die neueste Version von @michengai/dsh-archive-manager aus der offiziellen npm-Registry in mein DSH-Web-Profil, überprüfe die Aktivierung und erkläre das Neuladen.
 ```
 
-### Manuelle Installation
+### Manuelle Installation & Aktualisierung
 
 ```powershell
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
+
 dsh plugin --profile web add @michengai/dsh-archive-manager@latest --registry=https://registry.npmjs.org/
 ```
 
-Starten Sie DSH Web neu und aktualisieren Sie die Seite (`Ctrl+Shift+R`). Öffnen Sie **Einstellungen → Archivierte Sitzungen** zur Verwendung.
-
-- **Host-Kompatibilität**: Vollständige DeepSeek Harness `0.2.x`-Reihe (`>=0.2.0-rc.1 <0.3.0-0`), verifiziert auf allen Release Candidates (`0.2.0-rc.1` bis `0.2.2-rc.2`).
-- Versionen vor `0.2.0-rc.1` werden nicht mehr unterstützt. Nutzer von `0.1.x` installieren bitte `1.0.20`.
+Starten Sie DSH Web neu, laden Sie den Browser hart neu (`Ctrl+Shift+R`) und öffnen Sie **Einstellungen → Archivierte Sitzungen**. Zum Aktualisieren führen Sie den Befehl erneut aus.
 
 ## Plugin-Konfiguration
 
-Verfügbar unter:
-> **Seitenleiste → Plugins → Klick auf `Archive Manager`**
+Öffnen Sie **Seitenleiste → Plugins → `Archive Manager`**, um Folgendes einzustellen:
 
-### 1. Position des Eintrags (`entryLocation`)
-- **Beide Positionen (`both`)**: Zeigt das Symbol in der linken Seitenleiste an und behält den Menüeintrag unter **Einstellungen → Archivierte Sitzungen**.
-- **Nur Seitenleiste (`sidebar`)**: Zeigt das Symbol in der Seitenleiste an und entfernt den Eintrag aus den Einstellungen für eine schlankere Oberfläche.
-- **Nur Einstellungen (`settings`)** (Standard): Hält die Seitenleiste minimalistisch und bietet Zugriff unter **Einstellungen → Archivierte Sitzungen**.
-
+- **Einstiegsplatzierung (`entryLocation`)**
+  - **Beide (`both`)**: Zeigt das Symbol in der linken Seitenleiste an und behält **Einstellungen → Archivierte Sitzungen**.
+  - **Nur Seitenleiste (`sidebar`)**: Zeigt das Symbol nur in der linken Seitenleiste und blendet den Eintrag in den Einstellungen aus.
+  - **Nur Einstellungen (`settings`)** (Standard): Bietet den Zugang ausschließlich unter **Einstellungen → Archivierte Sitzungen**.
+- **Favoritenstern in der Seitenleiste (`sidebarFavoriteStar`)**
+  - **Alle anzeigen (`all`)** (Standard): Zeigt den Stern beim Überfahren mit der Maus und bei favorisierten Sitzungen.
+  - **Nur Favoriten (`favorites`)**: Zeigt den Stern dauerhaft nur bei favorisierten Sitzungen; blendet Hover-Sterne bei anderen Zeilen aus.
+  - **Vollständig ausblenden (`none`)**: Blendet Sterne in der Seitenleiste aus (Favoriten können weiterhin über das Kontextmenü gesetzt und mit **Nur Favoriten** gefiltert werden).
 
 ## Bedienungsanleitung
 
 | Aktion | Anleitung |
 | --- | --- |
-| **Einzelnen Chat archivieren** | Kontextmenü der Sitzung in der Seitenleiste öffnen und **Sitzung archivieren** wählen |
-| **Arbeitsbereich archivieren** | Menü des Arbeitsbereichs öffnen und **Sitzung archivieren** wählen |
-| **Suchen und filtern** | **Einstellungen → Archivierte Sitzungen** öffnen oder in der Seitenleiste auf **Archiv** klicken |
-| **Interaktiver Kalender** | Auf die Datumskapsel klicken, um das Popover mit vollständiger Tastatursteuerung zu öffnen |
-| **Schnellvorschau** | Auf einen Treffer oder **Mehr → Schnellvorschau** klicken, um den Kontext ohne Wiederherstellung zu prüfen |
-| **Sortierung anpassen** | Nach zuletzt archiviert, Aktualisierungszeit, Erstellungszeit oder Titel sortieren |
-| **Chat wiederherstellen** | Auf das Wiederherstellungssymbol der Zeile oder **Mehr → Wiederherstellen und öffnen** klicken |
-| **Ganze Gruppe archivieren** | Unter **Nicht archiviert** im Menü **…** der Gruppe alle Sitzungen archivieren |
-| **Zu Favoriten hinzufügen** | Auf das Sternsymbol der Zeile klicken, um sie als Favorit zu markieren |
-| **Inaktive Chats bereinigen** | Unter **Nicht archiviert** Inaktivitätstage angeben, Vorschau prüfen und archivieren |
-| **Sitzungs-ID kopieren** | Im Menü **Mehr** die Option **Sitzungs-ID kopieren** wählen |
-| **Verwaiste Subagents bereinigen** | Im Bereinigungsbereich verwaiste Subagents erkennen und physisch löschen |
-| **Archivierung rückgängig machen** | Stellen Sie die im aktuellen Batch archivierten Sitzungen über die Benachrichtigung wieder her |
-| **Endgültig löschen** | Sitzungen auswählen, Löschen wählen und die physische Entfernung von Protokollen und Indizes bestätigen |
+| **Sitzungen archivieren** | Wählen Sie **Sitzung archivieren** im Kontextmenü der Seitenleiste oder wählen Sie unter **Nicht archiviert** mehrere Sitzungen aus |
+| **Arbeitsbereich / Gruppe archivieren** | Wählen Sie **Arbeitsbereich archivieren** im Arbeitsbereichs-Menü oder nutzen Sie **…** an einer Projektgruppe unter **Nicht archiviert** (ignoriert Suchfilter) |
+| **Suchen & Filtern** | Die Suche durchsucht Titel und Nachrichten gemeinsam; kombinierbar mit **Nur Favoriten**, Sortierung, Projektfilter und Datumsbereich (Kalender mit Voreinstellungen & Tastaturnavigation) |
+| **Schnellvorschau** | Klicken Sie auf einen Treffer-Ausschnitt oder **Weitere Aktionen → Schnellvorschau**, um den Kontext ohne Wiederherstellung anzusehen |
+| **Ansehen oder wiederherstellen** | Auf den Titel klicken, um im archivierten Zustand weiterzulesen/-chatten; Wiederherstellungssymbol oder **Weitere Aktionen → Wiederherstellen und öffnen** wählen |
+| **Favorisieren** | Sternsymbol in der Zeile oder im Kontextmenü anklicken und im Ansichtsmenü nach **Nur Favoriten** filtern |
+| **Inaktive Chats bereinigen** | Unter **Nicht archiviert** Inaktivitätstage (1–36.500) angeben, Kandidaten prüfen und bestätigen; über **Archivierung rückgängig machen** vor dem Schließen/Neuladen zurücknehmen |
+| **Zwischen Arbeitsbereichen verschieben** | Rechtsklick auf eine reguläre Sitzung in der Seitenleiste und **In Arbeitsbereich verschieben** wählen |
+| **Verwaiste Subagents bereinigen** | Werden Subagents ohne übergeordnete Sitzung erkannt, im Aufräum-Panel per Klick physisch löschen und Speicherplatz freigeben |
+| **Listen-Cache rekonstruieren** | Falls offizielle Listen-Caches fehlen, erscheint bei Bedarf eine Karte zum schreibgeschützten Einlesen der Protokolle und Wiederherstellen der Titel |
+| **Endgültig löschen** | Sitzungen auswählen und **Löschen** klicken (oder über das Kontextmenü), um Protokolle und Caches nach Bestätigung dauerhaft zu entfernen |
+| **Sitzungs-ID kopieren** | **Sitzungs-ID kopieren** im Menü **Weitere Aktionen** wählen |
 
-### Favoriten und Bereinigung inaktiver Sitzungen
+### Hinweise
 
-Kompakte Projektgruppen können eingeklappt werden. Sterne und Wiederherstellungs-/Archivierungssymbole befinden sich rechts; Menüs archivierter Sitzungen enthalten «Wiederherstellen und öffnen» sowie «Löschen».
-
-- Verwenden Sie den Stern auf beiden Registern und das Menü «Nur Favoriten», um wichtige Unterhaltungen zu filtern. Favoriten bleiben auf dem Host über Archivierung, Wiederherstellung und Browserwechsel hinweg erhalten.
-- Unter «Nicht archiviert» können Sie einen Inaktivitätsschwellenwert von 1 bis 36.500 Tagen festlegen, um Kandidaten unter den aktuellen Filtern zu prüfen. Einzelne Treffer können vor der Bestätigung abgewählt werden. Favoriten, der aktuelle Chat, laufende Sitzungen (einschließlich Subagents) und ausstehende Aktionen sind automatisch geschützt.
-- Batch-Vorgänge melden den Fortschritt sowie erfolgreiche, übersprungene und fehlgeschlagene Elemente. Ein Fehler stoppt den restlichen Ablauf nicht; nur fehlgeschlagene Einträge werden wiederholt.
-- **Archivierung rückgängig machen** stellt die im aktuellen Batch archivierten Sitzungen wieder her. Diese Option steht nur zur Verfügung, solange die aktuelle Verwaltungsseite geöffnet bleibt. Endgültiges Löschen kann nicht rückgängig gemacht werden.
-
-### Archivierte Unterhaltungen ansehen und fortsetzen
-
-Die native Navigation ermöglicht die Einsichtnahme und Fortführung archivierter Sitzungen:
-
-- **Auf den Sitzungstitel klicken**: Öffnet die native DSH-Unterhaltung, um Nachrichten, Anhänge und Werkzeugaufrufe einzusehen. Das Chatten kann fortgesetzt werden, während die Sitzung archiviert bleibt.
-- **Mehr → Wiederherstellen und öffnen**: Hebt die Archivierung auf und öffnet die Sitzung sofort zur Weiterarbeit.
-
-## API-Kompatibilität für die Suche (für Integratoren)
-
-Die kanonische API lautet `workspaceRegistry.searchSessionContent({ sessionIds, query })` und umfasst archivierte sowie nicht archivierte Sitzungen. Erfordert 1–20 Sitzungs-IDs und einen nicht-leeren Suchbegriff mit 1–200 Zeichen. Das Ergebnis hat die Form `{ items: [{ sessionId, seq, snippet }], failures: [{ sessionId, message }] }`.
-
-`searchArchivedContent` bleibt als Legacy-Endpunkt ausschließlich für archivierte Sitzungen erhalten. Beide nutzen die bestehende Typert-Verbindung des Hosts.
-
-## Aktualisierungen
-
-Führen Sie den Installationsbefehl oben in Ihrem aktiven DSH-Profil erneut aus, um das Plugin zu aktualisieren. In kontrollierten Unternehmensumgebungen können Updates über die Cordis-Konfiguration gesperrt werden.
+- **Favoriten & Schutz inaktiver Sitzungen**: Favoriten werden vom Host gespeichert und bleiben beim Archivieren oder Wiederherstellen erhalten. Die Bereinigung inaktiver Chats schließt Favoriten, die geöffnete Sitzung, laufende Sitzungen und ausstehende Aktionen automatisch aus; Favoriten lassen sich weiterhin manuell archivieren. Eine automatische Hintergrundarchivierung findet nicht statt.
+- **Suchumfang**: Die Volltextsuche umfasst Benutzer- und Assistenten-Nachrichten und schließt Werkzeugausgaben, Anhänge, Reasoning und Systemnachrichten aus. Es gibt keinen persistenten Volltextindex; bei umfangreichen Verläufen empfiehlt sich eine Eingrenzung über Projekt, Datum oder Favoriten.
+- **Stapelaktionen & Rückgängigmachen**: Stapel-Archivierung, -Wiederherstellung und -Löschung setzen bei einzelnen Fehlern fort und erlauben das gezielte Wiederholen fehlgeschlagener Einträge. **Archivierung rückgängig machen** ist nur verfügbar, solange die aktuelle Verwaltungsseite geöffnet bleibt. Endgültiges Löschen kann nicht rückgängig gemacht werden.
 
 ## Häufig gestellte Fragen (FAQ)
 
-### Was geschieht nach dem Upgrade mit historischen Plugin-Caches?
-
-Das Plugin ersetzt weder die offizielle Projektions-Cache-Tabelle noch scannt oder migriert es alte Plugin-Caches. Das Öffnen der Archivliste liest keine vollständigen Protokolle erneut ein, um fehlende Einträge aufzufüllen. Sitzungsprotokolle verbleiben beim Host, der abgeleitete Projektionen bei Bedarf regeneriert.
-
-**Eine kalte Sitzung ohne offiziellen Cache-Eintrag hat in der Liste möglicherweise zunächst keinen Titel; ein reines Neuladen der Liste garantiert keine Rekonstruktion.** Das Lesen des Protokolls stellt den Titel wieder her, und die Reaktivierung der Sitzung speichert den Cache über den nativen Schreibpfad. Historische Cache-Dateien bleiben unberührt. Weitere Details finden Sie im [Changelog](CHANGELOG.md).
-
 ### Warum wird der Eintrag nach der Installation nicht angezeigt?
-Starten Sie DSH Web neu und erzwingen Sie ein Neuladen im Browser (`Ctrl+Shift+R`). Stellen Sie sicher, dass das Plugin im aktiven Profil installiert wurde.
 
-### Was ist der Unterschied zwischen Archivieren und Löschen?
-Archivieren legt die Unterhaltung ab, damit sie später wiederhergestellt werden kann. **Endgültiges Löschen kann nicht rückgängig gemacht werden** und entfernt alle Daten physisch von der Festplatte.
+Starten Sie DSH Web neu, laden Sie die Seite hart neu (`Ctrl+Shift+R`) und prüfen Sie, ob im aktiven Profil installiert wurde. Falls weiterhin kein Eintrag erscheint, prüfen Sie mit folgendem Befehl, ob `ui-workspace-archive-manager` enthalten ist und `cordis.patch.yml` des Profils `workspace`, `session-projection-cache` oder `ui-workspace` nicht deaktiviert:
 
-### Kann es zusammen mit Codex UI verwendet werden?
-Ja. [Codex UI](https://github.com/MichengAI/dsh-codex-ui) behält sein Design und seine Seitenleistenfunktionen, und Archive Manager bleibt unter **Einstellungen → Archivierte Sitzungen** verfügbar.
+```powershell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 
-### Koexistenz mit anderen Archiv-Plugins
-Das Plugin registriert sich unter der Sektions-ID `archive-manager` und kann problemlos parallel zu anderen Archiv-Plugins betrieben werden.
+dsh --profile web --dump-config
+```
+
+### Was ist der Unterschied zwischen Archivieren und endgültigem Löschen?
+
+Archivieren legt eine Unterhaltung ab, sodass Sie sie jederzeit wiederherstellen können. **Endgültiges Löschen kann nicht rückgängig gemacht werden** und entfernt Protokolle, Cache-Einträge und Anhänge der Sitzung (Ihr Projektverzeichnis wird niemals gelöscht). Eine Bestätigung ist immer erforderlich.
+
+### Kann es zusammen mit Codex UI oder anderen Archiv-Plugins verwendet werden?
+
+Ja. Es funktioniert problemlos neben [Codex UI](https://github.com/MichengAI/dsh-codex-ui); sind weitere Archiv-Plugins installiert, registriert jedes seinen eigenen Eintrag in den Einstellungen unabhängig voneinander.
+
+Bei anderen Problemen öffnen Sie bitte ein [Issue](https://github.com/MichengAI/dsh-archive-manager/issues) mit DSH- und Plugin-Version, Schritten zur Reproduktion und Fehlerdetails.
 
 ## Installation aus dem Quellcode
 
 <details>
 <summary>Aufklappen für Entwicklung oder Tests unveröffentlichter Änderungen</summary>
-
-Führen Sie die folgenden Befehle in einem Verzeichnis Ihrer Wahl aus:
 
 ```powershell
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -200,7 +163,7 @@ pnpm build
 dsh plugin --profile web add .
 ```
 
-Nach der Installation DSH Web neu starten und die Browserseite aktualisieren. Der Quellcode unter [src](src) verwendet striktes TypeScript. Sowohl GitHub als auch npm enthalten das ausführbare Verzeichnis `lib`.
+Starten Sie danach DSH Web neu und laden Sie den Browser neu. Nach Änderungen in [src](src) vor dem Commit `pnpm build` ausführen (Prüfungen: `pnpm typecheck`, `pnpm test`, `pnpm verify`).
 
 </details>
 
