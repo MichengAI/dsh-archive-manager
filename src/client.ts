@@ -469,6 +469,18 @@ export function startArchiveClient(require: HostRequire) {
 			"Somente arquivado",
 			"Только архивные"
 		];
+		/** 工作区右键「筛选会话」二级菜单的跟随全局文案（各语言），用于排除右键/子菜单 */
+		const FOLLOW_GLOBAL_TEXTS = [
+			"跟随全局",
+			"Follow global",
+			"跟隨全域",
+			"跟隨全局",
+			"全体に従う",
+			"Global folgen",
+			"Suivre le global",
+			"Seguir global",
+			"Следовать глобальным"
+		];
 		const FAVORITES_FILTER_CSS = "[data-dsham-favorites-hidden='true']{display:none!important}" + "button[data-dsham-favorites-only='true'][data-active='true']::after{content:\"\\2713\";margin-left:auto;padding-left:12px;font-size:12px;line-height:1;color:var(--dsw-alias-state-business-primary,#3b82f6)}";
 		ensurePluginStyle("dsh-archive-manager/FavoritesFilter.css", FAVORITES_FILTER_CSS);
 		function readWorkspaceFavoritesOnly(): boolean {
@@ -710,9 +722,25 @@ export function startArchiveClient(require: HostRequire) {
 				}
 				if (expanding) schedulePass();
 			};
+			const isContextMenuOrSubmenu = (menu: HTMLElement): boolean => {
+				if (typeof menu.matches === "function" && menu.matches('[data-context-menu], [data-contextual]')) return true;
+				if (menu.hasAttribute("data-context-menu") || menu.hasAttribute("data-contextual")) return true;
+				if (Boolean(menu.closest?.('[data-context-menu], [data-contextual]'))) return true;
+				if (menu.hasAttribute("data-submenu-layout")) return true;
+				if (typeof menu.style?.getPropertyValue === "function" && menu.style.getPropertyValue("--dsh-submenu-parent") !== "") return true;
+				if (/(?:^|\s|_)submenu(?:$|\s|_)/i.test(menu.className)) return true;
+				if (Boolean(menu.parentElement?.closest?.('[role="menu"]'))) return true;
+				if (Boolean(menu.querySelector?.("button[data-menu-back]"))) return true;
+				const hasFollowGlobal = Array.from(menu.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]')).some((btn) => {
+					const text = btn.textContent ?? "";
+					return FOLLOW_GLOBAL_TEXTS.some((item) => text.includes(item));
+				});
+				if (hasFollowGlobal) return true;
+				return false;
+			};
 			const buildMenuRow = (anchor: HTMLButtonElement): HTMLDivElement | null => {
 				const wrap = anchor.parentElement;
-				if (wrap === null) return null;
+				if (wrap === null || wrap.getAttribute("role") === "menu" || wrap.getAttribute("role") === "menubar") return null;
 				const clone = wrap.cloneNode(true) as HTMLDivElement;
 				const button = clone.querySelector<HTMLButtonElement>('button[role="menuitem"]');
 				if (button === null) return null;
@@ -744,11 +772,17 @@ export function startArchiveClient(require: HostRequire) {
 					button.setAttribute("aria-checked", String(enabled));
 				}
 				for (const menu of Array.from(document.querySelectorAll<HTMLElement>('[role="menu"]'))) {
-					const anchor = Array.from(menu.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]')).find((item) => ONLY_ARCHIVED_TEXTS.some((text) => (item.textContent ?? "").includes(text)));
+					if (isContextMenuOrSubmenu(menu)) continue;
+					const anchor = Array.from(menu.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]')).find((item) => {
+						if (item.closest?.('[role="menu"]') !== menu) return false;
+						const text = item.textContent ?? "";
+						return ONLY_ARCHIVED_TEXTS.some((target) => text.includes(target));
+					});
 					if (anchor === undefined) continue;
 					if (menu.querySelector("[" + FAVORITES_ONLY_MARKER + "]") !== null) continue;
 					const wrap = anchor.parentElement;
-					if (wrap === null) continue;
+					if (wrap === null || wrap === menu || wrap.getAttribute("role") === "menu" || wrap.getAttribute("role") === "menubar") continue;
+					if (wrap.parentElement === null || (typeof menu.contains === "function" && !menu.contains(wrap.parentElement))) continue;
 					const row = buildMenuRow(anchor);
 					if (row !== null) wrap.parentElement?.insertBefore(row, wrap.nextSibling);
 				}
@@ -5322,6 +5356,7 @@ export function startArchiveClient(require: HostRequire) {
 			favoriteGroupPredicate,
 			createFavoriteRowStore,
 			ONLY_ARCHIVED_TEXTS,
+			FOLLOW_GLOBAL_TEXTS,
 			unarchivedSessionIds,
 			ArchiveSelectionToolbar,
 			ArchivedSessionsSection,
