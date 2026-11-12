@@ -1,4 +1,11 @@
 # Changelog
+## [1.3.3] - 2026-11-12
+
+### Fixes & Compatibility
+
+- Fixed an issue when using third-party workspace extensions (such as `dsh-better-workspace`) where hovering over workspace context submenus like "Filter sessions" could mistakenly trigger "Favorites only" injection, causing duplicated submenu panels or misplaced menu items (#115).
+- Preserved normal "Favorites only" injection and toggle behavior inside the top-right "View options" menu across both the official sidebar and custom workspace sidebar extensions.
+
 ## [1.3.2] - 2026-11-12
 
 ### Compatibility & Maintenance

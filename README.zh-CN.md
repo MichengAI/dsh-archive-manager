@@ -21,7 +21,7 @@
 
 > DSH Archive Manager 是社区维护的 DeepSeek Harness（DSH）插件，并非 DeepSeek AI 官方产品。
 
-本文描述 **1.3.2**。已发布变更见[更新日志](CHANGELOG.zh-CN.md)。
+本文描述 **1.3.3**。已发布变更见[更新日志](CHANGELOG.zh-CN.md)。
 
 ## 功能概览
 
