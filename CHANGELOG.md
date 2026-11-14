@@ -1,4 +1,11 @@
 # Changelog
+
+## [1.3.6] - 2026-11-14
+
+### Host Compatibility
+
+- DSH host support now covers `0.2.2-rc.3`; the verified host list, development baseline and localized README badges follow the same version.
+
 ## [1.3.5] - 2026-11-13
 
 ### Settings UI Standardization

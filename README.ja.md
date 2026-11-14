@@ -16,7 +16,7 @@
   [![npm package](https://img.shields.io/npm/v/%40michengai%2Fdsh-archive-manager.svg?label=npm%20package)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
   [![npm ダウンロード数](https://img.shields.io/npm/dt/%40michengai%2Fdsh-archive-manager.svg?label=npm%20downloads)](https://www.npmjs.com/package/@michengai/dsh-archive-manager)
   [![DSH Web Plugin](https://img.shields.io/badge/DSH%20Web-Plugin-0f766e.svg)](https://github.com/MichengAI/dsh-archive-manager)
-  [![DSH 対応バージョン 0.2.2-rc.2](https://img.shields.io/badge/DSH-up%20to%200.2.2--rc.2-2563eb.svg)](#インストール)
+  [![DSH 対応バージョン 0.2.2-rc.3](https://img.shields.io/badge/DSH-up%20to%200.2.2--rc.3-2563eb.svg)](#インストール)
 </div>
 
 > DSH Archive Manager はコミュニティによって保守されている DeepSeek Harness（DSH）向けプラグインであり、DeepSeek AI 公式の製品ではありません。
@@ -65,7 +65,7 @@
 
 動作する DeepSeek Harness 環境が必要です。以下の例では `web` プロファイルを使用していますので、環境に合わせて読み替えてください。
 
-- **ホスト対応範囲**：DeepSeek Harness `0.2.x` 全シリーズ（`>=0.2.0-rc.1 <0.3.0-0`）。`0.2.0-rc.1`〜`0.2.2-rc.2` の全 RC で検証済みです（中間の alpha 版は対象外）。
+- **ホスト対応範囲**：DeepSeek Harness `0.2.x` 全シリーズ（`>=0.2.0-rc.1 <0.3.0-0`）。`0.2.0-rc.1`〜`0.2.2-rc.3` の全 RC で検証済みです（中間の alpha 版は対象外）。
 - `0.2.0-rc.1` 未満の旧ホストはサポート対象外となり、`0.3.0` の破壊的変更はバージョンゲートで遮断されます。`0.1.x` をご利用の場合はプラグイン `1.0.20` をインストールしてください。
 - **リバースプロキシ対応**：パスプレフィックス付きリバースプロキシ（例：`/app/dsh/`）配下での運用に対応しています。
 
