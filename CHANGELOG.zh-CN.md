@@ -1,11 +1,15 @@
 # 更新日志
 
-## [1.3.7] - 2026-11-18
+## [1.3.7] - 2026-11-19
 
-### 体验优化与异常排查
+### 关键修复
 
-- **智能跳过物理缺失的失效会话**：在会话缓存诊断与重建过程中，自动识别并跳过在磁盘上已被删除或物理缺失日志的会话，避免整个工作区的缓存重建受阻，同时消除设置页中无法被清除的常驻诊断警示（#118）。
-- **完善重建失败详情与一键复制**：当缓存重建遇到文件权限或磁盘读取异常等非预期错误时，失败提示卡片明确标注具体的失败阶段与详细原因，并新增「复制错误详情」按钮，方便快速排查与反馈。
+- **修复工作区分组操作后对话消失** (`lib/session-move.js`)：在 `moveSessionToWorkspace` 的"同 CWD"路径中增加完整回滚逻辑。若挂载目标工作区失败，自动重新挂载原工作区并恢复 `sessionPaths` 映射，防止会话进入悬空状态。
+- **修复使用插件能力后无法创建新对话** (`lib/archive-experience.js`)：修正 `allowArchivedNavigation` 包装器，仅当 `clearArchivedCurrent` 调用参数为特定允许的归档会话 ID（`args[0] === allowed`）时才拦截，而非拦截所有调用导致正常会话创建被阻断。
+- **修复侧边栏面板挂载/卸载异常导致 UI 状态损坏** (`lib/sidebar-entry.js`)：为 `mountMain`、`mountRow`、`unmountMain`、`unmountRow`、`sync` 函数增加 try/catch 与 `console.warn` 日志，确保面板注册/注销时的异常不会留下悬空清理引用。
+- **修复 `installArchiveWorkspace` 依赖未初始化的 `favoriteDomainPromise`** (`lib/workspace.js`)：猴子补丁前在目标注册表上显式初始化 `favoriteDomainPromise = void 0`。
+- **修复 `pruneUnknownArchivedSessionIds` 暂时性存储错误导致误删归档会话** (`lib/workspace.js`)：将 `listStoredHeaders()` 调用包裹在 try/catch 中；失败时记录警告并直接返回当前归档列表，不执行任何修剪。
+- **修复卸载时未清理 `favoriteDomainPromise` 属性残留** (`lib/workspace.js`)：在 `installArchiveWorkspace` 返回的清理函数中显式删除 `favoriteDomainPromise` 属性。
 
 ## [1.3.6] - 2026-11-14
 

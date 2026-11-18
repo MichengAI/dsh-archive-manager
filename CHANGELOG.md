@@ -1,11 +1,15 @@
 # Changelog
 
-## [1.3.7] - 2026-11-18
+## [1.3.7] - 2026-11-19
 
-### Diagnostics & UX Enhancements
+### Critical Fixes
 
-- **Resilient Cache Rebuild for Missing Session Logs**: During session cache diagnosis and rebuild, sessions whose log files are deleted or physically missing from disk are automatically recognized and safely skipped, preventing whole-workspace cache rebuilds from getting stuck and eliminating persistent diagnostic alerts in settings (#118).
-- **Clear Rebuild Failure Stages & One-Click Copy**: When cache rebuild encounters file permission or I/O read errors, the failure card now clearly indicates the exact stage and underlying cause, with a new "Copy failure details" action for streamlined troubleshooting and reporting.
+- **Fixed conversations disappearing after workspace grouping** (`lib/session-move.js`): Added complete rollback logic for the "same CWD" path in `moveSessionToWorkspace`. If attaching to the target workspace fails, the original workspaces are re-attached and `sessionPaths` is restored, preventing sessions from becoming orphaned.
+- **Fixed inability to create new conversations after using plugin capabilities** (`lib/archive-experience.js`): Corrected `allowArchivedNavigation` wrapper to only intercept `clearArchivedCurrent` when called with the specific allowed archived session ID (`args[0] === allowed`), instead of intercepting all calls which blocked normal session creation.
+- **Fixed sidebar panel mount/unmount errors corrupting UI state** (`lib/sidebar-entry.js`): Added try/catch with `console.warn` logging to `mountMain`, `mountRow`, `unmountMain`, `unmountRow`, and `sync` functions, ensuring exceptions during panel registration/unregistration don't leave dangling cleanup references.
+- **Fixed `installArchiveWorkspace` depending on uninitialized `favoriteDomainPromise`** (`lib/workspace.js`): Explicitly initialize `favoriteDomainPromise = void 0` on the target registry before monkey-patching methods from `ArchiveWorkspaceRegistry.prototype`.
+- **Fixed `pruneUnknownArchivedSessionIds` incorrectly pruning on transient storage errors** (`lib/workspace.js`): Wrapped `listStoredHeaders()` call in try/catch; on failure, log a warning and return the current archived list unchanged instead of proceeding with incomplete data.
+- **Fixed `favoriteDomainPromise` not cleaned up on plugin uninstall** (`lib/workspace.js`): Added explicit deletion of `favoriteDomainPromise` property in the cleanup function returned by `installArchiveWorkspace`.
 
 ## [1.3.6] - 2026-11-14
 

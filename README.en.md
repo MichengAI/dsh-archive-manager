@@ -23,6 +23,19 @@
 
 This document describes **1.3.7**. See [Changelog](CHANGELOG.md) for published releases.
 
+## 1.3.7 Critical Fixes (2026-11-19)
+
+| Issue | Severity | Fixed File | Description |
+|-------|----------|------------|-------------|
+| Conversations disappear after workspace grouping | 🔴 Critical | `lib/session-move.js` | Added full rollback logic for same-CWD path to prevent orphaned sessions |
+| Cannot create new conversations after using plugin | 🔴 Critical | `lib/archive-experience.js` | Fixed `allowArchivedNavigation` to only intercept the specific archived session |
+| Sidebar panel mount/unmount errors corrupt UI state | 🟡 Medium | `lib/sidebar-entry.js` | Added try/catch with logging to all mount/unmount/sync functions |
+| `installArchiveWorkspace` depends on uninitialized property | 🟡 Medium | `lib/workspace.js` | Explicitly initialize `favoriteDomainPromise` before monkey-patching |
+| `pruneUnknownArchivedSessionIds` deletes on transient errors | 🟠 High | `lib/workspace.js` | Catch `listStoredHeaders` failures and skip pruning |
+| `favoriteDomainPromise` not cleaned up on uninstall | 🟢 Low | `lib/workspace.js` | Explicitly delete residual property in cleanup function |
+
+> ⚠️ **Deployment Note**: `workspace.js`, `session-move.js` are host-side — restart DSH to take effect; `archive-experience.js`, `sidebar-entry.js` are client-side sources — must rebuild in source repo (`pnpm build`) to regenerate `lib/client.js` for Web UI.
+
 ## Overview
 
 Put inactive conversations away and find them again when needed, keeping everyday task lists tidy.

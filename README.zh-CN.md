@@ -23,6 +23,19 @@
 
 本文描述 **1.3.7**。已发布变更见[更新日志](CHANGELOG.zh-CN.md)。
 
+## 1.3.7 关键修复 (2026-11-19)
+
+| 问题 | 严重度 | 修复文件 | 说明 |
+|------|--------|----------|------|
+| 工作区分组后对话消失 | 🔴 严重 | `lib/session-move.js` | 同 CWD 路径增加完整回滚逻辑，防止会话悬空 |
+| 使用插件后无法创建新对话 | 🔴 严重 | `lib/archive-experience.js` | 修正 `allowArchivedNavigation` 仅拦截特定归档会话 |
+| 侧边栏面板挂载/卸载异常导致 UI 损坏 | 🟡 中等 | `lib/sidebar-entry.js` | 所有挂载/卸载/同步函数增加 try/catch 与日志 |
+| `installArchiveWorkspace` 依赖未初始化属性 | 🟡 中等 | `lib/workspace.js` | 猴子补丁前显式初始化 `favoriteDomainPromise` |
+| `pruneUnknownArchivedSessionIds` 暂时性错误误删 | 🟠 较高 | `lib/workspace.js` | 捕获 `listStoredHeaders` 失败并跳过修剪 |
+| 卸载时未清理 `favoriteDomainPromise` | 🟢 低 | `lib/workspace.js` | 清理函数中显式删除残留属性 |
+
+> ⚠️ **部署说明**：`workspace.js`、`session-move.js` 为宿主端代码，重启 DSH 即时生效；`archive-experience.js`、`sidebar-entry.js` 为客户端源码，需在源码仓库构建后重新生成 `lib/client.js` 才能在 Web UI 生效。
+
 ## 功能概览
 
 把暂时不用的会话收起来，需要时再找回，让日常任务列表更清爽。
