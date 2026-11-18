@@ -832,7 +832,8 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Re
 					try {
 						source = await this.readStoredProjectionSource(this.ctx.sessionPersistence, item.sessionId);
 					} catch (readError) {
-						if (isSessionNotFoundError(readError, item.sessionId) || await this.cacheSourceMissing(item.sessionId, item.identity)) {
+						const confirmed = await this.cacheSourceMissing(item.sessionId, item.identity);
+						if (confirmed === true || (confirmed !== false && isSessionNotFoundError(readError, item.sessionId))) {
 							this.markMissingCacheSource(item.sessionId, item.identity);
 							(result.missingSourceSessionIds ??= []).push(item.sessionId);
 							result.skippedSessionIds.push(item.sessionId);

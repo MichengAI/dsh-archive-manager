@@ -114,9 +114,36 @@ test('Issue118 residual stat header does not break missing log suppression when 
   f.ctx.sessionPersistence.stat = async () => undefined;
   await f.registry.rebuildSessionCaches({ items: [diagnosis.items[0]] });
   // stat 能读出残余 header，但 findLog 依然确认为缺失
-  f.ctx.sessionPersistence.stat = async id => f.rows.find(row => row.id === id);
+  f.ctx.sessionPersistence.stat = async id => {
+    const found = f.rows.find(row => row.id === id);
+    return found ? { header: found } : undefined;
+  };
   const reDiag = await f.registry.diagnoseSessionCaches();
   assert.deepEqual(reDiag.items.map(item => item.sessionId), ['workspace', 'stray'], 'residual stat header must not cancel suppression if findLog confirms missing');
+});
+
+test('Issue118 read error is not masked as missing source when findLog confirms log exists', async () => {
+  const f = fixture();
+  f.registry.headers = new Map(f.rows.map(row => [row.id, row]));
+  const diagnosis = await f.registry.diagnoseSessionCaches();
+  f.ctx.sessionPersistence.findLog = async id => ({ sourcePath: `${id}.jsonl` });
+  const originalOpen = f.ctx.sessionPersistence.open;
+  f.ctx.sessionPersistence.open = async (id, ...args) => {
+    if (id === 'archived') {
+      const err = new Error(`session "${id}" not found`);
+      err.code = 'ENOENT';
+      err.name = 'SessionPersistenceNotFoundError';
+      throw err;
+    }
+    return originalOpen(id, ...args);
+  };
+  const result = await f.registry.rebuildSessionCaches({ items: [diagnosis.items[0]] });
+  assert.deepEqual(result.skippedSessionIds, []);
+  assert.equal(result.missingSourceSessionIds?.length ?? 0, 0);
+  assert.equal(result.failures.length, 1);
+  assert.equal(result.failures[0].sessionId, 'archived');
+  assert.equal(result.failures[0].stage, 'read');
+  assert.match(result.failures[0].message, /session "archived" not found/);
 });
 
 test('Issue118 an unreadable header is not mistaken for a missing log', async () => {
