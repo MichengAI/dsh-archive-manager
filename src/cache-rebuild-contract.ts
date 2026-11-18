@@ -2,7 +2,15 @@ import { record } from "./contracts.js";
 import type { Header } from "./host-compat.js";
 export interface CacheCandidate { sessionId: string; identity: string }
 export interface CacheDiagnosis { count: number; items: CacheCandidate[] }
-export interface CacheRebuildResult { rebuiltSessionIds: string[]; skippedSessionIds: string[]; failures: { sessionId: string; message: string }[] }
+export const cacheFailureStages = ["lookup", "read", "save", "request"] as const;
+export type CacheFailureStage = typeof cacheFailureStages[number];
+export interface CacheRebuildResult {
+  rebuiltSessionIds: string[];
+  skippedSessionIds: string[];
+  /** 已确认缺少原始日志的跳过项。 */
+  missingSourceSessionIds?: string[];
+  failures: { sessionId: string; message: string; stage?: CacheFailureStage }[];
+}
 /** 仅由不可变头部生成生命周期见证，客户端传值不能代替服务端权威校验。 */
 export function cacheIdentity(header: Header): string {
   return JSON.stringify([header.version, header.createdAt, header.cwd ?? null, header.isSeeded]);
@@ -25,7 +33,9 @@ export const cacheDiagnosisSchema = { parse(input: unknown): CacheDiagnosis {
 export const cacheRebuildSchema = { parse(input: unknown): CacheRebuildResult {
   const value = record(input);
   for (const key of ["rebuiltSessionIds", "skippedSessionIds"]) if (!Array.isArray(value?.[key]) || (value[key] as unknown[]).some(id => typeof id !== "string")) throw new TypeError("invalid cache rebuild result");
-  if (!Array.isArray(value.failures) || value.failures.some(f => !f || typeof f.sessionId !== "string" || typeof f.message !== "string")) throw new TypeError("invalid cache rebuild failures");
+  const missing = value.missingSourceSessionIds;
+  if (missing !== undefined && (!Array.isArray(missing) || new Set(missing).size !== missing.length || missing.some(id => typeof id !== "string" || !(value.skippedSessionIds as unknown[]).includes(id)))) throw new TypeError("invalid missing cache sources");
+  if (!Array.isArray(value.failures) || value.failures.some(f => !f || typeof f.sessionId !== "string" || typeof f.message !== "string" || (f.stage !== undefined && !cacheFailureStages.includes(f.stage)))) throw new TypeError("invalid cache rebuild failures");
   return value as unknown as CacheRebuildResult;
 } };
 export function cacheRebuildInvocations() {

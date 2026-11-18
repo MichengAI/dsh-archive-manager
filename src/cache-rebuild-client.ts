@@ -55,8 +55,9 @@ export function createCacheRebuildController(api: {
           const value = cacheRebuildSchema.parse(await api.rebuild({ items: [item] }));
           if (!active) return;
           result.rebuiltSessionIds.push(...value.rebuiltSessionIds); result.skippedSessionIds.push(...value.skippedSessionIds); result.failures.push(...value.failures);
+          if (value.missingSourceSessionIds?.length) (result.missingSourceSessionIds ??= []).push(...value.missingSourceSessionIds);
           if (value.failures.length) retry.push(item);
-        } catch (error) { if (!active) return; result.failures.push({ sessionId: item.sessionId, message: errorMessage(error) }); retry.push(item); }
+        } catch (error) { if (!active) return; result.failures.push({ sessionId: item.sessionId, stage: "request", message: errorMessage(error) }); retry.push(item); }
         update({ progress: { done: index + 1, total: items.length } });
       }
       update({ result });

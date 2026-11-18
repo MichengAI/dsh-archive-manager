@@ -515,6 +515,7 @@ export function bindArchiveManagerRemote(ctx: Context): () => void {
 type RestorableWorkspaceConstructor = new (ctx: Context) => InstanceType<WorkspaceConstructor> & {
 	unarchiveSession(sessionId: string): Promise<unknown>;
 };
+const missingCacheSources = new WeakMap<object, Map<string, string>>();
 var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as RestorableWorkspaceConstructor) {
 	static inject = [
 		"storageDomain",
@@ -743,15 +744,36 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Re
 		const cache = this.ctx.get("sessionProjectionCache");
 		if (!cache) throw new Error("Official session projection cache is unavailable");
 		const items = [];
-		const headers = (this as unknown as { headers?: Map<string, Header> }).headers?.size
-			? Array.from((this as unknown as { headers: Map<string, Header> }).headers.values())
-			: await this.listStoredHeaders();
+		const index = (this as unknown as { headers?: Map<string, Header> }).headers;
+		const headers = index?.size ? Array.from(index.values()) : await this.listStoredHeaders();
+		const missing = missingCacheSources.get(Reflect.get(this, symbols.original) ?? this);
 		for (const header of headers) {
-			if (await this.cacheRebuildEligible(header) && !this.usableSessionListCache(header)) {
-				items.push({ sessionId: header.id, identity: cacheIdentity(header) });
+			if (!(await this.cacheRebuildEligible(header)) || this.usableSessionListCache(header)) continue;
+			const identity = cacheIdentity(header);
+			if (missing?.get(header.id) === identity) {
+				// 只复核上次明确缺源的条目；查询失败时仍让用户看到并排查该条目。
+				try {
+					if (!await this.readSessionHeaderDirect(header.id) && await this.cacheSourceMissing(header.id)) continue;
+				} catch { /* 无法确认缺源，保留候选。 */ }
+				if (missing.get(header.id) === identity) missing.delete(header.id);
 			}
+			items.push({ sessionId: header.id, identity });
 		}
 		return { count: items.length, items };
+	}
+	/** stat 也会对坏头部返回空；仅在宿主工件查找明确返回空时才算缺源。 */
+	async cacheSourceMissing(sessionId: string, identity?: string): Promise<boolean | undefined> {
+		const persistence = this.ctx.sessionPersistence;
+		if (typeof persistence?.findLog !== "function") return undefined;
+		const missing = await persistence.findLog(sessionId) === undefined;
+		const indexed = this.headers?.get(sessionId);
+		if (missing && indexed && cacheIdentity(indexed) === identity) {
+			const registry = Reflect.get(this, symbols.original) ?? this;
+			const previous = missingCacheSources.get(registry) ?? new Map<string, string>();
+			previous.set(sessionId, identity);
+			missingCacheSources.set(registry, previous);
+		}
+		return missing;
 	}
 	/** 定向读取持久化头部，优先单会话 stat 避免全量枚举，无 stat 时安全回退。 */
 	async readSessionHeaderDirect(sessionId: string): Promise<Header | undefined> {
@@ -769,22 +791,34 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Re
 		const result: CacheRebuildResult = { rebuiltSessionIds: [], skippedSessionIds: [], failures: [] };
 		for (const item of [...new Map(items.map(row => [row.sessionId, row])).values()]) {
 			await this.enqueueOperation(async () => {
+				let stage: "lookup" | "read" | "save" = "lookup";
 				try {
 					const cache = this.ctx.get("sessionProjectionCache");
-					if (!cache) throw new Error("Official session projection cache is unavailable");
+					const readHeader = async () => {
+						const header = await this.readSessionHeaderDirect(item.sessionId);
+						if (header) return header;
+						const missing = await this.cacheSourceMissing(item.sessionId, item.identity);
+						if (missing === false) throw new Error("The source log exists, but its session header could not be read.");
+						if (missing) (result.missingSourceSessionIds ??= []).push(item.sessionId);
+						return undefined;
+					};
+					if (!cache) { stage = "save"; throw new Error("Official session projection cache is unavailable"); }
 					// 定向读取持久化头部，不使用工作区可能陈旧的内存索引。
-					const header = await this.readSessionHeaderDirect(item.sessionId);
+					const header = await readHeader();
 					if (!header || cacheIdentity(header) !== item.identity || !(await this.cacheRebuildEligible(header)) || this.usableSessionListCache(header)) {
 						result.skippedSessionIds.push(item.sessionId); return;
 					}
+					stage = "read";
 					const source = await this.readStoredProjectionSource(this.ctx.sessionPersistence, item.sessionId);
-					const current = await this.readSessionHeaderDirect(item.sessionId);
+					stage = "lookup";
+					const current = await readHeader();
 					if (!current || cacheIdentity(current) !== item.identity || cacheIdentity(source.meta) !== item.identity || !(await this.cacheRebuildEligible(current))) {
 						result.skippedSessionIds.push(item.sessionId); return;
 					}
+					stage = "save";
 					await confirmColdCacheWrite(cache, source);
 					result.rebuiltSessionIds.push(item.sessionId);
-				} catch (error) { result.failures.push({ sessionId: item.sessionId, message: (error instanceof Error ? error.message : String(error)).slice(0, 500) }); }
+				} catch (error) { result.failures.push({ sessionId: item.sessionId, stage, message: errorMessage(error).slice(0, 500) }); }
 			});
 		}
 		return result;

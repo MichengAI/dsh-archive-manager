@@ -1,6 +1,9 @@
 import type { Translate, BatchProgress, BatchResult, OrganizeKind } from "./contracts.js";
+import { errorCode } from "./contracts.js";
+import { copySessionText } from "./archive-discovery.js";
 import { Disclosure, NumberField } from "./plugin-ui.js";
 import type { CacheRepairState } from "./cache-rebuild-client.js";
+import type { CacheRebuildResult } from "./cache-rebuild-contract.js";
 interface OrganizerPanelProps {
  t: Translate; archived: boolean; busy: boolean; ready: boolean; days: string | number; onDays(value: string): void;
  count: number; onPreview(): void; progress?: BatchProgress | null; result?: (BatchResult & { kind?: OrganizeKind }) | null;
@@ -21,10 +24,20 @@ export function createOrganizerPanel(React: typeof import("react"), Button?: imp
     const Control = Button ?? ((buttonProps: { disabled?: boolean; onClick?: () => void; children?: import("react").ReactNode }) => h("button", { type: "button", disabled: buttonProps.disabled, onClick: buttonProps.onClick }, buttonProps.children));
     return h(Control, { variant: "outline", size: "sm", ...props }, label);
   }
-  function FailureDetails({ title, failures, separator }: { title: string; failures: { sessionId: string; message: string }[]; separator: string }) {
+  function FailureDetails({ title, failures, separator, cacheTranslate }: { title: string; failures: CacheRebuildResult["failures"]; separator: string; cacheTranslate?: Translate }) {
     const [open, setOpen] = React.useState(false);
-    const list = h("ul", null, failures.map(failure => h("li", { key: failure.sessionId }, failure.sessionId, separator, failure.message)));
-    return h(Disclosure, { title, open, onToggle: () => setOpen(value => !value) }, list);
+    const [copyStatus, setCopyStatus] = React.useState<{ message: string; failed?: boolean } | null>(null);
+    const lines = failures.map(failure => {
+      const stage = failure.stage && cacheTranslate ? cacheTranslate(`organizer.cacheFailure.${failure.stage}`) + separator : "";
+      return failure.sessionId + separator + stage + failure.message;
+    });
+    const list = h("ul", { style: cacheTranslate ? { overflowWrap: "anywhere", userSelect: "text" } : undefined }, failures.map((failure, index) => h("li", { key: failure.sessionId }, lines[index])));
+    const copy = cacheTranslate && textButton(cacheTranslate("organizer.cacheCopyFailures"), { onClick: async () => {
+      try { await copySessionText(lines.join("\n")); setCopyStatus({ message: cacheTranslate("organizer.cacheCopied") }); }
+      catch (error) { setCopyStatus({ message: cacheTranslate(String(errorCode(error) ?? "copy.denied")), failed: true }); }
+    } });
+    return h(Disclosure, { title, open, onToggle: () => setOpen(value => !value) }, list, copy,
+      copyStatus && h("p", { role: copyStatus.failed ? "alert" : "status" }, copyStatus.message));
   }
   return function OrganizerPanel({ t, archived, busy, ready, days, onDays, count, onPreview, progress, result, onRetry, undoCount, onUndo, onReload, orphanCount = 0, orphanSizeBytes = 0, orphanCleaning = false, onCleanOrphans, cacheCount = 0, cacheRepair, onRebuildCaches, onRetryCaches, onReloadCaches, onDismissCaches }: OrganizerPanelProps) {
     return h(React.Fragment, null,
@@ -47,7 +60,8 @@ export function createOrganizerPanel(React: typeof import("react"), Button?: imp
       cacheRepair && (cacheRepair.result || cacheRepair.progress || cacheRepair.error || cacheRepair.refreshError) && h("section", { className: "dsham_batchFeedback", "aria-label": t("organizer.cacheRebuild") },
         cacheRepair.progress && h("div", { role: "status" }, h("progress", { value: cacheRepair.progress.done, max: Math.max(1, cacheRepair.progress.total) }), t("organizer.progressCount", cacheRepair.progress)),
         cacheRepair.result && h("div", { role: "status" }, h("p", null, t("organizer.result", { succeeded: cacheRepair.result.rebuiltSessionIds.length, skipped: cacheRepair.result.skippedSessionIds.length, failed: cacheRepair.result.failures.length })),
-          cacheRepair.result.failures.length > 0 && h(FailureDetails, { title: t("organizer.failureDetails"), failures: cacheRepair.result.failures, separator: t("common.separator") }),
+          !!cacheRepair.result.missingSourceSessionIds?.length && h("p", null, t("organizer.cacheMissing", { n: cacheRepair.result.missingSourceSessionIds.length })),
+          cacheRepair.result.failures.length > 0 && h(FailureDetails, { title: t("organizer.failureDetails"), failures: cacheRepair.result.failures, separator: t("common.separator"), cacheTranslate: t }),
           cacheRepair.result.failures.length > 0 && onRetryCaches && textButton(t("organizer.cacheRetry", { n: cacheRepair.result.failures.length }), { disabled: busy || cacheRepair.busy, onClick: onRetryCaches })),
         cacheRepair.error && h("p", { role: "alert" }, t("organizer.cacheError", { detail: cacheRepair.error })),
         cacheRepair.refreshError && h("p", { role: "alert" }, t("organizer.refreshError", { detail: cacheRepair.refreshError })),
@@ -71,6 +85,13 @@ export function createOrganizerPanel(React: typeof import("react"), Button?: imp
 }
 
 export const organizerZh = {
+  "organizer.cacheMissing": "跳过 {n} 条：原始日志不存在",
+  "organizer.cacheFailure.lookup": "查找原始日志",
+  "organizer.cacheFailure.read": "读取原始日志",
+  "organizer.cacheFailure.save": "确认缓存写入",
+  "organizer.cacheFailure.request": "请求重建",
+  "organizer.cacheCopyFailures": "复制失败详情",
+  "organizer.cacheCopied": "已复制失败详情",
   "organizer.cacheTitle": "发现 {n} 个会话缺少可用列表缓存",
   "organizer.cacheDesc": "检查工作区、未分组及归档普通会话的头部与官方缓存。点击后逐条只读日志并重建官方列表缓存；跳过活动会话，不打开会话、不调用模型，也不改变归档或定时任务。超时表示保存未确认，可重试。",
   "organizer.cacheRebuild": "重建列表缓存", "organizer.cacheRebuilding": "重建中…", "organizer.cacheRetry": "重试失败 {n} 条", "organizer.cacheCheck": "刷新列表并重新检测", "organizer.cacheError": "缓存检测失败：{detail}", "organizer.dismiss": "完成",
@@ -95,6 +116,13 @@ export const organizerZh = {
 };
 
 export const organizerEn = {
+  "organizer.cacheMissing": "Skipped {n}: original log not found",
+  "organizer.cacheFailure.lookup": "Locate original log",
+  "organizer.cacheFailure.read": "Read original log",
+  "organizer.cacheFailure.save": "Confirm cache write",
+  "organizer.cacheFailure.request": "Request rebuild",
+  "organizer.cacheCopyFailures": "Copy failure details",
+  "organizer.cacheCopied": "Failure details copied",
   "organizer.cacheTitle": "Found {n} sessions without usable list caches",
   "organizer.cacheDesc": "Checks headers and official caches for workspace, ungrouped, and archived ordinary sessions. On click, reads logs one at a time and rebuilds official caches. Skips active sessions; never opens sessions, calls models or changes archives or schedules. Timeout means persistence is unconfirmed and can be retried.",
   "organizer.cacheRebuild": "Rebuild list caches", "organizer.cacheRebuilding": "Rebuilding…", "organizer.cacheRetry": "Retry {n} failed", "organizer.cacheCheck": "Refresh lists and check again", "organizer.cacheError": "Cache check failed: {detail}", "organizer.dismiss": "Done",
@@ -119,6 +147,13 @@ export const organizerEn = {
 };
 
 export const organizerRu = {
+  "organizer.cacheMissing": "Пропущено: {n} (исходный журнал не найден)",
+  "organizer.cacheFailure.lookup": "Поиск исходного журнала",
+  "organizer.cacheFailure.read": "Чтение исходного журнала",
+  "organizer.cacheFailure.save": "Подтверждение записи кеша",
+  "organizer.cacheFailure.request": "Запрос на восстановление",
+  "organizer.cacheCopyFailures": "Копировать сведения об ошибках",
+  "organizer.cacheCopied": "Сведения об ошибках скопированы",
   "organizer.cacheTitle": "Найдено {n} сессий без пригодного кеша списка",
   "organizer.cacheDesc": "Проверяются заголовки и официальный кеш сессий рабочих областей, без группы и архива. По нажатию журналы читаются по одному для восстановления официального кеша. Активные сессии пропускаются; сессии не открываются, модели не вызываются, архивы и расписания не меняются. Тайм-аут означает неподтверждённое сохранение; доступен повтор.",
   "organizer.cacheRebuild": "Восстановить кеш списков", "organizer.cacheRebuilding": "Восстановление…", "organizer.cacheRetry": "Повторить {n} ошибок", "organizer.cacheCheck": "Обновить списки и проверить", "organizer.cacheError": "Ошибка проверки кеша: {detail}", "organizer.dismiss": "Готово",
@@ -142,6 +177,13 @@ export const organizerRu = {
   "organizer.orphanCleanSuccess": "Успешно очищено {n} осиротевших подагентов."
 };
 export const organizerJa = {
+  "organizer.cacheMissing": "{n} 件をスキップ：元のログが存在しません",
+  "organizer.cacheFailure.lookup": "元のログを検索",
+  "organizer.cacheFailure.read": "元のログを読み取り",
+  "organizer.cacheFailure.save": "キャッシュの書き込みを確認",
+  "organizer.cacheFailure.request": "再構築を要求",
+  "organizer.cacheCopyFailures": "失敗の詳細をコピー",
+  "organizer.cacheCopied": "失敗の詳細をコピーしました",
   "organizer.cacheTitle": "{n} 件のセッションに利用可能な一覧キャッシュがありません",
   "organizer.cacheDesc": "ワークスペース、未分類、アーカイブ内の通常セッションのヘッダーと公式キャッシュを検査します。クリックするとログを順次読み取り、公式一覧キャッシュを再構築します。実行中のセッションはスキップされ、セッションを開いたり、モデルを呼び出したり、アーカイブやスケジュールを変更することはありません。タイムアウトした場合は未確認状態のため再試行できます。",
   "organizer.cacheRebuild": "一覧キャッシュを再構築",
@@ -182,6 +224,13 @@ export const organizerJa = {
 };
 
 export const organizerEs = {
+  "organizer.cacheMissing": "Omitidas: {n} (no se encontró el registro original)",
+  "organizer.cacheFailure.lookup": "Localizar el registro original",
+  "organizer.cacheFailure.read": "Leer el registro original",
+  "organizer.cacheFailure.save": "Confirmar la escritura de la caché",
+  "organizer.cacheFailure.request": "Solicitar la reconstrucción",
+  "organizer.cacheCopyFailures": "Copiar detalles de los errores",
+  "organizer.cacheCopied": "Detalles de los errores copiados",
   "organizer.cacheTitle": "Se encontraron {n} sesiones sin caché de lista utilizable",
   "organizer.cacheDesc": "Comprueba los encabezados y cachés oficiales para sesiones normales en espacios de trabajo, no agrupadas y archivadas. Al hacer clic, lee los registros uno a uno y reconstruye la caché oficial de lista. Omite sesiones activas; nunca abre sesiones, no llama a modelos ni altera archivos o tareas programadas. Si se agota el tiempo de espera, la persistencia no está confirmada y puede reintentarse.",
   "organizer.cacheRebuild": "Reconstruir caché de lista",
@@ -222,6 +271,13 @@ export const organizerEs = {
 };
 
 export const organizerFr = {
+  "organizer.cacheMissing": "Éléments ignorés : {n} (journal d’origine introuvable)",
+  "organizer.cacheFailure.lookup": "Rechercher le journal d’origine",
+  "organizer.cacheFailure.read": "Lire le journal d’origine",
+  "organizer.cacheFailure.save": "Confirmer l’écriture du cache",
+  "organizer.cacheFailure.request": "Demander la reconstruction",
+  "organizer.cacheCopyFailures": "Copier le détail des erreurs",
+  "organizer.cacheCopied": "Détail des erreurs copié",
   "organizer.cacheTitle": "{n} sessions trouvées sans cache de liste utilisable",
   "organizer.cacheDesc": "Vérifie les en-têtes et les caches officiels des sessions standard d'espace de travail, non groupées et archivées. Au clic, lit les journaux un par un et reconstruit les caches officiels. Ignore les sessions actives ; n'ouvre aucune session, n'appelle aucun modèle et ne modifie ni archives ni planifications. Un délai dépassé indique une persistance non confirmée et peut être réessayé.",
   "organizer.cacheRebuild": "Reconstruire le cache de liste",
@@ -262,6 +318,13 @@ export const organizerFr = {
 };
 
 export const organizerDe = {
+  "organizer.cacheMissing": "Übersprungen: {n} (ursprüngliches Protokoll nicht gefunden)",
+  "organizer.cacheFailure.lookup": "Ursprüngliches Protokoll suchen",
+  "organizer.cacheFailure.read": "Ursprüngliches Protokoll lesen",
+  "organizer.cacheFailure.save": "Cache-Schreibvorgang bestätigen",
+  "organizer.cacheFailure.request": "Neuaufbau anfordern",
+  "organizer.cacheCopyFailures": "Fehlerdetails kopieren",
+  "organizer.cacheCopied": "Fehlerdetails kopiert",
   "organizer.cacheTitle": "{n} Sitzungen ohne brauchbaren Listencache gefunden",
   "organizer.cacheDesc": "Prüft Header und offizielle Caches für normale Arbeitsbereichs-, ungruppierte und archivierte Sitzungen. Liest bei Klick Protokolle nacheinander und baut offizielle Caches neu auf. Überspringt aktive Sitzungen; öffnet niemals Sitzungen, ruft keine Modelle auf und ändert weder Archive noch Zeitpläne. Bei Zeitüberschreitung ist die Speicherung unbestätigt und kann wiederholt werden.",
   "organizer.cacheRebuild": "Listencache neu aufbauen",
@@ -302,6 +365,13 @@ export const organizerDe = {
 };
 
 export const organizerPt = {
+  "organizer.cacheMissing": "Ignorados: {n} (registro original não encontrado)",
+  "organizer.cacheFailure.lookup": "Localizar o registro original",
+  "organizer.cacheFailure.read": "Ler o registro original",
+  "organizer.cacheFailure.save": "Confirmar a gravação do cache",
+  "organizer.cacheFailure.request": "Solicitar a reconstrução",
+  "organizer.cacheCopyFailures": "Copiar detalhes dos erros",
+  "organizer.cacheCopied": "Detalhes dos erros copiados",
   "organizer.cacheTitle": "{n} sessões encontradas sem cache de lista utilizável",
   "organizer.cacheDesc": "Verifica cabeçalhos e caches oficiais para sessões normais de espaço de trabalho, não agrupadas e arquivadas. Ao clicar, lê registros sequencialmente e reconstrói caches oficiais. Pula sessões ativas; nunca abre sessões, não chama modelos nem altera arquivos ou agendamentos. Tempo limite esgotado indica persistência não confirmada e pode ser repetido.",
   "organizer.cacheRebuild": "Reconstruir cache de lista",

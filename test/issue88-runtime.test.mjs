@@ -46,6 +46,54 @@ test('Issue88 rebuilding queries authoritative targets without full-library list
   assert.equal(stats, 6, 'check each target before and after reading');
 });
 
+test('Issue118 a confirmed missing log is skipped and not advertised again, but reappears when restored', async () => {
+  const f = fixture();
+  const stored = f.rows[0];
+  f.registry.headers = new Map(f.rows.map(row => [row.id, row]));
+  let probes = 0;
+  f.ctx.sessionPersistence.findLog = async id => { probes++; return f.rows.find(row => row.id === id); };
+  const diagnosis = await f.registry.diagnoseSessionCaches();
+  assert.equal(probes, 0, 'initial diagnosis must not look up every cold log');
+  f.rows.shift();
+  const result = await f.registry.rebuildSessionCaches({ items: [diagnosis.items[0]] });
+  assert.deepEqual(result, { rebuiltSessionIds: [], skippedSessionIds: ['archived'], missingSourceSessionIds: ['archived'], failures: [] });
+  assert.deepEqual((await f.registry.diagnoseSessionCaches()).items.map(item => item.sessionId), ['workspace', 'stray']);
+  assert.deepEqual(f.reads, []); assert.deepEqual(f.writes, []);
+  assert.equal(f.registry.headers.get('archived'), stored, 'do not alter the shared index or archive state');
+  f.rows.unshift(stored);
+  assert.deepEqual((await f.registry.diagnoseSessionCaches()).items.map(item => item.sessionId), ['archived', 'workspace', 'stray']);
+});
+
+test('Issue118 an unreadable header is not mistaken for a missing log', async () => {
+  const f = fixture();
+  f.registry.headers = new Map(f.rows.map(row => [row.id, row]));
+  const diagnosis = await f.registry.diagnoseSessionCaches();
+  f.ctx.sessionPersistence.stat = async () => undefined;
+  f.ctx.sessionPersistence.findLog = async () => ({ sourcePath: 'synthetic.jsonl' });
+  const result = await f.registry.rebuildSessionCaches({ items: [diagnosis.items[0]] });
+  assert.deepEqual(result.skippedSessionIds, []);
+  assert.equal(result.failures[0].sessionId, 'archived');
+  assert.match(result.failures[0].message, /header/i);
+  assert.deepEqual(f.reads, []); assert.deepEqual(f.writes, []);
+  assert.equal((await f.registry.diagnoseSessionCaches()).count, 3);
+});
+
+test('Issue118 a previously missing log returns to the list when its lookup starts failing', async () => {
+  const f = fixture();
+  f.registry.headers = new Map(f.rows.map(row => [row.id, row]));
+  const diagnosis = await f.registry.diagnoseSessionCaches();
+  f.rows.shift();
+  f.ctx.sessionPersistence.findLog = async () => undefined;
+  const input = { items: [diagnosis.items[0]] };
+  await f.registry.rebuildSessionCaches(input);
+  assert.equal((await f.registry.diagnoseSessionCaches()).count, 2);
+  f.ctx.sessionPersistence.findLog = async () => { throw Error('log location failed'); };
+  assert.equal((await f.registry.diagnoseSessionCaches()).count, 3);
+  const result = await f.registry.rebuildSessionCaches(input);
+  assert.deepEqual(result.skippedSessionIds, []);
+  assert.equal(result.failures[0].message, 'log location failed');
+});
+
 test('Issue88 IM channel sessions stay out of diagnosis and rebuild even with a matching identity', async () => {
   const f = fixture();
   // 真实 IM 适配器会话：官方 session_projcache 的 JSON 后端无法承载含冒号的键。
@@ -102,6 +150,24 @@ for (const change of ['deleted', 'recreated', 'source-mismatch', 'stat-failure']
     if (change === 'stat-failure') assert.match(result.failures[0].message, /target stat failed/);
     else assert.deepEqual(result.skippedSessionIds, ['archived']);
     assert.deepEqual(f.writes, []); assert.ok(f.reads.includes('closed'));
+  });
+}
+
+for (const stage of ['lookup', 'read', 'save']) {
+  test(`Issue118 ${stage} failure preserves its stage and raw error`, async () => {
+    const f = fixture();
+    const { items } = await f.registry.diagnoseSessionCaches();
+    const message = 'raw ' + stage + ' error';
+    const fail = () => { throw Error(message); };
+    if (stage === 'lookup') f.ctx.sessionPersistence.stat = fail;
+    if (stage === 'read') {
+      const open = f.ctx.sessionPersistence.open;
+      f.ctx.sessionPersistence.open = async (...args) => ({ ...await open(...args), read: fail });
+    }
+    if (stage === 'save') f.cache.coldSnapshot = fail;
+    const result = await f.registry.rebuildSessionCaches({ items: items.slice(0, 1) });
+    assert.deepEqual(result, { rebuiltSessionIds: [], skippedSessionIds: [], failures: [{ sessionId: 'archived', stage, message }] });
+    if (stage === 'read') assert.ok(f.reads.includes('closed'));
   });
 }
 

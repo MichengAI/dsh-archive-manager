@@ -29,6 +29,30 @@ test('Issue88 controller rebuilds one at a time, retains failures and retries on
   controller.dispose();
 });
 
+test('Issue118 controller keeps confirmed missing and request failure separate', async () => {
+  const { createCacheRebuildController } = await import('../src/cache-rebuild-client.ts');
+  const items = ['missing', 'unreachable'].map(sessionId => ({ sessionId, identity: sessionId }));
+  const controller = createCacheRebuildController({ diagnose: async () => ({ count: items.length, items }), rebuild: async ({ items: [item] }) => {
+    if (item.sessionId === 'unreachable') throw Error('RPC rejected');
+    return { rebuiltSessionIds: [], skippedSessionIds: ['missing'], missingSourceSessionIds: ['missing'], failures: [] };
+  }, refresh: async () => {} });
+  await controller.load(); await controller.run();
+  assert.deepEqual(controller.snapshot().result, { rebuiltSessionIds: [], skippedSessionIds: ['missing'], missingSourceSessionIds: ['missing'], failures: [{ sessionId: 'unreachable', stage: 'request', message: 'RPC rejected' }] });
+  controller.dispose();
+});
+
+test('Issue118 expanded details identify the failing stage and expose the raw error', () => {
+  const Panel = createOrganizerPanel({ ...React, useState: value => [typeof value === 'boolean' ? true : value, () => {}] });
+  const props = { t: translate, archived: true, ready: true, busy: false, undoCount: 0, count: 0 };
+  const html = renderToStaticMarkup(React.createElement(Panel, { ...props, cacheRepair: { result: {
+    rebuiltSessionIds: [], skippedSessionIds: ['missing'], missingSourceSessionIds: ['missing'],
+    failures: [{ sessionId: 'session-a', stage: 'read', message: 'raw <error>' }]
+  } } }));
+  assert.match(html, /跳过 1 条：原始日志不存在/);
+  assert.match(html, /读取原始日志[^<]*raw &lt;error&gt;/);
+  assert.match(html, /复制失败详情/);
+});
+
 test('Issue88 disposed controller never starts another diagnostic request', async () => {
   const { createCacheRebuildController } = await import('../src/cache-rebuild-client.ts');
   let calls = 0;
