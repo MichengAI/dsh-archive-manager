@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.7] - 2026-11-18
+
+### Diagnostics & UX Enhancements
+
+- **Resilient Cache Rebuild for Missing Session Logs**: During session cache diagnosis and rebuild, sessions whose log files are deleted or physically missing from disk are automatically recognized and safely skipped, preventing whole-workspace cache rebuilds from getting stuck and eliminating persistent diagnostic alerts in settings (#118).
+- **Clear Rebuild Failure Stages & One-Click Copy**: When cache rebuild encounters file permission or I/O read errors, the failure card now clearly indicates the exact stage and underlying cause, with a new "Copy failure details" action for streamlined troubleshooting and reporting.
+
 ## [1.3.6] - 2026-11-14
 
 ### Host Compatibility
