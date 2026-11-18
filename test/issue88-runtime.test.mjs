@@ -64,6 +64,18 @@ test('Issue118 a confirmed missing log is skipped and not advertised again, but 
   assert.deepEqual((await f.registry.diagnoseSessionCaches()).items.map(item => item.sessionId), ['archived', 'workspace', 'stray']);
 });
 
+test('Issue118 missing log suppression works without populated in-memory headers index', async () => {
+  const f = fixture();
+  f.registry.headers = undefined;
+  f.ctx.sessionPersistence.findLog = async id => f.rows.find(row => row.id === id);
+  const diagnosis = await f.registry.diagnoseSessionCaches();
+  assert.equal(diagnosis.count, 3);
+  f.rows.shift();
+  const result = await f.registry.rebuildSessionCaches({ items: [diagnosis.items[0]] });
+  assert.deepEqual(result, { rebuiltSessionIds: [], skippedSessionIds: ['archived'], missingSourceSessionIds: ['archived'], failures: [] });
+  assert.deepEqual((await f.registry.diagnoseSessionCaches()).items.map(item => item.sessionId), ['workspace', 'stray']);
+});
+
 test('Issue118 an unreadable header is not mistaken for a missing log', async () => {
   const f = fixture();
   f.registry.headers = new Map(f.rows.map(row => [row.id, row]));
@@ -170,6 +182,21 @@ for (const stage of ['lookup', 'read', 'save']) {
     if (stage === 'read') assert.ok(f.reads.includes('closed'));
   });
 }
+
+test('Issue118 stat failure during recheck after reading source is reported as lookup stage', async () => {
+  const f = fixture();
+  const { items } = await f.registry.diagnoseSessionCaches();
+  let calls = 0;
+  const originalStat = f.ctx.sessionPersistence.stat;
+  f.ctx.sessionPersistence.stat = async (id) => {
+    calls++;
+    if (calls > 1) throw new Error('recheck lookup failed');
+    return originalStat(id);
+  };
+  const result = await f.registry.rebuildSessionCaches({ items: items.slice(0, 1) });
+  assert.deepEqual(result, { rebuiltSessionIds: [], skippedSessionIds: [], failures: [{ sessionId: 'archived', stage: 'lookup', message: 'recheck lookup failed' }] });
+  assert.ok(f.reads.includes('closed'));
+});
 
 test('Issue88 malformed and oversized batches are rejected before reading', async () => {
   const f = fixture();

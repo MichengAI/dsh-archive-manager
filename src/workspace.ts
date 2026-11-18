@@ -753,7 +753,7 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Re
 			if (missing?.get(header.id) === identity) {
 				// 只复核上次明确缺源的条目；查询失败时仍让用户看到并排查该条目。
 				try {
-					if (!await this.readSessionHeaderDirect(header.id) && await this.cacheSourceMissing(header.id)) continue;
+					if (!await this.readSessionHeaderDirect(header.id) && await this.cacheSourceMissing(header.id, identity)) continue;
 				} catch { /* 无法确认缺源，保留候选。 */ }
 				if (missing.get(header.id) === identity) missing.delete(header.id);
 			}
@@ -766,11 +766,11 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Re
 		const persistence = this.ctx.sessionPersistence;
 		if (typeof persistence?.findLog !== "function") return undefined;
 		const missing = await persistence.findLog(sessionId) === undefined;
-		const indexed = this.headers?.get(sessionId);
-		if (missing && indexed && cacheIdentity(indexed) === identity) {
+		const expectedIdentity = identity ?? (this.headers?.get(sessionId) ? cacheIdentity(this.headers.get(sessionId)!) : undefined);
+		if (missing && expectedIdentity) {
 			const registry = Reflect.get(this, symbols.original) ?? this;
 			const previous = missingCacheSources.get(registry) ?? new Map<string, string>();
-			previous.set(sessionId, identity);
+			previous.set(sessionId, expectedIdentity);
 			missingCacheSources.set(registry, previous);
 		}
 		return missing;
