@@ -23,9 +23,16 @@ try {
 	const dependencies = Object.fromEntries([
 		"session", "session-persistence", "session-persistence-jsonl", "session-format-catalog", "session-format-v3-to-v4", "session-query", "session-projection", "session-projection-cache", "workspace", "spill-local", "typert-protocol", "typert-registry"
 	].map((name) => [`@deepseek-ai/dsh-${name}`, version]));
-	dependencies["@deepseek-ai/cordis"] = manifest.devDependencies["@deepseek-ai/cordis"];
-	dependencies["@deepseek-ai/schemastery"] = "3.18.5";
-	Object.assign(dependencies, {
+	const cordisVersion = manifest.devDependencies["@deepseek-ai/cordis"];
+	dependencies["@deepseek-ai/cordis"] = cordisVersion;
+	dependencies["@deepseek-ai/schemastery"] = cordisVersion === "4.1.0" ? "3.19.0" : "3.18.5";
+	Object.assign(dependencies, cordisVersion === "4.1.0" ? {
+		"@deepseek-ai/cordis-plugin-group": "1.1.0",
+		"@deepseek-ai/cordis-plugin-hmr": "1.1.0",
+		"@deepseek-ai/cordis-plugin-include": "1.1.0",
+		"@deepseek-ai/cordis-plugin-loader": "1.1.0",
+		"@deepseek-ai/cordis-plugin-timer": "1.2.0",
+	} : {
 		"@deepseek-ai/cordis-plugin-group": "1.0.5",
 		"@deepseek-ai/cordis-plugin-hmr": "1.0.20",
 		"@deepseek-ai/cordis-plugin-include": "1.0.10",
