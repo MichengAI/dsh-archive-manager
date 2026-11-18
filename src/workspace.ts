@@ -516,6 +516,17 @@ type RestorableWorkspaceConstructor = new (ctx: Context) => InstanceType<Workspa
 	unarchiveSession(sessionId: string): Promise<unknown>;
 };
 const missingCacheSources = new WeakMap<object, Map<string, string>>();
+function isSessionNotFoundError(error: unknown, sessionId?: string): boolean {
+	if (!error || typeof error !== "object") return false;
+	const name = "name" in error ? String(error.name) : "";
+	if (name === "SessionPersistenceNotFoundError") return true;
+	const code = "code" in error ? String(error.code) : "";
+	if (code === "ENOENT") return true;
+	const message = "message" in error ? String(error.message) : "";
+	if (sessionId && message.includes(`session "${sessionId}" not found`)) return true;
+	if (message.endsWith("not found") && message.includes("session")) return true;
+	return false;
+}
 var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as RestorableWorkspaceConstructor) {
 	static inject = [
 		"storageDomain",
@@ -751,15 +762,26 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Re
 			if (!(await this.cacheRebuildEligible(header)) || this.usableSessionListCache(header)) continue;
 			const identity = cacheIdentity(header);
 			if (missing?.get(header.id) === identity) {
-				// 只复核上次明确缺源的条目；查询失败时仍让用户看到并排查该条目。
+				// 已明确缺源的条目：未确认日志已恢复可用前保持抑制，避免提示清不掉；
+				// 若查询发生异常则解除抑制，让用户看到并排查具体错误。
+				let shouldContinue = false;
 				try {
-					if (!await this.readSessionHeaderDirect(header.id) && await this.cacheSourceMissing(header.id, identity)) continue;
-				} catch { /* 无法确认缺源，保留候选。 */ }
-				if (missing.get(header.id) === identity) missing.delete(header.id);
+					const sourceMissing = await this.cacheSourceMissing(header.id, identity);
+					if (sourceMissing === true) shouldContinue = true;
+					else if (sourceMissing === undefined && !await this.readSessionHeaderDirect(header.id)) shouldContinue = true;
+				} catch { /* 无法确认缺源，保留候选并排查错误。 */ }
+				if (shouldContinue) continue;
+				missing.delete(header.id);
 			}
 			items.push({ sessionId: header.id, identity });
 		}
 		return { count: items.length, items };
+	}
+	markMissingCacheSource(sessionId: string, identity: string) {
+		const registry = Reflect.get(this, symbols.original) ?? this;
+		const previous = missingCacheSources.get(registry) ?? new Map<string, string>();
+		previous.set(sessionId, identity);
+		missingCacheSources.set(registry, previous);
 	}
 	/** stat 也会对坏头部返回空；仅在宿主工件查找明确返回空时才算缺源。 */
 	async cacheSourceMissing(sessionId: string, identity?: string): Promise<boolean | undefined> {
@@ -768,10 +790,7 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Re
 		const missing = await persistence.findLog(sessionId) === undefined;
 		const expectedIdentity = identity ?? (this.headers?.get(sessionId) ? cacheIdentity(this.headers.get(sessionId)!) : undefined);
 		if (missing && expectedIdentity) {
-			const registry = Reflect.get(this, symbols.original) ?? this;
-			const previous = missingCacheSources.get(registry) ?? new Map<string, string>();
-			previous.set(sessionId, expectedIdentity);
-			missingCacheSources.set(registry, previous);
+			this.markMissingCacheSource(sessionId, expectedIdentity);
 		}
 		return missing;
 	}
@@ -809,7 +828,18 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Re
 						result.skippedSessionIds.push(item.sessionId); return;
 					}
 					stage = "read";
-					const source = await this.readStoredProjectionSource(this.ctx.sessionPersistence, item.sessionId);
+					let source;
+					try {
+						source = await this.readStoredProjectionSource(this.ctx.sessionPersistence, item.sessionId);
+					} catch (readError) {
+						if (isSessionNotFoundError(readError, item.sessionId) || await this.cacheSourceMissing(item.sessionId, item.identity)) {
+							this.markMissingCacheSource(item.sessionId, item.identity);
+							(result.missingSourceSessionIds ??= []).push(item.sessionId);
+							result.skippedSessionIds.push(item.sessionId);
+							return;
+						}
+						throw readError;
+					}
 					stage = "lookup";
 					const current = await readHeader();
 					if (!current || cacheIdentity(current) !== item.identity || cacheIdentity(source.meta) !== item.identity || !(await this.cacheRebuildEligible(current))) {
