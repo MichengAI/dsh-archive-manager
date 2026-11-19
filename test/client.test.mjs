@@ -12,7 +12,6 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 import semver from "semver";
 
 const FALLBACK = fileURLToPath(new URL("../node_modules", import.meta.url));
@@ -457,7 +456,7 @@ test("bundle does not require obsolete client-store or client-runtime", () => {
 
 test("manifest keeps one DSH peer range; obsolete client-store and client-runtime removed", () => {
 	assert.equal(PACKAGE_MANIFEST.engines?.node, "^22.19.0 || >=24.0.0");
-	assert.equal(PACKAGE_MANIFEST.engines?.dsh, ">=0.2.0-rc.1 <0.3.0-0");
+	assert.equal(PACKAGE_MANIFEST.engines?.dsh, ">=0.2.2-rc.1 <0.3.0-0");
 	assert.equal(PACKAGE_MANIFEST.packageManager, "pnpm@11.22.0");
 	const dshPeerRanges = Object.entries(PACKAGE_MANIFEST.peerDependencies ?? {})
 		.filter(([name]) => name.startsWith("@deepseek-ai/dsh-"))
@@ -467,11 +466,11 @@ test("manifest keeps one DSH peer range; obsolete client-store and client-runtim
 		.map(([, version]) => version);
 	assert.ok(dshPeerRanges.length > 0);
 	assert.equal(new Set(dshPeerRanges).size, 1);
-	assert.equal(dshPeerRanges[0], ">=0.2.0-rc.1 <0.3.0-0");
-	for (const version of ["0.2.0-rc.1", "0.2.0-rc.2", "0.2.1-rc.1", "0.2.1-rc.2", "0.2.1-rc.3", "0.2.1-rc.4", "0.2.2-alpha.1", "0.2.2-rc.1", "0.2.2-rc.2", "0.2.2-rc.3", "0.2.9"]) {
-		assert.ok(semver.satisfies(version, dshPeerRanges[0], { includePrerelease: true }), `peer 范围必须接纳 0.2.x 代际版本 ${version}`);
+	assert.equal(dshPeerRanges[0], ">=0.2.2-rc.1 <0.3.0-0");
+	for (const version of ["0.2.2-rc.1", "0.2.2-rc.2", "0.2.2-rc.3", "0.2.2-rc.4", "0.2.2-rc.5", "0.2.9"]) {
+		assert.ok(semver.satisfies(version, dshPeerRanges[0], { includePrerelease: true }), `peer 范围必须接纳 0.2.2 代际版本 ${version}`);
 	}
-	for (const version of ["0.1.0-rc.8", "0.1.1-rc.2", "0.1.2-rc.1", "0.1.5-rc.1", "0.1.5-rc.2", "0.1.5-rc.3", "0.1.6-alpha.1", "0.1.6-alpha.2", "0.1.7-alpha.1", "0.1.7-rc.1", "0.1.7-rc.2", "0.2.0-alpha.1", "0.3.0-alpha.1", "0.3.0-rc.1", "0.3.0", "1.0.0"]) {
+	for (const version of ["0.1.0-rc.8", "0.1.1-rc.2", "0.1.2-rc.1", "0.1.5-rc.1", "0.1.5-rc.2", "0.1.5-rc.3", "0.1.6-alpha.1", "0.1.6-alpha.2", "0.1.7-alpha.1", "0.1.7-rc.1", "0.1.7-rc.2", "0.2.0-rc.1", "0.2.0-rc.2", "0.2.1-rc.1", "0.2.1-rc.5", "0.2.0-alpha.1", "0.3.0-alpha.1", "0.3.0-rc.1", "0.3.0", "1.0.0"]) {
 		assert.equal(semver.satisfies(version, dshPeerRanges[0], { includePrerelease: true }), false, `不接纳超出 0.2 代际版本 ${version}`);
 	}
 	assert.ok(dshDevelopmentVersions.length > 0);

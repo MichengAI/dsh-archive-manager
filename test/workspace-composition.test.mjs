@@ -7,7 +7,6 @@ import { pathToFileURL, fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { Context } from "@deepseek-ai/cordis";
 import { loadClientStore } from "./helpers/client-store.mjs";
-import { mirrorDirectoryFlow } from "../src/directory-flow-slot.ts";
 import { allowArchivedNavigation, currentSessionId } from "../src/archive-experience.ts";
 import { createSessionOrganizer } from "../src/archive-organizer.ts";
 
@@ -132,47 +131,6 @@ test("真实官方导航监听器：显式查看归档不再被清空，切换�
     else list.update({ ...list.getSnapshot() });
     assert.equal(selected(), undefined, "卸载恢复官方策略");
   } finally { guard?.dispose(); await stock.dispose(); }
-});
-
-test("目录镜像失败不影响源组件注册，清理部分镜像并在后续变化时恢复", () => {
-	const root = new Context();
-	const slots = new SlotRegistry(root);
-	const sourceName = "sidebar.workspaces.directoryFlow";
-	const target = "archiveManager.sidebar.directoryFlow";
-	const disposeRoot = slots.register({ name: "root", children: {
-		[sourceName]: { kind: "single", scope: "root" },
-		[target]: { kind: "single", scope: "root" }
-	} }, () => null);
-	const errors = [];
-	const originalError = console.error;
-	console.error = (...args) => errors.push(args);
-	const disposers = [];
-	let stop;
-	try {
-		const blocker = slots.register({ name: target, priority: 1 }, () => null);
-		disposers.push(blocker);
-		stop = mirrorDirectoryFlow(root, target);
-		disposers.push(slots.register({ name: sourceName, priority: 0, registrant: "official-a" }, () => null));
-		assert.equal(slots.entries(target).length, 2);
-		assert.doesNotThrow(() => {
-			disposers.push(slots.register({ name: sourceName, priority: 1, registrant: "official-b" }, () => null));
-		}, "目标冲突不能传播到官方源组件的注册调用");
-		assert.equal(slots.entries(sourceName).length, 2);
-		assert.equal(slots.entries(target).length, 1, "失败后仅保留外部阻塞条目");
-		assert.ok(errors.some((args) => args[0].includes(sourceName) && args[0].includes(target) && args[0].includes("official-b") && args[1] instanceof Error));
-		blocker();
-		disposers.push(slots.register({ name: sourceName, priority: 2, registrant: "official-c" }, () => null));
-		assert.equal(slots.entries(target).length, 3);
-		assert.deepEqual(slots.entries(target).map((entry) => entry.registrant), ["official-a", "official-b", "official-c"]);
-		stop();
-		assert.equal(slots.entries(target).length, 0);
-		assert.equal(slots.entries(sourceName).length, 3);
-	} finally {
-		stop?.();
-		for (const dispose of disposers.reverse()) dispose();
-		disposeRoot();
-		console.error = originalError;
-	}
 });
 
 test("已废弃的旧侧栏样式与注入函数已被彻底清理", () => {

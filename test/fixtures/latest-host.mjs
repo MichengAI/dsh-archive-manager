@@ -1,7 +1,7 @@
 // 使用真实新版 JSONL 和查询服务验证删除持久结果；所有工件仅写入临时目录。
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile, access, readFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { registerHooks } from "node:module";

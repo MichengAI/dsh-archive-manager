@@ -3,7 +3,6 @@ import type { StoredEntry } from "@deepseek-ai/dsh-client-ui-slots";
 import type { ArchiveProps, ClientList, ClientWorkspace, Observable, SearchPage, WorkspaceSnapshot } from "./client-types.js";
 import type { ArchiveState } from "./contracts.js";
 import type { NavigationSource, SessionNavigationSource } from "./archive-experience.js";
-import type { DirectoryMirrorContext } from "./directory-flow-slot.js";
 
 /** 跨版本远程结果保持宿主原有的成功/失败判别字段。 */
 export type RemoteResult<T> = { ok: true; value: T } | { ok: false; error: { message: string } };
@@ -82,7 +81,9 @@ interface Services {
   "contextMenus": ContextMenusService;
 }
 /** 仅描述实际消费的客户端能力，隔离旧宿主缺失的公开声明。 */
-export interface ClientContext extends Omit<DirectoryMirrorContext, "slots"> {
+export interface ClientContext {
+  effect(effect: () => () => void, label: string): () => void;
+  on(event: "slots/changed", listener: (key: string) => void): () => void;
   sessions: Sessions;
   workspaces: Workspaces;
   locale: { register(namespace: string, dictionaries: Record<string, Record<string, string>>): () => void; bind(namespace: string): ArchiveProps["t"] };

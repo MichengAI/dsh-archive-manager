@@ -1,5 +1,5 @@
-import { record, errorMessage, errorCode } from "./contracts.js";
-import type { Schema, ConversationEvent, TextMessage, SearchHit, Failure, SearchInput, SearchProgress, SessionSummary } from "./contracts.js";
+import { record } from "./contracts.js";
+import type { Schema, TextMessage, SearchHit, Failure, SearchInput, SearchProgress } from "./contracts.js";
 /** 归档正文检索和只读预览的共享协议与纯函数。正文只包含用户和助手的文本。 */
 const id = (value: unknown) => {
   if (typeof value !== "string" || !value.length || value.length > 1024) throw new TypeError("会话 ID 无效");

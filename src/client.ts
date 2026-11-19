@@ -1,15 +1,14 @@
-import type { ClientContext, Workspaces, Registry, RegistryCalls, DiscoveryMethod } from "./client-compat.js";
+import type { ClientContext, Workspaces, RegistryCalls } from "./client-compat.js";
 import type { ArchiveDeleteTarget } from "./client-types.js";
 import { record, errorMessage, errorCode } from "./contracts.js";
 import type { Schema } from "./contracts.js";
-import type { ClientSession, ClientList, ClientWorkspace, WorkspaceSnapshot, Observable, UiFacts, PendingHook, StatusHook, StatusMap, BatchTarget, DeletedBatch, ArchivedGroup, ArchiveProps, ArchiveBatchResult, ArchiveRetry, Translate, BatchProgress, OrganizeKind } from "./client-types.js";
+import type { ClientSession, ClientWorkspace, Observable, PendingHook, StatusHook, StatusMap, BatchTarget, DeletedBatch, ArchivedGroup, ArchiveProps, ArchiveBatchResult, ArchiveRetry, Translate, BatchProgress, OrganizeKind } from "./client-types.js";
 import type { NavigationSource } from "./archive-experience.js";
 import type { RemoteResult } from "./client-compat.js";
-import type { ReactNode, RefObject, AriaAttributes, HTMLAttributes, DragEvent as ReactDragEvent } from "react";
+import type { ReactNode, RefObject, AriaAttributes, HTMLAttributes } from "react";
 import { createDiscoveryTools, discoveryCss, discoveryZh, discoveryEn, discoveryRu, discoveryJa, discoveryEs, discoveryFr, discoveryDe, discoveryPt } from "./archive-discovery-ui.js";
 import { copySessionText, discoveryInvocations, matchesUpdatedRange, validUpdatedRange } from "./archive-discovery.js";
 import { cacheRebuildInvocations } from "./cache-rebuild-contract.js";
-import type { CacheDiagnosis } from "./cache-rebuild-contract.js";
 import { createCacheRebuildController } from "./cache-rebuild-client.js";
 import type { CacheRepairState } from "./cache-rebuild-client.js";
 import { allowArchivedNavigation, openArchivedConversation, formatArchiveNavigationError, ArchiveNavigationError, currentSessionId } from "./archive-experience.js";
@@ -2198,6 +2197,7 @@ export function startArchiveClient(require: HostRequire) {
 			const buttonTitle = `${buttonLabel} · ${currentSort?.label ?? sortBy}`;
 
 			return (0, react_jsx_runtime.jsxs)("div", {
+				id,
 				className: "dsham_viewSortContainer",
 				children: [
 					(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Menu, {
@@ -3676,11 +3676,6 @@ export function startArchiveClient(require: HostRequire) {
 				ctx.get("layout")?.beginNavigation?.();
 				sidebarReveal.request(sessionId);
 			};
-			const searchSessions = async (query: string, signal?: AbortSignal) => {
-				const result = await ctx.sessions.search(query, signal);
-				if (!result.ok) throw new Error(result.error.message);
-				return result.value;
-			};
 			const refreshSessionList = async () => {
 				if (typeof ctx.sessions.refresh !== "function") return null;
 				try {
@@ -3908,7 +3903,7 @@ export function startArchiveClient(require: HostRequire) {
 				});
 			}
 
-			function MoveSessionMenuItem({ sessionId, displayTitle: title, useMenuOpenState, t }: { sessionId: string; displayTitle: string; useMenuOpenState: () => readonly [boolean, (open: boolean) => void]; t: Translate }) {
+			function MoveSessionMenuItem({ sessionId, useMenuOpenState, t }: { sessionId: string; displayTitle?: string; useMenuOpenState: () => readonly [boolean, (open: boolean) => void]; t: Translate }) {
 				const [, setMenuOpen] = useMenuOpenState();
 				const submenuId = react.useId();
 				const [subOpen, setSubOpen] = react.useState(false);

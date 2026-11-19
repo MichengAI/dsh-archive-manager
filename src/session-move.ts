@@ -1,5 +1,5 @@
-import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, normalize, resolve } from "node:path";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { dirname, join, normalize, resolve } from "node:path";
 import zlib from "node:zlib";
 
 const ZSTD_MAGIC = 0xfd2fb528;

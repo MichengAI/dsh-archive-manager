@@ -25,19 +25,13 @@ try {
 	].map((name) => [`@deepseek-ai/dsh-${name}`, version]));
 	const cordisVersion = manifest.devDependencies["@deepseek-ai/cordis"];
 	dependencies["@deepseek-ai/cordis"] = cordisVersion;
-	dependencies["@deepseek-ai/schemastery"] = cordisVersion === "4.1.0" ? "3.19.0" : "3.18.5";
-	Object.assign(dependencies, cordisVersion === "4.1.0" ? {
+	dependencies["@deepseek-ai/schemastery"] = "3.19.0";
+	Object.assign(dependencies, {
 		"@deepseek-ai/cordis-plugin-group": "1.1.0",
 		"@deepseek-ai/cordis-plugin-hmr": "1.1.0",
 		"@deepseek-ai/cordis-plugin-include": "1.1.0",
 		"@deepseek-ai/cordis-plugin-loader": "1.1.0",
 		"@deepseek-ai/cordis-plugin-timer": "1.2.0",
-	} : {
-		"@deepseek-ai/cordis-plugin-group": "1.0.5",
-		"@deepseek-ai/cordis-plugin-hmr": "1.0.20",
-		"@deepseek-ai/cordis-plugin-include": "1.0.10",
-		"@deepseek-ai/cordis-plugin-loader": "1.0.6",
-		"@deepseek-ai/cordis-plugin-timer": "1.1.7",
 	});
 	await writeFile(join(isolated, "package.json"), JSON.stringify({ private: true, type: "module", dependencies, overrides: hostTestOverrides(version) }), "utf8");
 	await cp(join(root, "lib"), join(isolated, "lib"), { recursive: true });
