@@ -70,7 +70,7 @@ test("会话跨工作区移动：目标路径与当前 cwd 相同时直接归并
 		title: "项目2",
 		path: "D:\\shared-path",
 		sessionIds: [],
-		async attachSession(id) { attached.push(id); },
+		async attachSession(id) { attached.push(id); this.sessionIds.push(id); },
 	};
 	const mockRegistry = {
 		list: () => [ws1, ws2],
@@ -99,6 +99,111 @@ test("会话跨工作区移动：目标路径与当前 cwd 相同时直接归并
 	assert.deepEqual(detached, ["s-same"]);
 	assert.deepEqual(attached, ["s-same"]);
 	assert.equal(coldSnapshotId, "s-same");
+});
+
+function sameCwdMoveFixture() {
+	const sessionId = "s-same";
+	const cwd = join(tmpdir(), "dsham-same-cwd");
+	const workspaces = [];
+	const registry = {
+		list: () => workspaces,
+		readSessionHeader: async () => ({ id: sessionId, cwd }),
+		sessionPaths: new Map([[sessionId, cwd]]),
+		invalidSessionPaths: new Map(),
+		missingSessionPaths: new Set(),
+	};
+	const workspace = (id, sessionIds) => {
+		const ws = {
+			id,
+			path: cwd,
+			record: { sessionIds },
+			get sessionIds() { return this.record.sessionIds; },
+			async attachSession(id) {
+				if (!this.sessionIds.includes(id)) this.record.sessionIds = [id, ...this.sessionIds];
+			},
+			async detachSession(id) {
+				this.record.sessionIds = this.sessionIds.filter((x) => x !== id);
+			},
+		};
+		workspaces.push(ws);
+		return ws;
+	};
+	const move = () => moveSessionToWorkspace({ workspaceRegistry: registry }, sessionId, "target");
+	return { sessionId, cwd, registry, workspace, move };
+}
+
+for (const priorPath of ["indexed", "unindexed"]) {
+	test(`同目录移动：目标接收失败不移除来源（${priorPath}）`, async () => {
+		const { sessionId, cwd, registry, workspace, move } = sameCwdMoveFixture();
+		const source = workspace("source", ["first", sessionId, "last"]);
+		const target = workspace("target", []);
+		const failure = new Error("目标写入失败");
+		if (priorPath === "unindexed") {
+			registry.sessionPaths.delete(sessionId);
+			registry.invalidSessionPaths.set(sessionId, "原索引状态");
+			registry.missingSessionPaths.add(sessionId);
+		}
+		// 宿主会先更新路径索引，再提交目标工作区的成员记录。
+		target.attachSession = async () => {
+			registry.sessionPaths.set(sessionId, cwd);
+			registry.invalidSessionPaths.delete(sessionId);
+			registry.missingSessionPaths.delete(sessionId);
+			throw failure;
+		};
+
+		await assert.rejects(move, (error) => error === failure);
+		assert.deepEqual(source.sessionIds, ["first", sessionId, "last"]);
+		assert.deepEqual(target.sessionIds, []);
+		assert.equal(registry.sessionPaths.get(sessionId), priorPath === "indexed" ? cwd : undefined);
+		assert.equal(registry.invalidSessionPaths.get(sessionId), priorPath === "indexed" ? undefined : "原索引状态");
+		assert.equal(registry.missingSessionPaths.has(sessionId), priorPath === "unindexed");
+	});
+}
+
+test("同目录移动：目标没有保留成员时不移除来源", async () => {
+	const { sessionId, workspace, move } = sameCwdMoveFixture();
+	const source = workspace("source", [sessionId]);
+	const target = workspace("target", []);
+	target.attachSession = async () => {};
+
+	await assert.rejects(move, /目标工作区未保留会话/);
+	assert.deepEqual(source.sessionIds, [sessionId]);
+});
+
+for (const priorTarget of [false, true]) {
+	test(`同目录移动：移除来源失败时恢复成员关系（目标原有成员=${priorTarget}）`, async () => {
+		const { sessionId, workspace, move } = sameCwdMoveFixture();
+		const source = workspace("source", [sessionId]);
+		const blocked = workspace("blocked-source", [sessionId]);
+		const target = workspace("target", priorTarget ? [sessionId] : []);
+		const failure = new Error("来源写入失败");
+		blocked.detachSession = async () => { throw failure; };
+
+		await assert.rejects(move, (error) => error === failure);
+		assert.deepEqual(source.sessionIds, [sessionId]);
+		assert.deepEqual(blocked.sessionIds, [sessionId]);
+		assert.deepEqual(target.sessionIds, priorTarget ? [sessionId] : []);
+	});
+}
+
+test("同目录移动：来源恢复也失败时保留已确认的目标关联", async () => {
+	const { sessionId, workspace, move } = sameCwdMoveFixture();
+	const source = workspace("source", [sessionId]);
+	const blocked = workspace("blocked-source", [sessionId]);
+	const target = workspace("target", []);
+	const failure = new Error("来源写入失败");
+	const restoreFailure = new Error("恢复写入失败");
+	blocked.detachSession = async () => { throw failure; };
+	source.attachSession = async () => { throw restoreFailure; };
+
+	await assert.rejects(move, (error) => {
+		assert.ok(error instanceof AggregateError);
+		assert.deepEqual(error.errors, [failure, restoreFailure]);
+		return true;
+	});
+	assert.deepEqual(source.sessionIds, []);
+	assert.deepEqual(blocked.sessionIds, [sessionId]);
+	assert.deepEqual(target.sessionIds, [sessionId]);
 });
 
 test("会话跨工作区物理迁移：影子改写、回读自检、原子切换与冷缓存自愈", async () => {

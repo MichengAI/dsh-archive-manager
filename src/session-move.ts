@@ -32,6 +32,7 @@ export interface SessionMoveContext {
 		sessionPaths?: Map<string, string>;
 		headers?: Map<string, unknown>;
 		invalidSessionPaths?: Map<string, unknown>;
+		missingSessionPaths?: Set<string>;
 	};
 	sessionPersistence?: {
 		name?: string;
@@ -267,10 +268,49 @@ export async function moveSessionToWorkspace(
 
 	// 4. 路径比对：若 cwd 相同，仅需调整工作区记账，无需改动物理文件
 	if (currentNormalizedCwd && targetNormalizedCwd && currentNormalizedCwd === targetNormalizedCwd) {
-		for (const ws of sourceWorkspaces) {
-			await ws.detachSession(cleanSessionId);
+		const targetHadSession = rawWorkspaceSessionIds(targetWorkspace).includes(cleanSessionId);
+		const previousPath = registry.sessionPaths?.get(cleanSessionId);
+		const previousInvalidPath = registry.invalidSessionPaths?.get(cleanSessionId);
+		const wasMissing = registry.missingSessionPaths?.has(cleanSessionId);
+		const attemptedSources: WorkspaceEntityLike[] = [];
+		try {
+			// 先确认目标已接收，避免目标写入失败时原工作区已移除会话。
+			await targetWorkspace.attachSession(cleanSessionId);
+			if (!rawWorkspaceSessionIds(targetWorkspace).includes(cleanSessionId)) {
+				throw new Error("目标工作区未保留会话关联，已取消移动。");
+			}
+			for (const ws of sourceWorkspaces) {
+				attemptedSources.push(ws);
+				await ws.detachSession(cleanSessionId);
+			}
+		} catch (error) {
+			const rollbackErrors: unknown[] = [];
+			for (const ws of attemptedSources) {
+				if (rawWorkspaceSessionIds(ws).includes(cleanSessionId)) continue;
+				try {
+					await ws.attachSession(cleanSessionId);
+					if (!rawWorkspaceSessionIds(ws).includes(cleanSessionId)) {
+						throw new Error(`原工作区未恢复会话关联：${ws.id}`);
+					}
+				} catch (restoreError) {
+					rollbackErrors.push(restoreError);
+				}
+			}
+			// 只有来源恢复后才移除本次新增的目标关联，避免两边都找不到会话。
+			if (!rollbackErrors.length && !targetHadSession && rawWorkspaceSessionIds(targetWorkspace).includes(cleanSessionId)) {
+				try { await targetWorkspace.detachSession(cleanSessionId); }
+				catch (restoreError) { rollbackErrors.push(restoreError); }
+			}
+			if (rollbackErrors.length) {
+				throw new AggregateError([error, ...rollbackErrors], `移动失败，且未能完整恢复工作区关联：${String(error)}`);
+			}
+			// 宿主可能在目标落盘前修改索引；回滚后恢复移动前的索引状态。
+			if (previousPath === undefined) registry.sessionPaths?.delete(cleanSessionId);
+			else registry.sessionPaths?.set(cleanSessionId, previousPath);
+			if (previousInvalidPath !== undefined) registry.invalidSessionPaths?.set(cleanSessionId, previousInvalidPath);
+			if (wasMissing) registry.missingSessionPaths?.add(cleanSessionId);
+			throw error;
 		}
-		await targetWorkspace.attachSession(cleanSessionId);
 		registry.sessionPaths?.set(cleanSessionId, targetPath);
 
 		if (ctx.sessionProjectionCache && typeof ctx.sessionProjectionCache.coldSnapshot === "function") {
