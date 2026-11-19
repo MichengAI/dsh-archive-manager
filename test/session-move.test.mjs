@@ -605,3 +605,81 @@ test("会话跨工作区物理迁移：来源解绑后恢复失败抛出 Aggrega
 		await rm(tempDir, { recursive: true, force: true }).catch(() => {});
 	}
 });
+
+test("会话跨工作区物理迁移：目标挂接失败且来源重挂受阻时原工作区依然保留会话（守护 attach 优先顺序）", async () => {
+	const tempDir = await mkdtemp(join(tmpdir(), "dsham-move-attach-order-"));
+	try {
+		const sourceProject = join(tempDir, "proj-a");
+		const targetProject = join(tempDir, "proj-b");
+		const sessionsRoot = join(tempDir, "sessions");
+		await mkdir(sourceProject, { recursive: true });
+		await mkdir(targetProject, { recursive: true });
+		await mkdir(sessionsRoot, { recursive: true });
+
+		const sessionId = "session-order-probe";
+		const sourceSessionDir = join(sessionsRoot, "--proj-a--", sessionId);
+		await mkdir(sourceSessionDir, { recursive: true });
+		const sourceLog = join(sourceSessionDir, "session.v2.jsonl.zstd");
+		const targetLog = join(sessionsRoot, "--proj-b--", sessionId, "session.v2.jsonl.zstd");
+		const header = { type: "session", id: sessionId, cwd: sourceProject, version: 2 };
+		await writeFile(sourceLog, createZstdLog(header, []));
+
+		const wsA = {
+			id: "ws-a",
+			path: sourceProject,
+			record: { sessionIds: [sessionId] },
+			get sessionIds() { return this.record.sessionIds; },
+			async detachSession(id) {
+				this.record.sessionIds = this.record.sessionIds.filter((x) => x !== id);
+			},
+			async attachSession() {
+				throw new Error("灾难重挂失败");
+			},
+		};
+		const wsB = {
+			id: "ws-b",
+			path: targetProject,
+			record: { sessionIds: [] },
+			get sessionIds() { return this.record.sessionIds; },
+			async attachSession() {
+				throw new Error("目标挂接崩溃");
+			},
+			async detachSession(id) {
+				this.record.sessionIds = this.record.sessionIds.filter((x) => x !== id);
+			},
+		};
+
+		const ctx = {
+			workspaceRegistry: {
+				list: () => [wsA, wsB],
+				readSessionHeader: async () => header,
+				sessionPaths: new Map([[sessionId, sourceProject]]),
+				headers: new Map([[sessionId, header]]),
+				invalidSessionPaths: new Map(),
+				missingSessionPaths: new Set(),
+			},
+			sessionPersistence: {
+				root: sessionsRoot,
+				async stat(id) { return { header: { id, cwd: sourceProject } }; },
+				locate(h) {
+					const projKey = h.cwd === targetProject ? "--proj-b--" : "--proj-a--";
+					return { kind: "jsonl", path: join(sessionsRoot, projKey, sessionId, "session.v2.jsonl.zstd") };
+				},
+			},
+			sessions: { get: () => undefined },
+		};
+
+		await assert.rejects(
+			() => moveSessionToWorkspace(ctx, sessionId, "ws-b"),
+			/目标挂接崩溃/
+		);
+		// 守护「先 attach 目标后 detach 来源」：目标挂接崩溃时，来源尚未解绑，来源依然安全保留会话
+		assert.deepEqual(wsA.sessionIds, [sessionId]);
+		assert.deepEqual(wsB.sessionIds, []);
+		const sourceAfter = await readFile(sourceLog);
+		assert.ok(sourceAfter.length > 0);
+		await assert.rejects(() => readFile(targetLog));
+	} finally {
+		await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+	}
+});
