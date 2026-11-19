@@ -21,7 +21,7 @@
 
 > DSH Archive Manager ist ein von der Community gepflegtes Plugin für DeepSeek Harness (DSH) und kein offizielles Produkt von DeepSeek AI.
 
-Dieses Dokument beschreibt Version **1.3.7**. Frühere Änderungen finden Sie im [Changelog](CHANGELOG.md).
+Dieses Dokument beschreibt Version **1.4.0**. Frühere Änderungen finden Sie im [Changelog](CHANGELOG.md).
 
 ## Funktionsübersicht
 
@@ -66,7 +66,7 @@ Rechtsklicken Sie auf eine beliebige Arbeitsbereichs- oder Sitzungszeile in der 
 Ein funktionierendes DeepSeek Harness-Setup ist erforderlich. Die Beispiele verwenden das Profil `web`; passen Sie es an Ihre Umgebung an.
 
 - **Host-Kompatibilität**: DeepSeek Harness `0.2.2`-Reihe (`>=0.2.2-rc.1 <0.3.0-0`), verifiziert auf allen `0.2.2`-Release-Candidates (`0.2.2-rc.1` bis `0.2.2-rc.5`; Zwischen-Alphas werden nicht unterstützt).
-- Hosts vor `0.2.2-rc.1` werden nicht mehr unterstützt, und Breaking-Updates der Generation `0.3.0` werden durch das Versions-Gate abgefangen. Nutzer auf `0.1.x` installieren bitte Version `1.0.20`.
+- Hosts vor `0.2.2-rc.1` werden nicht mehr unterstützt, und Breaking-Updates der Generation `0.3.0` werden durch das Versions-Gate abgefangen. Nutzer auf Hosts von `0.2.0-rc.1` bis `0.2.1-rc.5` bleiben bitte auf Version `1.3.7`; Nutzer auf `0.1.x` installieren bitte Version `1.0.20`.
 - **Reverse-Proxy-Unterstützung**: Funktioniert hinter Reverse Proxies mit Pfadpräfix (z. B. `/app/dsh/`).
 
 ### Installation durch einen Agenten (empfohlen)

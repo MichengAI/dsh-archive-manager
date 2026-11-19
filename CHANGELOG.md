@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0] - 2026-11-19
+
+### Enhancements & Resilience
+
+- **Atomic Rollback & Protection for Workspace Session Moves**: Significantly improved safety and reliability when moving sessions across workspaces. If a move operation is interrupted or fails due to disk permission or workspace errors, original session data and records are safely retained in the source workspace without data loss.
+- **Host Support Alignment**: Upgraded the baseline to DeepSeek Harness `0.2.2` RC series (`0.2.2-rc.1` through `0.2.2-rc.5`) with cleaned-up legacy shims for a lighter and more stable runtime. If your host version is between `0.2.0-rc.1` and `0.2.1-rc.5`, please remain on version `1.3.7`. For `0.1.x` hosts, please use version `1.0.20`.
+
 ## [1.3.7] - 2026-11-18
 
 ### Diagnostics & UX Enhancements
