@@ -3903,7 +3903,7 @@ export function startArchiveClient(require: HostRequire) {
 				});
 			}
 
-			function MoveSessionMenuItem({ sessionId, useMenuOpenState, t }: { sessionId: string; displayTitle?: string; useMenuOpenState: () => readonly [boolean, (open: boolean) => void]; t: Translate }) {
+			function MoveSessionMenuItem({ sessionId, useMenuOpenState, t }: { sessionId: string; useMenuOpenState: () => readonly [boolean, (open: boolean) => void]; t: Translate }) {
 				const [, setMenuOpen] = useMenuOpenState();
 				const submenuId = react.useId();
 				const [subOpen, setSubOpen] = react.useState(false);

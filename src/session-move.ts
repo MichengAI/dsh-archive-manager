@@ -86,6 +86,26 @@ function rawWorkspaceSessionIds(ws: WorkspaceEntityLike): readonly string[] {
 	return Array.isArray(raw) ? raw : (Array.isArray(ws.sessionIds) ? ws.sessionIds : []);
 }
 
+function getInvalidSessionState(entry?: unknown, id?: string): unknown {
+	if (!entry || !id || typeof entry !== "object") return undefined;
+	const e = entry as { get?: (k: string) => unknown; has?: (k: string) => boolean };
+	if (typeof e.get === "function") return e.get(id);
+	if (typeof e.has === "function" && e.has(id)) return true;
+	return undefined;
+}
+
+function restoreInvalidSessionState(entry?: unknown, id?: string, state?: unknown): void {
+	if (!entry || !id || typeof entry !== "object") return;
+	const e = entry as { delete?: (k: string) => unknown; set?: (k: string, v: unknown) => unknown; add?: (k: string) => unknown };
+	if (state === undefined) {
+		e.delete?.(id);
+	} else if (typeof e.set === "function") {
+		e.set(id, state);
+	} else if (typeof e.add === "function") {
+		e.add(id);
+	}
+}
+
 /**
  * 解析并定位多帧 zstd 压缩的第一个 frame（Header 帧）边界。
  */
@@ -270,7 +290,7 @@ export async function moveSessionToWorkspace(
 	if (currentNormalizedCwd && targetNormalizedCwd && currentNormalizedCwd === targetNormalizedCwd) {
 		const targetHadSession = rawWorkspaceSessionIds(targetWorkspace).includes(cleanSessionId);
 		const previousPath = registry.sessionPaths?.get(cleanSessionId);
-		const previousInvalidPath = registry.invalidSessionPaths?.get(cleanSessionId);
+		const previousInvalidPath = getInvalidSessionState(registry.invalidSessionPaths, cleanSessionId);
 		const wasMissing = registry.missingSessionPaths?.has(cleanSessionId);
 		const attemptedSources: WorkspaceEntityLike[] = [];
 		try {
@@ -307,8 +327,9 @@ export async function moveSessionToWorkspace(
 			// 宿主可能在目标落盘前修改索引；回滚后恢复移动前的索引状态。
 			if (previousPath === undefined) registry.sessionPaths?.delete(cleanSessionId);
 			else registry.sessionPaths?.set(cleanSessionId, previousPath);
-			if (previousInvalidPath !== undefined) registry.invalidSessionPaths?.set(cleanSessionId, previousInvalidPath);
-			if (wasMissing) registry.missingSessionPaths?.add(cleanSessionId);
+			restoreInvalidSessionState(registry.invalidSessionPaths, cleanSessionId, previousInvalidPath);
+			if (!wasMissing) registry.missingSessionPaths?.delete(cleanSessionId);
+			else registry.missingSessionPaths?.add(cleanSessionId);
 			throw error;
 		}
 		registry.sessionPaths?.set(cleanSessionId, targetPath);
@@ -395,7 +416,11 @@ export async function moveSessionToWorkspace(
 	}
 
 	// 事务执行：移开源目录到备份区 -> 写入目标 -> 校验 -> 切换记账
-	const detachedWorkspaces: WorkspaceEntityLike[] = [];
+	const targetHadSession = rawWorkspaceSessionIds(targetWorkspace).includes(cleanSessionId);
+	const previousPath = registry.sessionPaths?.get(cleanSessionId);
+	const previousInvalidPath = getInvalidSessionState(registry.invalidSessionPaths, cleanSessionId);
+	const wasMissing = registry.missingSessionPaths?.has(cleanSessionId) ?? false;
+	const attemptedSources: WorkspaceEntityLike[] = [];
 	let targetAttached = false;
 	let stageFile: string | null = null;
 	let sourceDirMoved = false;
@@ -434,12 +459,18 @@ export async function moveSessionToWorkspace(
 		}
 
 		// e. 宿主记账同步
-		for (const ws of sourceWorkspaces) {
-			await ws.detachSession(cleanSessionId);
-			detachedWorkspaces.push(ws);
-		}
+		// 优先挂接目标工作区，再解除来源工作区关联。
+		// 即使来源移除失败，会话也已进入目标工作区；反之若先解绑来源再挂接目标，一旦目标挂接失败会导致两边都丢失。
 		await targetWorkspace.attachSession(cleanSessionId);
+		if (!rawWorkspaceSessionIds(targetWorkspace).includes(cleanSessionId)) {
+			throw new Error("目标工作区未保留会话关联，已取消移动。");
+		}
 		targetAttached = true;
+
+		for (const ws of sourceWorkspaces) {
+			attemptedSources.push(ws);
+			await ws.detachSession(cleanSessionId);
+		}
 
 		if (ctx.sessionProjectionCache && typeof ctx.sessionProjectionCache.coldSnapshot === "function") {
 			try {
@@ -465,11 +496,30 @@ export async function moveSessionToWorkspace(
 			}
 		}
 	} catch (error) {
-		// 回滚内存映射
+		const rollbackErrors: unknown[] = [];
+
+		// 1. 回滚物理工件（必须优先恢复原工件，因为宿主 attachSession 校验需要读取原工件与真实 header）
+		if (stageFile) await rm(stageFile, { force: true }).catch(() => {});
+		await rm(targetSessionDir, { recursive: true, force: true }).catch(() => {});
+		if (sourceDirMoved) {
+			try {
+				await mkdir(dirname(sourceSessionDir), { recursive: true });
+				await rename(backupDir, sourceSessionDir);
+			} catch (restoreErr) {
+				rollbackErrors.push(restoreErr);
+			}
+		}
+
+		// 2. 回滚内存映射与索引状态
 		if (header) {
 			registry.headers?.set(cleanSessionId, header);
-			if (header.cwd) registry.sessionPaths?.set(cleanSessionId, header.cwd);
 		}
+		if (previousPath === undefined) registry.sessionPaths?.delete(cleanSessionId);
+		else registry.sessionPaths?.set(cleanSessionId, previousPath);
+		restoreInvalidSessionState(registry.invalidSessionPaths, cleanSessionId, previousInvalidPath);
+		if (!wasMissing) registry.missingSessionPaths?.delete(cleanSessionId);
+		else registry.missingSessionPaths?.add(cleanSessionId);
+
 		if (liveSession !== undefined && header) {
 			try {
 				if ("header" in liveSession && (liveSession as unknown as { header?: { cwd?: string } }).header) {
@@ -481,22 +531,30 @@ export async function moveSessionToWorkspace(
 			} catch {}
 		}
 
-		// 回滚链路
-		if (stageFile) await rm(stageFile, { force: true }).catch(() => {});
-		await rm(targetSessionDir, { recursive: true, force: true }).catch(() => {});
-		if (sourceDirMoved) {
+		// 3. 恢复已解绑的来源工作区关联
+		for (const ws of attemptedSources) {
+			if (rawWorkspaceSessionIds(ws).includes(cleanSessionId)) continue;
 			try {
-				await mkdir(dirname(sourceSessionDir), { recursive: true });
-				await rename(backupDir, sourceSessionDir);
-			} catch (restoreErr) {
-				throw new AggregateError([error, restoreErr], `移动失败且原工件回滚异常，备份暂存于: ${backupDir}`);
+				await ws.attachSession(cleanSessionId);
+				if (!rawWorkspaceSessionIds(ws).includes(cleanSessionId)) {
+					throw new Error(`原工作区未恢复会话关联：${ws.id}`);
+				}
+			} catch (restoreError) {
+				rollbackErrors.push(restoreError);
 			}
 		}
-		if (targetAttached) {
-			await targetWorkspace.detachSession(cleanSessionId).catch(() => {});
+
+		// 4. 只有来源全部恢复（或未解绑）后，才移除本次新增的目标关联，避免两边都找不到会话
+		if (!rollbackErrors.length && targetAttached && !targetHadSession && rawWorkspaceSessionIds(targetWorkspace).includes(cleanSessionId)) {
+			try {
+				await targetWorkspace.detachSession(cleanSessionId);
+			} catch (restoreError) {
+				rollbackErrors.push(restoreError);
+			}
 		}
-		for (const ws of detachedWorkspaces) {
-			await ws.attachSession(cleanSessionId).catch(() => {});
+
+		if (rollbackErrors.length) {
+			throw new AggregateError([error, ...rollbackErrors], `物理移动失败，且未能完整恢复工件或工作区关联：${String(error)}`);
 		}
 		throw error;
 	}

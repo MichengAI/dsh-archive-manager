@@ -525,7 +525,7 @@ test("侧栏不再替换官方列表，打开和分叉交给宿主导航", async
 		sessions: { open() {}, fork: async () => "fork" },
 		workspaces: {},
 		slots: {
-			inject: (name, callback) => name === "archiveManager.sidebar.directoryFlow" ? () => {} : callback(),
+			inject: (_name, callback) => callback(),
 			register: (options) => registrations.set(options.name, options)
 		},
 		effect() {}
