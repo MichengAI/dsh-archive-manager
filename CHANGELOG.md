@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.4.1] - 2026-11-20
+
+### Bug Fixes & Improvements
+
+- **Safe Handling for Active Session Moves Across Workspaces**: Fixed an issue where moving an actively opened or running session across workspaces could lead to unstable sidebar states or failures when creating new sessions (#122). The plugin now safely guides users to close the active session first before performing cross-workspace moves, keeping ongoing sessions stable and preventing unexpected desktop errors.
+
 ## [1.4.0] - 2026-11-19
 
 ### Enhancements & Resilience
