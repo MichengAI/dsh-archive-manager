@@ -38,9 +38,8 @@ export interface SessionMoveContext {
 		name?: string;
 		root?: string;
 		config?: { root?: string };
-		prepare?(sessionId: string): Promise<{ session?: unknown } | undefined>;
-		stat?(id: string): Promise<{ header?: { id?: string; cwd?: string; origin?: string; version?: number } } | undefined>;
-		open?(id: string, access: "read" | "write"): Promise<{
+		stat?(id: string): Promise<{ header?: { id?: string; cwd?: string; origin?: string; version?: number } | undefined }>;
+		open?(id: string, access: "read"): Promise<{
 			header?: { id?: string; cwd?: string; origin?: string; version?: number };
 			read?(offset: number): Promise<{ events: unknown[] }>;
 			close(): Promise<void>;
@@ -51,22 +50,10 @@ export interface SessionMoveContext {
 		coldSnapshot?(sessionId: string): Promise<unknown>;
 	};
 	sessions?: {
-		get?(sessionId: string): unknown;
-		flush?(session: unknown): Promise<void>;
-		enter?(session: unknown): () => void;
-		announce?(session: unknown): void;
-		prepare?(sessionId: string, options: unknown): { session?: unknown } | unknown;
-		store?: Map<string, { detach?(): void; session?: unknown }>;
+		get?(sessionId: string): { running?: boolean; status?: string } | undefined;
 	};
 	agents?: {
-		get?(sessionId: string): {
-			status?: string;
-			busy?: boolean;
-			scope?: { dispose?(): Promise<void> | void };
-			cancel?(options?: { kind?: string }): void;
-			whenIdle?(): Promise<void>;
-		};
-		store?: Map<string, unknown>;
+		get?(sessionId: string): { status?: string; busy?: boolean } | undefined;
 	};
 	logger?: {
 		info?(msg: string): void;
@@ -202,12 +189,8 @@ export async function moveSessionToWorkspace(
 	}
 	const targetPath = targetWorkspace.path ?? (targetWorkspace as unknown as { record?: { path?: string } }).record?.path;
 
-	// 1. 活跃状态检查与静默停靠（Quiesce）
-	const liveSession = ctx.sessions?.get?.(cleanSessionId) as {
-		running?: boolean;
-		status?: string;
-	} | undefined;
-
+	// 1. 活跃状态检查
+	const liveSession = ctx.sessions?.get?.(cleanSessionId);
 	const agent = ctx.agents?.get?.(cleanSessionId);
 
 	const isExecuting = liveSession?.running === true ||
@@ -218,36 +201,6 @@ export async function moveSessionToWorkspace(
 
 	if (isExecuting) {
 		throw new Error("该会话正处于执行或运行状态，请等待完成后再移动。");
-	}
-
-	// 若处于打开空闲态，先刷新缓冲并安全释放原有 entry，释放写所有权
-	let originalEntry: { detach?(): void } | undefined;
-	if (liveSession !== undefined) {
-		if (typeof agent?.cancel === "function") {
-			try {
-				agent.cancel({ kind: "disposed" });
-				await agent.whenIdle?.();
-			} catch {}
-		}
-		if (typeof ctx.sessions?.flush === "function") {
-			try {
-				await ctx.sessions.flush(liveSession);
-			} catch {}
-		}
-		try {
-			await agent?.scope?.dispose?.();
-			ctx.agents?.store?.delete(cleanSessionId);
-		} catch {}
-
-		originalEntry = ctx.sessions?.store?.get?.(cleanSessionId)
-			?? (typeof (ctx.sessions as unknown as { liveEntryFor?: (s: unknown) => unknown })?.liveEntryFor === "function" ? (() => {
-				try { return (ctx.sessions as unknown as { liveEntryFor: (s: unknown) => unknown }).liveEntryFor(liveSession) as { detach?(): void }; } catch { return undefined; }
-			})() : undefined);
-		if (typeof originalEntry?.detach === "function") {
-			try {
-				originalEntry.detach();
-			} catch {}
-		}
 	}
 
 	// 2. 读取会话 Header 并校验
@@ -369,6 +322,14 @@ export async function moveSessionToWorkspace(
 		};
 	}
 
+	// 跨目录要搬写入中的工件；只有宿主能完整释放其运行实例。
+	const requireReleasedSession = () => {
+		if (ctx.sessions?.get?.(cleanSessionId) || ctx.agents?.get?.(cleanSessionId)) {
+			throw new Error("该会话仍被宿主持有，无法跨目录移动。请先关闭该会话再重试。");
+		}
+	};
+	requireReleasedSession();
+
 	// 5. 跨工作区物理迁移
 	if (!persistence || typeof persistence.locate !== "function") {
 		throw new Error("当前持久化后端不支持物理定位，无法跨工作区移动会话。");
@@ -415,6 +376,9 @@ export async function moveSessionToWorkspace(
 		}
 	}
 
+	// 预检有异步读盘，期间会话可能已被重新打开。
+	requireReleasedSession();
+
 	// 事务执行：移开源目录到备份区 -> 写入目标 -> 校验 -> 切换记账
 	const targetHadSession = rawWorkspaceSessionIds(targetWorkspace).includes(cleanSessionId);
 	const previousPath = registry.sessionPaths?.get(cleanSessionId);
@@ -446,17 +410,6 @@ export async function moveSessionToWorkspace(
 		registry.sessionPaths?.set(cleanSessionId, targetPath);
 		registry.headers?.set(cleanSessionId, targetHeader);
 		registry.invalidSessionPaths?.delete(cleanSessionId);
-
-		if (liveSession !== undefined) {
-			try {
-				if ("header" in liveSession && (liveSession as unknown as { header?: { cwd?: string } }).header) {
-					(liveSession as unknown as { header: { cwd?: string } }).header.cwd = targetPath;
-				}
-				if ("cwd" in liveSession) {
-					(liveSession as unknown as { cwd?: string }).cwd = targetPath;
-				}
-			} catch {}
-		}
 
 		// e. 宿主记账同步
 		// 优先挂接目标工作区，再解除来源工作区关联。
@@ -519,17 +472,6 @@ export async function moveSessionToWorkspace(
 		restoreInvalidSessionState(registry.invalidSessionPaths, cleanSessionId, previousInvalidPath);
 		if (!wasMissing) registry.missingSessionPaths?.delete(cleanSessionId);
 		else registry.missingSessionPaths?.add(cleanSessionId);
-
-		if (liveSession !== undefined && header) {
-			try {
-				if ("header" in liveSession && (liveSession as unknown as { header?: { cwd?: string } }).header) {
-					(liveSession as unknown as { header: { cwd?: string } }).header.cwd = header.cwd;
-				}
-				if ("cwd" in liveSession && header.cwd) {
-					(liveSession as unknown as { cwd?: string }).cwd = header.cwd;
-				}
-			} catch {}
-		}
 
 		// 3. 恢复已解绑的来源工作区关联
 		for (const ws of attemptedSources) {

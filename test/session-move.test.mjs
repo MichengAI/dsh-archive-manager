@@ -82,16 +82,28 @@ test("会话跨工作区移动：目标路径与当前 cwd 相同时直接归并
 	const mockCache = {
 		coldSnapshot: async (id) => { coldSnapshotId = id; },
 	};
+	const lifecycle = [];
+	const session = { running: false };
+	const agent = { busy: false, scope: { dispose: () => lifecycle.push("dispose") } };
+	const agents = new Map([["s-same", agent]]);
+	const liveEntry = { detach: () => lifecycle.push("detach") };
 	const ctx = {
 		workspaceRegistry: mockRegistry,
 		sessionProjectionCache: mockCache,
-		sessions: { get: () => undefined },
+		sessions: {
+			get: () => session,
+			flush: () => lifecycle.push("flush"),
+			store: new Map([["s-same", liveEntry]]),
+		},
+		agents: { get: id => agents.get(id), store: agents },
 		sessionPersistence: {
 			open: async () => ({ async close() {} }),
 		},
 	};
 
 	const res = await moveSessionToWorkspace(ctx, "s-same", "ws-2");
+	assert.deepEqual(lifecycle, []);
+	assert.equal(agents.get("s-same"), agent);
 	assert.equal(res.ok, true);
 	assert.equal(res.moved, true);
 	assert.equal(res.alreadyCwd, true);
@@ -282,6 +294,39 @@ test("会话跨工作区物理迁移：影子改写、回读自检、原子切�
 			sessions: { get: () => undefined },
 		};
 
+		const targetLog = join(sessionsRoot, "--proj-b--", sessionId, "session.v2.jsonl.zstd");
+		const sourceBytes = await readFile(sourceLog);
+		const liveSession = { running: false, header: { ...header } };
+		const liveAgent = { busy: false };
+		const locate = mockPersistence.locate;
+		for (const retained of ["session", "agent", "reopened during header lookup", "reopened during file preflight"]) {
+			let reopened = false;
+			ctx.sessions.get = () => retained === "session" || reopened ? liveSession : undefined;
+			ctx.agents = { get: () => retained === "agent" ? liveAgent : undefined };
+			mockRegistry.readSessionHeader = async () => {
+				reopened = retained === "reopened during header lookup";
+				return header;
+			};
+			mockPersistence.locate = (h) => {
+				if (retained === "reopened during file preflight") reopened = true;
+				return locate(h);
+			};
+			await assert.rejects(() => moveSessionToWorkspace(ctx, sessionId, "ws-b"), /关闭该会话/, retained);
+			assert.deepEqual(await readFile(sourceLog), sourceBytes);
+			await assert.rejects(() => stat(targetLog), { code: "ENOENT" });
+			if (retained !== "reopened during file preflight") {
+				await assert.rejects(() => stat(join(tempDir, "dsham-move-backup")), { code: "ENOENT" });
+			}
+			assert.deepEqual(wsA.sessionIds, [sessionId]);
+			assert.deepEqual(wsB.sessionIds, []);
+			assert.equal(mockRegistry.headers.get(sessionId), header);
+			assert.equal(mockRegistry.sessionPaths.get(sessionId), sourceProject);
+			assert.equal(coldSnapshotId, null);
+		}
+		ctx.sessions.get = () => undefined;
+		ctx.agents.get = () => undefined;
+		mockRegistry.readSessionHeader = async () => header;
+
 		const result = await moveSessionToWorkspace(ctx, sessionId, "ws-b");
 		assert.equal(result.ok, true);
 		assert.equal(result.moved, true);
@@ -296,7 +341,6 @@ test("会话跨工作区物理迁移：影子改写、回读自检、原子切�
 		assert.equal(sourceExists, false, "源日志应该已经移出");
 
 		// 目标会话文件应已生成并拥有改写后的 Header
-		const targetLog = join(sessionsRoot, "--proj-b--", sessionId, "session.v2.jsonl.zstd");
 		const targetContent = await readFile(targetLog);
 		// 解压第一帧
 		const f0 = zlib.zstdDecompressSync(targetContent);
