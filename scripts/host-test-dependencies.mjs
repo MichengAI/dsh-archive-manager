@@ -1,19 +1,22 @@
 // 同代宿主的依赖范围允许后续版本；隔离验收固定传递依赖，避免宿主混版。
-// 只覆盖仍支持的 0.2.2 RC。
+// 覆盖仍支持的 0.2.2 RC 及 0.2.3。
 export function hostTestOverrides(version) {
-	// 支持范围：0.2.2 的全部 RC（0.2.2-rc.1 ～ 0.2.2-rc.5）。
+	// 支持范围：0.2.2 的全部 RC（0.2.2-rc.1 ～ 0.2.2-rc.5）与 0.2.3。
 	const supported = [
 		"0.2.2-rc.1",
 		"0.2.2-rc.2",
 		"0.2.2-rc.3",
 		"0.2.2-rc.4",
 		"0.2.2-rc.5",
+		"0.2.3-alpha.1",
+		"0.2.3-alpha.2",
 	];
 	if (!supported.includes(version)) return {};
 	const names = [
 		"agent", "api-gateway", "brand", "client-connection", "client-locale", "client-store",
 		"client-ui-conversation", "client-ui-primitives", "client-ui-sidebar", "client-ui-slots", "client-ui-workspace",
-		"code-runtime", "compaction", "credentials", "deque",
+		...(version.startsWith("0.2.3") ? [] : ["code-runtime"]),
+		"compaction", "credentials", "deque",
 		...(version !== "0.2.2-rc.1" ? ["error"] : []),
 		"host-webserver",
 		"llm",

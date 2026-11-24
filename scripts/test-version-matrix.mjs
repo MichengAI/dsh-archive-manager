@@ -8,13 +8,14 @@ import { hostTestOverrides } from "./host-test-dependencies.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
-// 支持范围：0.2.2 全系列全部 RC（0.2.2-rc.1 ～ 0.2.2-rc.5）。
+// 支持范围：0.2.2 全系列全部 RC（0.2.2-rc.1 ～ 0.2.2-rc.5）与 0.2.3。
 const profiles = [
 	{ version: "0.2.2-rc.1", cordis: "4.1.0", schemastery: "3.19.0", latest: true },
 	{ version: "0.2.2-rc.2", cordis: "4.1.0", schemastery: "3.19.0", latest: true },
 	{ version: "0.2.2-rc.3", cordis: "4.1.0", schemastery: "3.19.0", latest: true },
 	{ version: "0.2.2-rc.4", cordis: "4.1.0", schemastery: "3.19.0", latest: true },
 	{ version: "0.2.2-rc.5", cordis: "4.1.0", schemastery: "3.19.0", latest: true },
+	{ version: "0.2.3-alpha.2", cordis: "4.2.0-alpha.1", schemastery: "3.20.0-alpha.1", latest: true },
 ];
 const cordisPlugins = {
 	"4.1.0": {
@@ -23,6 +24,13 @@ const cordisPlugins = {
 		"@deepseek-ai/cordis-plugin-include": "1.1.0",
 		"@deepseek-ai/cordis-plugin-loader": "1.1.0",
 		"@deepseek-ai/cordis-plugin-timer": "1.2.0",
+	},
+	"4.2.0-alpha.1": {
+		"@deepseek-ai/cordis-plugin-group": "1.2.0-alpha.1",
+		"@deepseek-ai/cordis-plugin-hmr": "1.2.0-alpha.1",
+		"@deepseek-ai/cordis-plugin-include": "1.2.0-alpha.1",
+		"@deepseek-ai/cordis-plugin-loader": "1.2.0-alpha.1",
+		"@deepseek-ai/cordis-plugin-timer": "1.3.0-alpha.1",
 	},
 };
 const npm = process.platform === "win32" ? process.execPath : "npm";
@@ -40,8 +48,8 @@ function run(command, args, cwd, env = process.env) {
 	});
 }
 
-if (manifest.devDependencies["@deepseek-ai/dsh-session"] !== "0.2.2-rc.3") {
-	throw new Error(`开发依赖基线必须钉为 0.2.2-rc.3，实际 ${manifest.devDependencies["@deepseek-ai/dsh-session"]}`);
+if (manifest.devDependencies["@deepseek-ai/dsh-session"] !== "0.2.3-alpha.2") {
+	throw new Error(`开发依赖基线必须钉为 0.2.3-alpha.2，实际 ${manifest.devDependencies["@deepseek-ai/dsh-session"]}`);
 }
 const failures = [];
 for (const profile of profiles) {

@@ -42,6 +42,14 @@ const favoriteDomainSpec = defineDomain({
  * 单会话与批量恢复/删除方法均通过 Typert Remote 暴露给浏览器，并注册到
  * typert.local，避免生产环境只靠 SRC 扫描时 404.
  */
+function isJsonlPersistence(persistence: PersistenceCompat) {
+	return (
+		persistence.name === "session-persistence-jsonl" ||
+		persistence.name === "sessionPersistence" ||
+		persistence.constructor?.name === "JsonlSessionPersistence"
+	);
+}
+
 /**
  * Compatibility adapter for the official JSONL backend's session-owned layout.
  * A generic locate() path does NOT grant ownership of its parent directory.
@@ -49,7 +57,7 @@ const favoriteDomainSpec = defineDomain({
  */
 function jsonlSessionDirectory(persistence: PersistenceCompat, header: Header, location: { kind: string; path: string }) {
 	if (
-		persistence.name !== "session-persistence-jsonl" ||
+		!isJsonlPersistence(persistence) ||
 		location.kind !== "jsonl"
 	)
 		return;
@@ -1091,7 +1099,7 @@ var ArchiveWorkspaceRegistry = class extends (WorkspaceRegistry as unknown as Re
 					if (!stat.isDirectory())
 						throw new Error(`expected session storage directory "${path}"`);
 				}
-			} else if (persistence.name === "session-persistence-jsonl") {
+			} else if (isJsonlPersistence(persistence)) {
 				this.ctx.logger.warn(
 					`archive-manager: session "${sessionId}": JSONL directory ownership could not be verified; falling back to artifact-only deletion at "${location.path}" (parent directory retained)`,
 				);

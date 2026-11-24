@@ -44,6 +44,7 @@ const tick = () => new Promise((resolve) => setImmediate(resolve));
 const source = (state) => ({ getSnapshot: () => state, subscribe: () => () => {} });
 // 0.1.7-rc.2 起官方工作区与侧栏客户端在 cordis inject 里要求 shortcuts 服务；
 // 0.2.1-alpha.3 起还要求 remoteAccess（侧栏权限钩子），缺一则官方 apply 不跑。
+// 0.2.3 起还要求 uiSession / uiSession.sessionStatus 状态监听。
 const provideShortcuts = (root) => {
 	root.provide("shortcuts", { register: () => () => {}, catalog: source([]) });
 	if (root.get("remoteAccess") === undefined) {
@@ -51,6 +52,11 @@ const provideShortcuts = (root) => {
 	}
 	if (root.get("contextMenus") === undefined) {
 		root.provide("contextMenus", { register: () => () => {}, open: () => {}, close: () => {} });
+	}
+	if (root.get("uiSession") === undefined) {
+		const status = source(new Map());
+		root.provide("uiSession", { sessionStatus: status });
+		root.provide("uiSession.sessionStatus", status);
 	}
 };
 
@@ -105,7 +111,7 @@ test("真实官方导航监听器：显式查看归档不再被清空，切换�
   root.provide("remote.directoryPicker", {}); root.provide("connection", {}); root.provide("typert", {});
   root.provide("layout", { beginNavigation: () => new AbortController().signal, selectPanel() {} });
   provideShortcuts(root);
-  const stock = root.plugin(official);
+  const stock = root.plugin(official, { recentViewLimit: source(10) });
   await stock;
   const navigation = root.get("uiWorkspace");
   if (typeof navigation.openSession !== "function") { await stock.dispose(); t.skip("此宿主无会话打开接口"); return; }
@@ -192,7 +198,7 @@ for (const archiveFirst of [false, true]) test(`官方选择器和导航保持�
 	let stock, custom;
 	try {
 		if (archiveFirst) custom = root.plugin(archive);
-		stock = root.plugin(official);
+		stock = root.plugin(official, { recentViewLimit: source(10) });
 		await stock;
 		const navigation = root.get("uiWorkspace");
 		if (navigation) navigation.archiveCompositionMarker = "official-instance";
@@ -267,7 +273,7 @@ for (const codexFirst of [false, true]) test(`Codex 侧栏保留组件与交互�
 	const mountCodex = () => slots.register({ name: "sidebar.workspaces", priority: -1, inject }, CodexSidebar);
 	let disposeCodex, stock, custom;
 	try {
-		stock = root.plugin(official);
+		stock = root.plugin(official, { recentViewLimit: source(10) });
 		await stock;
 		if (codexFirst) disposeCodex = mountCodex();
 		custom = root.plugin(archive);
