@@ -322,10 +322,19 @@ export async function moveSessionToWorkspace(
 		};
 	}
 
-	// 跨目录要搬写入中的工件；只有宿主能完整释放其运行实例。
+	// 跨目录要搬写入中的工件；只在该会话确实还在执行/运行时拒绝。
+	// 宿主 sessions.get(id)=store.get(id)?.session，会话一旦被加载就常驻内存，
+	// 对象驻留本身不代表占用，不能据此拒绝一次空闲会话的迁移。
 	const requireReleasedSession = () => {
-		if (ctx.sessions?.get?.(cleanSessionId) || ctx.agents?.get?.(cleanSessionId)) {
-			throw new Error("该会话仍被宿主持有，无法跨目录移动。请先关闭该会话再重试。");
+		const live = ctx.sessions?.get?.(cleanSessionId);
+		const busyAgent = ctx.agents?.get?.(cleanSessionId);
+		const executing = live?.running === true ||
+			live?.status === "running" ||
+			live?.status === "ongoing" ||
+			busyAgent?.busy === true ||
+			busyAgent?.status === "running";
+		if (executing) {
+			throw new Error("该会话仍在执行或运行中，无法跨目录移动。请先关闭该会话再重试。");
 		}
 	};
 	requireReleasedSession();

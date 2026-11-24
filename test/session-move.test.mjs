@@ -296,8 +296,9 @@ test("会话跨工作区物理迁移：影子改写、回读自检、原子切�
 
 		const targetLog = join(sessionsRoot, "--proj-b--", sessionId, "session.v2.jsonl.zstd");
 		const sourceBytes = await readFile(sourceLog);
-		const liveSession = { running: false, header: { ...header } };
-		const liveAgent = { busy: false };
+		// 只有真在执行/运行的会话才该被拒绝；驻留但空闲的对象必须放行。
+		const liveSession = { running: true, header: { ...header } };
+		const liveAgent = { busy: true };
 		const locate = mockPersistence.locate;
 		for (const retained of ["session", "agent", "reopened during header lookup", "reopened during file preflight"]) {
 			let reopened = false;
@@ -311,7 +312,7 @@ test("会话跨工作区物理迁移：影子改写、回读自检、原子切�
 				if (retained === "reopened during file preflight") reopened = true;
 				return locate(h);
 			};
-			await assert.rejects(() => moveSessionToWorkspace(ctx, sessionId, "ws-b"), /关闭该会话/, retained);
+			await assert.rejects(() => moveSessionToWorkspace(ctx, sessionId, "ws-b"), /执行或运行/, retained);
 			assert.deepEqual(await readFile(sourceLog), sourceBytes);
 			await assert.rejects(() => stat(targetLog), { code: "ENOENT" });
 			if (retained !== "reopened during file preflight") {
@@ -323,8 +324,10 @@ test("会话跨工作区物理迁移：影子改写、回读自检、原子切�
 			assert.equal(mockRegistry.sessionPaths.get(sessionId), sourceProject);
 			assert.equal(coldSnapshotId, null);
 		}
-		ctx.sessions.get = () => undefined;
-		ctx.agents.get = () => undefined;
+		// 驻留但空闲的对象（running:false / busy:false）不该阻止迁移：
+		// 这既是本次修复的核心回归点，也是下面这次真实迁移所在的条件。
+		ctx.sessions.get = () => ({ running: false, header: { ...header } });
+		ctx.agents.get = () => ({ busy: false });
 		mockRegistry.readSessionHeader = async () => header;
 
 		const result = await moveSessionToWorkspace(ctx, sessionId, "ws-b");
