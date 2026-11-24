@@ -43,7 +43,7 @@ export interface LifecycleRuntime {
 }
 
 const runtimes = new WeakMap<object, LifecycleRuntime>();
-const migrationContext = new AsyncLocalStorage<LifecycleRuntime>();
+export const migrationContext = new AsyncLocalStorage<LifecycleRuntime>();
 
 function getRaw<T>(value: T): T {
 	if (value && typeof value === "object") {
@@ -102,7 +102,10 @@ export function installSessionLifecycle(owner: {
 					const action = agent[actionName];
 					if (typeof action !== "function") continue;
 					const guarded = function (this: unknown, ...params: unknown[]) {
-						if (runtime.moving.has(agent.id) || getRaw(rawAgents.get?.(agent.id)) !== agent) {
+						if (
+							(runtime.moving.has(agent.id) && migrationContext.getStore() !== runtime) ||
+							getRaw(rawAgents.get?.(agent.id)) !== agent
+						) {
 							throw migrationInProgressError();
 						}
 						return Reflect.apply(action, this, params);
@@ -175,6 +178,18 @@ export async function withReleasedSession<T>(
 		return operation();
 	}
 
+	const controller =
+		ctx.sessionController ??
+		(typeof (ctx as unknown as { get?: (k: string) => unknown }).get === "function"
+			? ((ctx as unknown as { get: (k: string) => unknown }).get("sessionController") as SessionMoveContext["sessionController"])
+			: undefined);
+
+	// 若宿主未提供 sessionController.resolveAgent，则无法在移动后安全重新拉起会话。
+	// 为避免会话被 dispose 后变成孤儿，退回普通 operation 分支（由内部检查抛出“会话仍处于打开或运行状态，请先关闭该会话后再移动。”）
+	if (typeof controller?.resolveAgent !== "function") {
+		return operation();
+	}
+
 	const { handle, agent, runtime } = owned;
 	const executing =
 		agent.busy === true ||
@@ -205,12 +220,6 @@ export async function withReleasedSession<T>(
 	} finally {
 		runtime.handles.delete(sessionId);
 		try {
-			const controller =
-				ctx.sessionController ??
-				(typeof (ctx as unknown as { get?: (k: string) => unknown }).get === "function"
-					? ((ctx as unknown as { get: (k: string) => unknown }).get("sessionController") as SessionMoveContext["sessionController"])
-					: undefined);
-
 			if (typeof controller?.resolveAgent === "function") {
 				const restored = (await migrationContext.run(runtime, () =>
 					controller.resolveAgent!(sessionId)
@@ -220,6 +229,9 @@ export async function withReleasedSession<T>(
 					throw restored.error;
 				}
 
+				// 物理迁移已落盘且新 Agent 已成功恢复挂载，立即解除 moving 状态，放行工作区通知等合法操作
+				runtime.moving.delete(sessionId);
+
 				if (!failure && options?.targetPath && restored?.agent) {
 					const workingDirectory =
 						ctx.workingDirectory ??
@@ -228,7 +240,9 @@ export async function withReleasedSession<T>(
 							: undefined);
 
 					if (typeof workingDirectory?.set === "function") {
-						await workingDirectory.set(restored.agent, options.targetPath);
+						await migrationContext.run(runtime, () =>
+							workingDirectory.set!(restored.agent!, options.targetPath!)
+						);
 					}
 				}
 			}

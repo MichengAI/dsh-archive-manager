@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import zlib from "node:zlib";
 import { moveSessionToWorkspace } from "../src/session-move.js";
-import { installSessionLifecycle, lifecycleFor } from "../src/session-lifecycle.js";
+import { installSessionLifecycle, lifecycleFor, migrationContext } from "../src/session-lifecycle.js";
 
 const CHECKSUM_OPTS = { params: { [zlib.constants.ZSTD_c_checksumFlag]: 1 } };
 
@@ -37,6 +37,8 @@ test("生命周期拦截与安全跨工作区迁移：空闲驻留会话释放�
 		let disposed = false;
 		let reloadedId = null;
 		let setDirectory = null;
+		let injectedNotices = [];
+		let hostWarnings = [];
 
 		const mockAgent = {
 			id: sessionId,
@@ -49,6 +51,9 @@ test("生命周期拦截与安全跨工作区迁移：空闲驻留会话释放�
 				header: { ...header },
 			},
 			send: () => {},
+			inject: (notice) => {
+				injectedNotices.push(notice);
+			},
 		};
 
 		const activeHandles = new Map();
@@ -143,6 +148,11 @@ test("生命周期拦截与安全跨工作区迁移：空闲驻留会话释放�
 		const workingDirectory = {
 			set: async (agent, path) => {
 				setDirectory = path;
+				try {
+					agent.inject?.({ type: "notice", text: `已切换工作区: ${path}` });
+				} catch (err) {
+					ctx.logger?.warn?.(`working-directory commit notice error: ${err instanceof Error ? err.message : String(err)}`);
+				}
 				return path;
 			},
 		};
@@ -154,6 +164,9 @@ test("生命周期拦截与安全跨工作区迁移：空闲驻留会话释放�
 			agents: agentsService,
 			sessionController,
 			workingDirectory,
+			logger: {
+				warn: (msg) => { hostWarnings.push(msg); },
+			},
 		};
 
 		// 执行移动
@@ -164,6 +177,8 @@ test("生命周期拦截与安全跨工作区迁移：空闲驻留会话释放�
 		assert.equal(disposed, true, "生命周期句柄应该已被释放");
 		assert.equal(reloadedId, sessionId, "迁移完成后应该重新 resolveAgent");
 		assert.equal(setDirectory, targetProject, "迁移完成后应该调用 workingDirectory.set 同步有效目录");
+		assert.equal(injectedNotices.length, 1, "宿主工作区切换通知必须成功注入到新恢复的 Agent 中");
+		assert.equal(hostWarnings.length, 0, "迁移过程与工作区切换不得产生任何告警日志");
 		assert.deepEqual(wsSource.sessionIds, []);
 		assert.deepEqual(wsTarget.sessionIds, [sessionId]);
 
@@ -172,6 +187,10 @@ test("生命周期拦截与安全跨工作区迁移：空闲驻留会话释放�
 		const f0 = zlib.zstdDecompressSync(targetBytes);
 		const f0Obj = JSON.parse(f0.toString("utf8").split("\n")[0]);
 		assert.equal(f0Obj.cwd, targetProject);
+
+		// 验证迁移完成后 moving 状态已彻底消除，后续外部业务调用畅通无阻
+		mockAgent.inject({ type: "notice", text: "post-migration-user-action" });
+		assert.equal(injectedNotices.length, 2);
 
 		uninstallLifecycle();
 	} finally {
@@ -543,8 +562,9 @@ test("生命周期拦截：迁移期拦截 steer/inject 等写入动作与外部
 	// 模拟进入迁移中状态
 	owned.runtime.moving.add(sessionId);
 	try {
+		// 外部调用：拦截 steer, inject, resume
 		assert.throws(() => mockAgent.steer(), /正在跨工作区移动中/);
-		assert.throws(() => mockAgent.inject(), /正在跨工作区移动中/);
+		assert.throws(() => mockAgent.inject("external-payload"), /正在跨工作区移动中/);
 		assert.equal(steerCalled, false);
 		assert.equal(injectCalled, false);
 
@@ -552,6 +572,15 @@ test("生命周期拦截：迁移期拦截 steer/inject 等写入动作与外部
 			() => agentsService.resume({ resumeSessionId: sessionId }),
 			/正在跨工作区移动中/
 		);
+
+		// ALS 上下文内部：放行 resume 与动作注入，杜绝误伤宿主内部通知
+		await migrationContext.run(owned.runtime, async () => {
+			const resumed = await agentsService.resume({ resumeSessionId: sessionId });
+			assert.ok(resumed?.agent);
+
+			mockAgent.inject("als-allowed-notice");
+			assert.equal(injectCalled, true);
+		});
 	} finally {
 		owned.runtime.moving.delete(sessionId);
 		uninstall();
@@ -627,6 +656,9 @@ test("生命周期拦截：TOCTOU 守护——跨 Await 期间 Agent 转为 runn
 			},
 			sessions: { get: () => mockAgent.session },
 			agents: agentsService,
+			sessionController: {
+				resolveAgent: async () => ({ agent: mockAgent }),
+			},
 		};
 
 		await assert.rejects(
@@ -635,6 +667,84 @@ test("生命周期拦截：TOCTOU 守护——跨 Await 期间 Agent 转为 runn
 		);
 
 		assert.equal(disposed, false, "TOCTOU 复检生效：并发转为 running 的会话严禁被 dispose 释放");
+
+		uninstallLifecycle();
+	} finally {
+		await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+	}
+});
+
+test("生命周期拦截：宿主缺少 sessionController.resolveAgent 时不擅自 dispose 会话，退回安全拒绝", async () => {
+	const tempDir = await mkdtemp(join(tmpdir(), "dsham-lifecycle-no-ctrl-"));
+	try {
+		const sourceProject = join(tempDir, "proj-source");
+		const targetProject = join(tempDir, "proj-target");
+		const sessionsRoot = join(tempDir, "sessions");
+		await mkdir(sourceProject, { recursive: true });
+		await mkdir(targetProject, { recursive: true });
+
+		const sessionId = "session-no-ctrl";
+		const sourceLog = join(sessionsRoot, "--proj-source--", sessionId, "session.v2.jsonl.zstd");
+		await mkdir(dirname(sourceLog), { recursive: true });
+
+		const header = { id: sessionId, cwd: sourceProject, version: 2 };
+		await writeFile(sourceLog, createZstdLog(header));
+
+		let disposed = false;
+		const mockAgent = {
+			id: sessionId,
+			busy: false,
+			status: "idle",
+			session: { id: sessionId, running: false, status: "idle", header: { ...header } },
+		};
+
+		const agentsStore = new Map([[sessionId, mockAgent]]);
+		const agentsService = {
+			get: (id) => agentsStore.get(id),
+			resume: async () => ({
+				agent: mockAgent,
+				dispose: async () => { disposed = true; },
+			}),
+		};
+
+		const uninstallLifecycle = installSessionLifecycle({ agents: agentsService });
+		await agentsService.resume({ resumeSessionId: sessionId });
+
+		const wsSource = {
+			id: "ws-source",
+			path: sourceProject,
+			sessionIds: [sessionId],
+			async attachSession() {},
+			async detachSession() {},
+		};
+		const wsTarget = {
+			id: "ws-target",
+			path: targetProject,
+			sessionIds: [],
+			async attachSession() {},
+			async detachSession() {},
+		};
+
+		const ctx = {
+			workspaceRegistry: {
+				list: () => [wsSource, wsTarget],
+				readSessionHeader: async () => header,
+			},
+			sessionPersistence: {
+				locate: () => ({ path: sourceLog, kind: "file" }),
+				stat: async () => ({ header }),
+			},
+			sessions: { get: () => mockAgent.session },
+			agents: agentsService,
+			// 注意：ctx 中不提供 sessionController，模拟不支持重挂的宿主环境
+		};
+
+		await assert.rejects(
+			() => moveSessionToWorkspace(ctx, sessionId, "ws-target"),
+			/仍被宿主持有，无法跨目录移动/
+		);
+
+		assert.equal(disposed, false, "缺少 resolveAgent 能力时不擅自 dispose 会话，避免孤儿状态");
 
 		uninstallLifecycle();
 	} finally {
