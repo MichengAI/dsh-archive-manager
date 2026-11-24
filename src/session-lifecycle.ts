@@ -229,7 +229,7 @@ export async function withReleasedSession<T>(
 					throw restored.error;
 				}
 
-				// 物理迁移已落盘且新 Agent 已成功恢复挂载，立即解除 moving 状态，放行工作区通知等合法操作
+				// 双保险：新 Agent 恢复后立即解除 moving 标记（物理排他期已过），即使后续 set 异常也能确保状态干净
 				runtime.moving.delete(sessionId);
 
 				if (!failure && options?.targetPath && restored?.agent) {

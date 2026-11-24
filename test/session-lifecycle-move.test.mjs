@@ -139,9 +139,11 @@ test("生命周期拦截与安全跨工作区迁移：空闲驻留会话释放�
 		const sessionController = {
 			resolveAgent: async (id) => {
 				reloadedId = id;
-				agentsStore.set(id, mockAgent);
-				sessionsStore.set(id, mockAgent.session);
-				return { agent: mockAgent };
+				// 模拟真实宿主 dsh-api-session-controller：通过 agents.resume 重挂会话
+				const handle = await agentsService.resume({ resumeSessionId: id });
+				agentsStore.set(id, handle.agent);
+				sessionsStore.set(id, handle.agent.session);
+				return { agent: handle.agent };
 			},
 		};
 
