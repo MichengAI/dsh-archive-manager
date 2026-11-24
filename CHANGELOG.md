@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.4.2] - 2026-11-24
+
+### Host Compatibility & Stability
+
+- **Latest DeepSeek Harness Support**: Fully aligned with the latest DeepSeek Harness `0.2.3` and `0.2.2` series, optimizing session storage and transcription management compatibility for improved stability and seamless user experience.
+
 ## [1.4.1] - 2026-11-20
 
 ### Bug Fixes & Improvements
