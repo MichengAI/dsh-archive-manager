@@ -22,6 +22,7 @@ const required = [
   "lib/cache-rebuild-contract.js",
   "lib/cache-rebuild-client.js",
   "lib/session-move.js",
+  "lib/session-lifecycle.js",
   "lib/explorer-path-policy.js",
   "lib/native-explorer.js",
   "LICENSE",

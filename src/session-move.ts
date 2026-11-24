@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, normalize, resolve } from "node:path";
 import zlib from "node:zlib";
+import { withReleasedSession } from "./session-lifecycle.js";
 
 const ZSTD_MAGIC = 0xfd2fb528;
 const CHECKSUM_OPTS = { params: { [zlib.constants.ZSTD_c_checksumFlag]: 1 } };
@@ -54,6 +55,13 @@ export interface SessionMoveContext {
 	};
 	agents?: {
 		get?(sessionId: string): { status?: string; busy?: boolean } | undefined;
+	};
+	sessionController?: {
+		resolveAgent?(sessionId: string): Promise<{ agent?: unknown; error?: unknown }>;
+	};
+	workingDirectory?: {
+		set?(agent: unknown, path: string): Promise<unknown>;
+		get?(session: unknown): string | undefined;
 	};
 	logger?: {
 		info?(msg: string): void;
@@ -322,18 +330,22 @@ export async function moveSessionToWorkspace(
 		};
 	}
 
-	// 跨目录要搬写入中的工件；只有宿主能完整释放其运行实例。
-	const requireReleasedSession = () => {
-		if (ctx.sessions?.get?.(cleanSessionId) || ctx.agents?.get?.(cleanSessionId)) {
-			throw new Error("该会话仍被宿主持有，无法跨目录移动。请先关闭该会话再重试。");
-		}
-	};
-	requireReleasedSession();
+	return withReleasedSession(
+		ctx,
+		cleanSessionId,
+		async () => {
+			// 跨目录要搬写入中的工件；只有宿主能完整释放其运行实例。
+			const requireReleasedSession = () => {
+				if (ctx.sessions?.get?.(cleanSessionId) || ctx.agents?.get?.(cleanSessionId)) {
+					throw new Error("该会话仍被宿主持有，无法跨目录移动。请先关闭该会话再重试。");
+				}
+			};
+			requireReleasedSession();
 
-	// 5. 跨工作区物理迁移
-	if (!persistence || typeof persistence.locate !== "function") {
-		throw new Error("当前持久化后端不支持物理定位，无法跨工作区移动会话。");
-	}
+			// 5. 跨工作区物理迁移
+			if (!persistence || typeof persistence.locate !== "function") {
+				throw new Error("当前持久化后端不支持物理定位，无法跨工作区移动会话。");
+			}
 
 	const sourceLoc = persistence.locate({ id: cleanSessionId, cwd: header.cwd });
 	const targetLoc = persistence.locate({ id: cleanSessionId, cwd: targetPath });
@@ -513,4 +525,7 @@ export async function moveSessionToWorkspace(
 		toWorkspaceTitle: targetWorkspace.title || cleanTargetWsId,
 		toWorkspacePath: targetPath,
 	};
+		},
+		{ targetPath }
+	);
 }
