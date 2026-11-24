@@ -21,6 +21,8 @@ export interface AgentLike {
 	send?: (...args: unknown[]) => unknown;
 	followup?: (...args: unknown[]) => unknown;
 	runMaintenance?: (...args: unknown[]) => unknown;
+	steer?: (...args: unknown[]) => unknown;
+	inject?: (...args: unknown[]) => unknown;
 	[key: string]: unknown;
 }
 
@@ -96,7 +98,7 @@ export function installSessionLifecycle(owner: {
 				const guards: (() => void)[] = [];
 				runtime.handles.set(agent.id, { handle, agent, guards });
 
-				for (const actionName of ["send", "followup", "runMaintenance"] as const) {
+				for (const actionName of ["send", "followup", "runMaintenance", "steer", "inject"] as const) {
 					const action = agent[actionName];
 					if (typeof action !== "function") continue;
 					const guarded = function (this: unknown, ...params: unknown[]) {
@@ -154,7 +156,7 @@ export function lifecycleFor(
 	const entry = runtime.handles.get(sessionId);
 	if (!entry) return null;
 	const currentAgent = rawAgents.get ? rawAgents.get(sessionId) : undefined;
-	if (currentAgent && getRaw(currentAgent) !== getRaw(entry.agent)) return null;
+	if (!currentAgent || getRaw(currentAgent) !== getRaw(entry.agent)) return null;
 	return { ...entry, runtime, agents: rawAgents };
 }
 
@@ -231,7 +233,14 @@ export async function withReleasedSession<T>(
 				}
 			}
 		} catch (error) {
-			if (!failure) failure = error;
+			if (!failure) {
+				// 若 operation() 已经成功落盘，后续目标重新挂接或目录同步异常降级为 warning，不将成功的移动篡改为失败
+				ctx.logger?.warn?.(
+					`[archive-manager] 会话 ${sessionId} 跨工作区移动已落盘，但在目标工作区重新挂接或同步目录异常: ${
+						error instanceof Error ? error.message : String(error)
+					}`
+				);
+			}
 		} finally {
 			runtime.moving.delete(sessionId);
 		}
