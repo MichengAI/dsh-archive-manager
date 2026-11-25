@@ -180,14 +180,54 @@ test("remote 挂载完成或强制刷新时，ensure(true) 打破退避限制立
 	assert.deepEqual([...store.getSnapshot().ids], ["s1"]);
 });
 
-test("apply 生命周期：在 remote.$mount 就绪后主动拉取收藏，全流程无 warning 报错", async () => {
+test("非中英多语言（如俄语）环境依赖 SERVICE_UNAVAILABLE 错误码静默报警", async () => {
+	const warnings = [];
+	const originalWarn = console.warn;
+	console.warn = (...args) => warnings.push(args.join(" "));
+	try {
+		const store = createFavoriteRowStore();
+		// 模拟俄语环境下尚未就绪的 RPC 错误（词条不包含中英文就绪关键词，如 Сервис ещё не готов. Повторите.）
+		const ruErrorWithCode = new Error("Сервис ещё не готов. Повторите.");
+		ruErrorWithCode.code = "SERVICE_UNAVAILABLE";
+		let attempts = 0;
+		store.bind({
+			async favoriteSessions() {
+				attempts += 1;
+				if (attempts === 1) throw ruErrorWithCode;
+				return { favoriteSessionIds: ["ru-session"] };
+			},
+			async setSessionFavorite() { return { favoriteSessionIds: [] }; }
+		});
+		await store.ensure();
+		assert.equal(store.getSnapshot().ready, false);
+		assert.equal(warnings.some((w) => w.includes("load favorites failed")), false, "带 SERVICE_UNAVAILABLE 的俄语错误必须静默");
+
+		// 变异对照：如果没有 SERVICE_UNAVAILABLE 且不含就绪关键词，必须正常输出 warn 告警
+		const ruErrorWithoutCode = new Error("Сервис ещё не готов. Повторите.");
+		const store2 = createFavoriteRowStore();
+		store2.bind({
+			async favoriteSessions() { throw ruErrorWithoutCode; },
+			async setSessionFavorite() { return { favoriteSessionIds: [] }; }
+		});
+		await store2.ensure();
+		assert.equal(warnings.some((w) => w.includes("load favorites failed")), true, "无 SERVICE_UNAVAILABLE 且不含就绪关键词的异常必须触发 warn 告警");
+	} finally {
+		console.warn = originalWarn;
+	}
+});
+
+test("apply 生命周期：在 remote.$mount 就绪后主动拉取收藏，多语言环境（俄语）全流程无 warning 报错", async () => {
 	const warnings = [];
 	const originalWarn = console.warn;
 	console.warn = (...args) => warnings.push(args.join(" "));
 	try {
 		let remoteMounted = false;
+		let favoriteSessionsCalls = 0;
 		const mockRegistry = {
-			favoriteSessions: async () => ({ ok: true, value: { favoriteSessionIds: ["fav-session-1"] } })
+			favoriteSessions: async () => {
+				favoriteSessionsCalls += 1;
+				return { ok: true, value: { favoriteSessionIds: ["fav-session-1"] } };
+			}
 		};
 		const ctx = {
 			get: (name) => {
@@ -207,7 +247,11 @@ test("apply 生命周期：在 remote.$mount 就绪后主动拉取收藏，全�
 			on: () => () => {},
 			sessions: {},
 			workspaces: {},
-			locale: { register: () => () => {}, bind: () => (key) => key },
+			locale: {
+				register: () => () => {},
+				// 使用俄语真实词条进行多语言端到端校验，该文案不含中英文就绪关键词，100% 依赖 code 守卫
+				bind: () => (key) => key === "service.unavailable" ? "Сервис ещё не готов. Повторите." : key
+			},
 			slots: {
 				entries: () => [],
 				inject: (name, callback) => callback(),
@@ -216,7 +260,9 @@ test("apply 生命周期：在 remote.$mount 就绪后主动拉取收藏，全�
 			effect: (fn) => fn()
 		};
 		const dispose = await bundle.apply(ctx);
-		assert.equal(warnings.some((w) => w.includes("load favorites failed")), false, "apply 过程中不得报 load favorites failed");
+		await sleep(20);
+		assert.equal(warnings.some((w) => w.includes("load favorites failed")), false, "俄语多语言环境下 apply 启动过程不得报 load favorites failed");
+		assert.equal(favoriteSessionsCalls, 1, "remote.$mount 就绪后必须立即主动触发一次收藏拉取（不得等待 600ms 定时器）");
 		await dispose?.();
 	} finally {
 		console.warn = originalWarn;

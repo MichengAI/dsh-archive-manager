@@ -808,6 +808,7 @@ export function startArchiveClient(require: HostRequire) {
 			const toggle = () => {
 				enabled = !enabled;
 				retriesLeft = 20;
+				retriesExhaustedWarned = false;
 				expansionClicks = 0;
 				lastExpansion = null;
 				stalledGroups.clear();
@@ -817,8 +818,16 @@ export function startArchiveClient(require: HostRequire) {
 			/** 客户端启动时 remote 还没挂上，第一次读收藏会失败：稍后重试，别把空集合当成结果。 */
 			let retryTimer: ReturnType<typeof setTimeout> | null = null;
 			let retriesLeft = 20;
+			let retriesExhaustedWarned = false;
 			const scheduleRetry = () => {
-				if (retryTimer !== null || disposed || retriesLeft <= 0) return;
+				if (retryTimer !== null || disposed) return;
+				if (retriesLeft <= 0) {
+					if (!retriesExhaustedWarned && !favoriteRow.getSnapshot().ready) {
+						retriesExhaustedWarned = true;
+						console.warn("archive-manager: favorites failed to initialize after retries; remote service remained unavailable");
+					}
+					return;
+				}
 				retriesLeft -= 1;
 				retryTimer = setTimeout(() => {
 					retryTimer = null;
@@ -931,7 +940,7 @@ export function startArchiveClient(require: HostRequire) {
 				if (sameIds && samePending && state.ready) return;
 				publish({ ready: true, ids: nextIds, pending: nextPending });
 			};
-			return {
+			const store: FavoriteRowStore = {
 				bind(next) { api = next; },
 				subscribe(listener) {
 					listeners.add(listener);
@@ -941,7 +950,13 @@ export function startArchiveClient(require: HostRequire) {
 				adopt: (favoriteSessionIds) => adopt(favoriteSessionIds),
 				ensure(force?: boolean) {
 					if (api === undefined || state.ready) return Promise.resolve();
-					if (loading !== undefined) return loading;
+					if (loading !== undefined) {
+						if (!force) return loading;
+						return loading.catch(() => {}).then(() => {
+							if (state.ready) return;
+							return store.ensure(true);
+						});
+					}
 					if (force) retryAt = 0;
 					if (Date.now() < retryAt) return Promise.resolve();
 					loading = api.favoriteSessions().then((value) => { adopt(value.favoriteSessionIds); }).catch((reason) => {
@@ -979,6 +994,7 @@ export function startArchiveClient(require: HostRequire) {
 					}
 				}
 			};
+			return store;
 		}
 		//#endregion
 		/** GitHub 品牌标识未由宿主图标库提供，内联以保持离线可用和主题适配。 */
