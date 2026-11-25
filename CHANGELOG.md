@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0] - 2026-11-25
+
+### Enhancements & Reliability
+
+- **Seamless Cross-Workspace Migration for Idle Sessions**: Sessions that are retained in memory but currently idle can now be safely moved across workspaces, automatically synchronizing workspace and session states without requiring manual cleanup.
+- **Startup Stability & Silent Diagnostics**: Resolved an intermittent "Service not ready" console warning when loading favorite sessions on startup, ensuring clean initialization across all language environments.
+
 ## [1.4.2] - 2026-11-24
 
 ### Host Compatibility & Stability
