@@ -822,7 +822,7 @@ export function startArchiveClient(require: HostRequire) {
 				retriesLeft -= 1;
 				retryTimer = setTimeout(() => {
 					retryTimer = null;
-					void favoriteRow.ensure();
+					void favoriteRow.ensure(true);
 					schedulePass();
 				}, 600);
 			};
@@ -879,11 +879,16 @@ export function startArchiveClient(require: HostRequire) {
 			favoriteSessions(): Promise<{ favoriteSessionIds: string[] }>;
 			setSessionFavorite(input: { sessionId: string; favorite: boolean }): Promise<{ favoriteSessionIds: string[] }>;
 		}
+		function isServiceUnavailableReason(reason: unknown): boolean {
+			if (reason && typeof reason === "object" && "code" in reason && (reason as { code: unknown }).code === "SERVICE_UNAVAILABLE") return true;
+			const msg = reason instanceof Error ? reason.message : String(reason);
+			return msg.includes("尚未就绪") || msg.includes("service.unavailable") || msg.toLowerCase().includes("not ready") || msg.toLowerCase().includes("unavailable");
+		}
 		interface FavoriteRowStore {
 			bind(api: FavoriteRowApi): void;
 			subscribe(listener: () => void): () => void;
 			getSnapshot(): FavoriteRowState;
-			ensure(): Promise<void>;
+			ensure(force?: boolean): Promise<void>;
 			adopt(favoriteSessionIds: readonly string[]): void;
 			toggle(sessionId: string): Promise<void>;
 		}
@@ -934,14 +939,17 @@ export function startArchiveClient(require: HostRequire) {
 				},
 				getSnapshot: () => state,
 				adopt: (favoriteSessionIds) => adopt(favoriteSessionIds),
-				ensure() {
+				ensure(force?: boolean) {
 					if (api === undefined || state.ready) return Promise.resolve();
 					if (loading !== undefined) return loading;
+					if (force) retryAt = 0;
 					if (Date.now() < retryAt) return Promise.resolve();
 					loading = api.favoriteSessions().then((value) => { adopt(value.favoriteSessionIds); }).catch((reason) => {
 						// 客户端启动时 remote 往往还没挂上：这次失败不能当成「没有收藏」，保持未就绪等待重试。
-						console.warn("archive-manager: load favorites failed, will retry", reason);
 						retryAt = Date.now() + 600;
+						if (!isServiceUnavailableReason(reason)) {
+							console.warn("archive-manager: load favorites failed, will retry", reason);
+						}
 					}).finally(() => { loading = undefined; });
 					return loading;
 				},
@@ -3632,10 +3640,13 @@ export function startArchiveClient(require: HostRequire) {
 
 		async function apply(ctx: ClientContext) {
 			// 先挂侧栏和设置页，再等 Remote；否则官方侧栏会一直占着，菜单里没有删除。
-			applyWorkspaceBrowser(ctx);
+			const browser = applyWorkspaceBrowser(ctx);
 			const remote = ctx.get("remote");
 			let disposeRemote: () => void | Promise<void> = () => {};
-			if (remote !== void 0) disposeRemote = await remote.$mount(ARCHIVE_MANAGER_REMOTE);
+			if (remote !== void 0) {
+				disposeRemote = await remote.$mount(ARCHIVE_MANAGER_REMOTE);
+				void browser?.favoriteRowStore?.ensure(true);
+			}
 			return async () => {
 				await disposeRemote();
 			};
@@ -3689,7 +3700,11 @@ export function startArchiveClient(require: HostRequire) {
 			const unarchiveOne = createUnarchiveSession(ctx.workspaces);
 			const registryCall = async <K extends keyof RegistryCalls>(method: K, ...args: Parameters<RegistryCalls[K]>): Promise<Awaited<ReturnType<RegistryCalls[K]>>> => {
                 const registry = ctx.get("remote.workspaceRegistry");
-                if (!registry || typeof registry[method] !== "function") throw new Error(ctx.locale.bind(NS)("service.unavailable"));
+                if (!registry || typeof registry[method] !== "function") {
+                    const unavailableError = new Error(ctx.locale.bind(NS)("service.unavailable"));
+                    (unavailableError as unknown as { code?: string }).code = "SERVICE_UNAVAILABLE";
+                    throw unavailableError;
+                }
                 // 映射类型索引后的联合无法保留参数与返回值关联；断言只放在这一个分发边界。
                 const call = registry[method] as (...input: Parameters<RegistryCalls[K]>) => Promise<RemoteResult<Awaited<ReturnType<RegistryCalls[K]>>>>;
                 const result = await call.apply(registry, args);
@@ -5334,6 +5349,9 @@ export function startArchiveClient(require: HostRequire) {
 					};
 				}
 			});
+			return {
+				favoriteRowStore
+			};
 		}
 		//#endregion
 		/** Pure derivation surface for dsh-archive-manager self-tests (no-op for the runtime). */

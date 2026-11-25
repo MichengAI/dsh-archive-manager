@@ -145,6 +145,84 @@ test("刷新后首次读取失败不算「没有收藏」，重试成功后星�
 	assert.deepEqual([...store.getSnapshot().ids].sort(), ["s1", "s3"]);
 });
 
+test("启动时服务尚未就绪：保持未就绪静默重试，绝不向控制台抛出 warning 报警", async () => {
+	const warnings = [];
+	const originalWarn = console.warn;
+	console.warn = (...args) => warnings.push(args.join(" "));
+	try {
+		const api = makeApi({ failTimes: 1, initial: ["s1"] });
+		const store = createFavoriteRowStore();
+		store.bind(api);
+		await store.ensure();
+		assert.equal(store.getSnapshot().ready, false);
+		assert.equal(warnings.some((w) => w.includes("load favorites failed")), false, "启动期服务尚未就绪应静默重试，不得输出 warn 报警");
+	} finally {
+		console.warn = originalWarn;
+	}
+});
+
+test("remote 挂载完成或强制刷新时，ensure(true) 打破退避限制立即拉取收藏", async () => {
+	const api = makeApi({ failTimes: 1, initial: ["s1"] });
+	const store = createFavoriteRowStore();
+	store.bind(api);
+	await store.ensure(); // 失败，设置了 600ms 退避
+	assert.equal(store.getSnapshot().ready, false);
+	assert.equal(api.attempts(), 1);
+
+	// 未过 600ms 时，普通 ensure() 会被跳过
+	await store.ensure();
+	assert.equal(api.attempts(), 1);
+
+	// force 模式立即执行重试
+	await store.ensure(true);
+	assert.equal(api.attempts(), 2);
+	assert.equal(store.getSnapshot().ready, true);
+	assert.deepEqual([...store.getSnapshot().ids], ["s1"]);
+});
+
+test("apply 生命周期：在 remote.$mount 就绪后主动拉取收藏，全流程无 warning 报错", async () => {
+	const warnings = [];
+	const originalWarn = console.warn;
+	console.warn = (...args) => warnings.push(args.join(" "));
+	try {
+		let remoteMounted = false;
+		const mockRegistry = {
+			favoriteSessions: async () => ({ ok: true, value: { favoriteSessionIds: ["fav-session-1"] } })
+		};
+		const ctx = {
+			get: (name) => {
+				if (name === "remote") {
+					return {
+						$mount: async () => {
+							remoteMounted = true;
+							return () => {};
+						}
+					};
+				}
+				if (name === "remote.workspaceRegistry") {
+					return remoteMounted ? mockRegistry : undefined;
+				}
+				return undefined;
+			},
+			on: () => () => {},
+			sessions: {},
+			workspaces: {},
+			locale: { register: () => () => {}, bind: () => (key) => key },
+			slots: {
+				entries: () => [],
+				inject: (name, callback) => callback(),
+				register: () => () => {}
+			},
+			effect: (fn) => fn()
+		};
+		const dispose = await bundle.apply(ctx);
+		assert.equal(warnings.some((w) => w.includes("load favorites failed")), false, "apply 过程中不得报 load favorites failed");
+		await dispose?.();
+	} finally {
+		console.warn = originalWarn;
+	}
+});
+
 test("星标读写走归档管理器自己的收藏接口，并同步共享集合", async () => {
 	const api = makeApi({ initial: ["s1"] });
 	const store = createFavoriteRowStore();
